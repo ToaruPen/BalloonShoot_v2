@@ -1,0 +1,74 @@
+language: ja-JP
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  review_status: true
+  review_details: false
+  commit_status: true
+  fail_commit_status: false
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: false
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_labels: false
+  auto_apply_labels: false
+  suggested_reviewers: false
+  auto_assign_reviewers: false
+  in_progress_fortune: false
+  poem: false
+  enable_prompt_for_ai_agents: true
+  path_filters:
+    - "!dist/**"
+    - "!coverage/**"
+    - "!playwright-report/**"
+    - "!test-results/**"
+    - "!public/models/**"
+    - "!public/audio/**"
+  path_instructions:
+    - path: "**/*.{ts,tsx,js,mjs,cjs,css,html}"
+      instructions: >
+        Review like a pragmatic senior engineer. Prioritize correctness,
+        regressions, risky edge cases, security, maintainability, and missing
+        tests. Flag naming, structure, or style issues only when they
+        materially affect change safety or long-term maintainability.
+    - path: "src/**"
+      instructions: >
+        Enforce the repository architecture described in AGENTS.md and the PoC
+        design. Keep gameplay, input mapping, rendering, browser adapters, and
+        app orchestration separate. Prefer thin browser-facing adapters and keep
+        reusable logic pure and testable.
+    - path: "tests/**"
+      instructions: >
+        Review tests for determinism, signal, and direct behavior coverage.
+        Explicitly check TDD intent: tests should drive behavior, fail for the
+        right reason, and avoid brittle coupling to implementation details.
+    - path: "**/*.{ts,tsx,js,mjs,cjs}"
+      instructions: >
+        Explicitly check YAGNI and DRY. Flag speculative abstractions,
+        premature extensibility, duplicated logic, copy-pasted conditionals, or
+        helper extraction that hides simple behavior. Prefer the smallest change
+        that satisfies the current PoC requirements.
+    - path: ".github/workflows/**"
+      instructions: >
+        Review CI for reliability, cache safety, clear failure modes, and
+        alignment with required quality gates. Required checks are lint,
+        typecheck, test, and build. Do not accept hidden skips or non-blocking
+        behavior for required gates.
+    - path: "docs/**"
+      instructions: >
+        Keep documentation aligned with the authoritative PoC design and
+        implementation plan. Prefer concise, concrete guidance over duplicated
+        or aspirational prose.
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 0
+    drafts: false
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT REVIEW"
