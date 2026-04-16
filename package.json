@@ -43,7 +43,7 @@
     "vitest": "^4.1.3"
   },
   "knip": {
-    "entry": ["index.html", "bench.html"],
+    "entry": ["index.html", "diagnostic.html", "bench.html", "src/diagnostic-main.ts"],
     "ignore": ["src/bench/harness.ts"]
   }
 }
