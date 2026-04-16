@@ -62,6 +62,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
   };
 
   const listeners = new Set<StateListener>();
+  let openGeneration = 0;
 
   const emit = (): void => {
     for (const fn of listeners) {
@@ -95,10 +96,19 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
   ): Promise<void> => {
     stopStreams();
 
+    openGeneration += 1;
+    const myGeneration = openGeneration;
+
     const [frontStream, sideStream] = await Promise.all([
       createDevicePinnedStream(frontId),
       createDevicePinnedStream(sideId)
     ]);
+
+    if (myGeneration !== openGeneration) {
+      frontStream.stop();
+      sideStream.stop();
+      return;
+    }
 
     const frontLabel = labelFor(state.devices, frontId);
     const sideLabel = labelFor(state.devices, sideId);

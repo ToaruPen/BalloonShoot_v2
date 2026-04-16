@@ -1,4 +1,5 @@
 import type { WorkbenchState } from "./DiagnosticWorkbench";
+import { escapeHTML } from "../../shared/browser/escapeHTML";
 
 const renderPermissionScreen = (): string => `
   <div class="wb-screen">
@@ -32,7 +33,7 @@ const renderDeviceOption = (device: MediaDeviceInfo, index: number): string => {
   const label =
     device.label !== "" ? device.label : `Camera ${String(index + 1)}`;
 
-  return `<option value="${device.deviceId}">${label}</option>`;
+  return `<option value="${escapeHTML(device.deviceId)}">${escapeHTML(label)}</option>`;
 };
 
 const renderDeviceSelection = (state: WorkbenchState): string => `
@@ -67,12 +68,12 @@ const renderPreviewing = (state: WorkbenchState): string => `
     <div class="wb-preview-grid">
       <div class="wb-preview-lane">
         <h3>フロント（照準）</h3>
-        <p class="wb-device-label">${state.frontAssignment?.label ?? "未選択"}</p>
+        <p class="wb-device-label">${escapeHTML(state.frontAssignment?.label ?? "未選択")}</p>
         <video id="wb-front-video" autoplay playsinline muted></video>
       </div>
       <div class="wb-preview-lane">
         <h3>サイド（トリガー）</h3>
-        <p class="wb-device-label">${state.sideAssignment?.label ?? "未選択"}</p>
+        <p class="wb-device-label">${escapeHTML(state.sideAssignment?.label ?? "未選択")}</p>
         <video id="wb-side-video" autoplay playsinline muted></video>
       </div>
     </div>
