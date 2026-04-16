@@ -24,7 +24,7 @@
     "tests",
     "vite.config.ts",
     "vitest.config.ts",
-    "vitest.bench.config.ts",
+    "vitest.replay.config.ts",
     "playwright.config.ts"
   ]
 }
