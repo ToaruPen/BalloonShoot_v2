@@ -117,9 +117,7 @@ h3 {
 }
 
 .wb-preview-lane video {
-  width: 100%;
-  border-radius: 4px;
-  background: #000;
+  /* Handled by .wb-video-container video when overlay is present */
 }
 
 .wb-device-label {
@@ -130,6 +128,73 @@ h3 {
 
 .wb-controls {
   margin-top: 1rem;
+}
+
+/* ----- Video + landmark overlay container ----- */
+
+.wb-video-container {
+  position: relative;
+  width: 100%;
+}
+
+.wb-video-container video {
+  width: 100%;
+  border-radius: 4px;
+  background: #000;
+  display: block;
+}
+
+.wb-landmark-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  border-radius: 4px;
+}
+
+/* ----- Tracking status ----- */
+
+.wb-tracking-status {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  margin-top: 0.4rem;
+  padding: 0.25rem 0;
+}
+
+.wb-tracking-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.wb-tracking-good .wb-tracking-dot {
+  background: #2ecc71;
+}
+
+.wb-tracking-uncertain .wb-tracking-dot {
+  background: #f39c12;
+}
+
+.wb-tracking-lost .wb-tracking-dot {
+  background: #555;
+}
+
+.wb-tracking-good {
+  color: #2ecc71;
+}
+
+.wb-tracking-uncertain {
+  color: #f39c12;
+}
+
+.wb-tracking-lost {
+  color: #888;
 }
 
 /* ----- Capture telemetry ----- */

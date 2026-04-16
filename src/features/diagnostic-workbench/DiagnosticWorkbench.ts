@@ -1,5 +1,6 @@
 import type { CameraLaneRole } from "../../shared/types/camera";
 import type { CaptureTelemetry } from "../../shared/types/captureTelemetry";
+import type { FrontHandDetection, SideHandDetection } from "../../shared/types/detection";
 import { requestCameraPermission } from "../camera/cameraPermission";
 import { enumerateVideoDevices } from "../camera/enumerateVideoDevices";
 import {
@@ -10,6 +11,11 @@ import {
   createCaptureLoop,
   type CaptureLoop
 } from "../camera/captureLoop";
+import {
+  createTrackingPipeline,
+  type TrackingPipeline
+} from "./trackingPipeline";
+import type { LaneHandTracker } from "../hand-tracking/laneHandTracker";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,6 +43,9 @@ export interface WorkbenchState {
   sideStream: DevicePinnedStream | undefined;
   frontCaptureTelemetry: CaptureTelemetry | undefined;
   sideCaptureTelemetry: CaptureTelemetry | undefined;
+  frontDetection: FrontHandDetection | undefined;
+  sideDetection: SideHandDetection | undefined;
+  trackingReady: boolean;
 }
 
 type StateListener = (state: WorkbenchState) => void;
@@ -65,6 +74,20 @@ export interface DiagnosticWorkbench {
     frontVideo: HTMLVideoElement,
     sideVideo: HTMLVideoElement
   ): void;
+  /**
+   * Start tracking pipelines using the provided lane trackers.
+   * Must be called after startCaptureLoops.
+   */
+  startTracking(
+    frontVideo: HTMLVideoElement,
+    sideVideo: HTMLVideoElement,
+    frontTracker: LaneHandTracker<FrontHandDetection>,
+    sideTracker: LaneHandTracker<SideHandDetection>
+  ): void;
+  /** Access the front capture loop (for external overlay scheduling). */
+  getFrontCaptureLoop(): CaptureLoop | undefined;
+  /** Access the side capture loop (for external overlay scheduling). */
+  getSideCaptureLoop(): CaptureLoop | undefined;
 }
 
 export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
@@ -76,7 +99,10 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     frontStream: undefined,
     sideStream: undefined,
     frontCaptureTelemetry: undefined,
-    sideCaptureTelemetry: undefined
+    sideCaptureTelemetry: undefined,
+    frontDetection: undefined,
+    sideDetection: undefined,
+    trackingReady: false
   };
 
   const listeners = new Set<StateListener>();
@@ -84,6 +110,8 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
 
   let frontCaptureLoop: CaptureLoop | undefined;
   let sideCaptureLoop: CaptureLoop | undefined;
+  let frontTrackingPipeline: TrackingPipeline<FrontHandDetection> | undefined;
+  let sideTrackingPipeline: TrackingPipeline<SideHandDetection> | undefined;
   let telemetryRafId: number | undefined;
 
   const emit = (): void => {
@@ -97,7 +125,15 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     emit();
   };
 
+  const destroyTrackingPipelines = (): void => {
+    frontTrackingPipeline?.destroy();
+    sideTrackingPipeline?.destroy();
+    frontTrackingPipeline = undefined;
+    sideTrackingPipeline = undefined;
+  };
+
   const destroyCaptureLoops = (): void => {
+    destroyTrackingPipelines();
     frontCaptureLoop?.destroy();
     sideCaptureLoop?.destroy();
     frontCaptureLoop = undefined;
@@ -122,20 +158,18 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       const frontTelemetry = frontCaptureLoop?.getTelemetry();
       const sideTelemetry = sideCaptureLoop?.getTelemetry();
 
-      const changed =
-        frontTelemetry !== state.frontCaptureTelemetry ||
-        sideTelemetry !== state.sideCaptureTelemetry;
+      // Also pull latest detections from tracking pipelines
+      const frontDet = frontTrackingPipeline?.getLatestDetection();
+      const sideDet = sideTrackingPipeline?.getLatestDetection();
 
-      if (changed) {
-        // Direct state mutation + emit to avoid full re-render thrashing;
-        // telemetry updates are display-only and high-frequency.
-        state = {
-          ...state,
-          frontCaptureTelemetry: frontTelemetry,
-          sideCaptureTelemetry: sideTelemetry
-        };
-        emit();
-      }
+      state = {
+        ...state,
+        frontCaptureTelemetry: frontTelemetry,
+        sideCaptureTelemetry: sideTelemetry,
+        frontDetection: frontDet,
+        sideDetection: sideDet
+      };
+      emit();
 
       telemetryRafId = requestAnimationFrame(tick);
     };
@@ -198,15 +232,13 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       frontStream,
       sideStream,
       frontCaptureTelemetry: undefined,
-      sideCaptureTelemetry: undefined
+      sideCaptureTelemetry: undefined,
+      frontDetection: undefined,
+      sideDetection: undefined,
+      trackingReady: false
     });
   };
 
-  /**
-   * Called from diagnostic-main after video elements are in the DOM
-   * and streams are attached. Creates capture loops that use
-   * requestVideoFrameCallback on the video elements.
-   */
   const startCaptureLoops = (
     frontVideo: HTMLVideoElement,
     sideVideo: HTMLVideoElement
@@ -232,6 +264,44 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     });
 
     startTelemetryTick();
+  };
+
+  const startTracking = (
+    frontVideo: HTMLVideoElement,
+    sideVideo: HTMLVideoElement,
+    frontTracker: LaneHandTracker<FrontHandDetection>,
+    sideTracker: LaneHandTracker<SideHandDetection>
+  ): void => {
+    destroyTrackingPipelines();
+
+    if (
+      frontCaptureLoop === undefined ||
+      sideCaptureLoop === undefined ||
+      state.frontAssignment === undefined ||
+      state.sideAssignment === undefined ||
+      state.frontStream === undefined ||
+      state.sideStream === undefined
+    ) {
+      return;
+    }
+
+    frontTrackingPipeline = createTrackingPipeline({
+      video: frontVideo,
+      captureLoop: frontCaptureLoop,
+      tracker: frontTracker,
+      deviceId: state.frontAssignment.deviceId,
+      streamId: state.frontStream.stream.id
+    });
+
+    sideTrackingPipeline = createTrackingPipeline({
+      video: sideVideo,
+      captureLoop: sideCaptureLoop,
+      tracker: sideTracker,
+      deviceId: state.sideAssignment.deviceId,
+      streamId: state.sideStream.stream.id
+    });
+
+    update({ trackingReady: true });
   };
 
   return {
@@ -298,7 +368,10 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
         frontStream: undefined,
         sideStream: undefined,
         frontCaptureTelemetry: undefined,
-        sideCaptureTelemetry: undefined
+        sideCaptureTelemetry: undefined,
+        frontDetection: undefined,
+        sideDetection: undefined,
+        trackingReady: false
       });
     },
 
@@ -307,6 +380,15 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       listeners.clear();
     },
 
-    startCaptureLoops
+    startCaptureLoops,
+    startTracking,
+
+    getFrontCaptureLoop() {
+      return frontCaptureLoop;
+    },
+
+    getSideCaptureLoop() {
+      return sideCaptureLoop;
+    }
   };
 };

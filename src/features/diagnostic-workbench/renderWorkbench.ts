@@ -120,6 +120,36 @@ export const renderCaptureTelemetryHTML = (
 // Previewing screen
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Tracking status helpers
+// ---------------------------------------------------------------------------
+
+const renderTrackingStatus = (
+  detection: { handPresenceConfidence: number } | undefined,
+  roleLabel: string
+): string => {
+  if (detection === undefined) {
+    return `
+      <div class="wb-tracking-status wb-tracking-lost">
+        <span class="wb-tracking-dot"></span>
+        ${escapeHTML(roleLabel)}: 手が検出されていません
+      </div>
+    `;
+  }
+
+  const pct = (detection.handPresenceConfidence * 100).toFixed(0);
+  const cls = detection.handPresenceConfidence >= 0.7
+    ? "wb-tracking-good"
+    : "wb-tracking-uncertain";
+
+  return `
+    <div class="wb-tracking-status ${cls}">
+      <span class="wb-tracking-dot"></span>
+      ${escapeHTML(roleLabel)}: 検出中 (${pct}%)
+    </div>
+  `;
+};
+
 const renderPreviewing = (state: WorkbenchState): string => `
   <div class="wb-previewing">
     <h2>ライブプレビュー</h2>
@@ -127,13 +157,21 @@ const renderPreviewing = (state: WorkbenchState): string => `
       <div class="wb-preview-lane">
         <h3>フロント（照準）</h3>
         <p class="wb-device-label">${escapeHTML(state.frontAssignment?.label ?? "未選択")}</p>
-        <video id="wb-front-video" autoplay playsinline muted></video>
+        <div class="wb-video-container">
+          <video id="wb-front-video" autoplay playsinline muted></video>
+          <canvas id="wb-front-overlay" class="wb-landmark-overlay"></canvas>
+        </div>
+        <div id="wb-front-tracking-status">${renderTrackingStatus(state.frontDetection, "フロント")}</div>
         <div id="wb-front-telemetry">${renderCaptureTelemetryHTML(state.frontCaptureTelemetry, "フロント")}</div>
       </div>
       <div class="wb-preview-lane">
         <h3>サイド（トリガー）</h3>
         <p class="wb-device-label">${escapeHTML(state.sideAssignment?.label ?? "未選択")}</p>
-        <video id="wb-side-video" autoplay playsinline muted></video>
+        <div class="wb-video-container">
+          <video id="wb-side-video" autoplay playsinline muted></video>
+          <canvas id="wb-side-overlay" class="wb-landmark-overlay"></canvas>
+        </div>
+        <div id="wb-side-tracking-status">${renderTrackingStatus(state.sideDetection, "サイド")}</div>
         <div id="wb-side-telemetry">${renderCaptureTelemetryHTML(state.sideCaptureTelemetry, "サイド")}</div>
       </div>
     </div>
@@ -143,6 +181,8 @@ const renderPreviewing = (state: WorkbenchState): string => `
     </div>
   </div>
 `;
+
+export { renderTrackingStatus };
 
 export const renderWorkbenchHTML = (state: WorkbenchState): string => {
   switch (state.screen) {
