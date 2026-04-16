@@ -131,3 +131,43 @@ h3 {
 .wb-controls {
   margin-top: 1rem;
 }
+
+/* ----- Capture telemetry ----- */
+
+.wb-telemetry {
+  margin-top: 0.75rem;
+  text-align: left;
+}
+
+.wb-telemetry h4 {
+  font-size: 0.85rem;
+  color: #a8d8ea;
+  margin-bottom: 0.4rem;
+}
+
+.wb-telemetry-dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.15rem 0.75rem;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.wb-telemetry-dl dt {
+  color: #888;
+  white-space: nowrap;
+}
+
+.wb-telemetry-dl dd {
+  color: #ccc;
+  font-variant-numeric: tabular-nums;
+}
+
+.wb-health-ok {
+  color: #2ecc71;
+}
+
+.wb-health-stalled {
+  color: #e74c3c;
+  font-weight: bold;
+}

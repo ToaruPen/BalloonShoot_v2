@@ -1,9 +1,13 @@
 import "./styles/diagnostic.css";
 import {
   createDiagnosticWorkbench,
-  type DiagnosticWorkbench
+  type DiagnosticWorkbench,
+  type WorkbenchScreen
 } from "./features/diagnostic-workbench/DiagnosticWorkbench";
-import { renderWorkbenchHTML } from "./features/diagnostic-workbench/renderWorkbench";
+import {
+  renderWorkbenchHTML,
+  renderCaptureTelemetryHTML
+} from "./features/diagnostic-workbench/renderWorkbench";
 
 const root = document.querySelector<HTMLDivElement>("#diagnostic-app");
 
@@ -13,11 +17,15 @@ if (!root) {
 
 const workbench: DiagnosticWorkbench = createDiagnosticWorkbench();
 
-const render = (): void => {
-  const state = workbench.getState();
-  root.innerHTML = renderWorkbenchHTML(state);
-  attachVideoStreams(state);
-};
+/**
+ * Track the last rendered screen and stream identity so we can decide
+ * between a full re-render (screen/stream change) and a lightweight
+ * telemetry patch.
+ */
+let lastScreen: WorkbenchScreen | undefined;
+let lastFrontStreamId: string | undefined;
+let lastSideStreamId: string | undefined;
+let captureLoopsStarted = false;
 
 const attachVideoStreams = (
   state: ReturnType<DiagnosticWorkbench["getState"]>
@@ -36,6 +44,73 @@ const attachVideoStreams = (
   if (sideVideo !== null && state.sideStream !== undefined) {
     sideVideo.srcObject = state.sideStream.stream;
   }
+};
+
+const startCaptureLoopsIfNeeded = (): void => {
+  if (captureLoopsStarted) return;
+
+  const frontVideo = document.querySelector<HTMLVideoElement>("#wb-front-video");
+  const sideVideo = document.querySelector<HTMLVideoElement>("#wb-side-video");
+
+  if (frontVideo === null || sideVideo === null) return;
+
+  workbench.startCaptureLoops(frontVideo, sideVideo);
+  captureLoopsStarted = true;
+};
+
+/**
+ * Patch only the telemetry `<div>` elements in the DOM without
+ * replacing the entire previewing layout (which would destroy videos).
+ */
+const patchTelemetry = (
+  state: ReturnType<DiagnosticWorkbench["getState"]>
+): void => {
+  const frontSlot = document.querySelector<HTMLDivElement>("#wb-front-telemetry");
+  const sideSlot = document.querySelector<HTMLDivElement>("#wb-side-telemetry");
+
+  if (frontSlot !== null) {
+    frontSlot.innerHTML = renderCaptureTelemetryHTML(
+      state.frontCaptureTelemetry,
+      "フロント"
+    );
+  }
+
+  if (sideSlot !== null) {
+    sideSlot.innerHTML = renderCaptureTelemetryHTML(
+      state.sideCaptureTelemetry,
+      "サイド"
+    );
+  }
+};
+
+const render = (): void => {
+  const state = workbench.getState();
+
+  const currentFrontStreamId = state.frontStream?.stream.id;
+  const currentSideStreamId = state.sideStream?.stream.id;
+
+  const streamsChanged =
+    currentFrontStreamId !== lastFrontStreamId ||
+    currentSideStreamId !== lastSideStreamId;
+
+  if (
+    state.screen === lastScreen &&
+    state.screen === "previewing" &&
+    !streamsChanged
+  ) {
+    // Telemetry-only update: patch in-place, don't rebuild the DOM.
+    patchTelemetry(state);
+    return;
+  }
+
+  // Full re-render on screen transitions or stream changes.
+  lastScreen = state.screen;
+  lastFrontStreamId = currentFrontStreamId;
+  lastSideStreamId = currentSideStreamId;
+  captureLoopsStarted = false;
+  root.innerHTML = renderWorkbenchHTML(state);
+  attachVideoStreams(state);
+  startCaptureLoopsIfNeeded();
 };
 
 const handleClick = (e: MouseEvent): void => {

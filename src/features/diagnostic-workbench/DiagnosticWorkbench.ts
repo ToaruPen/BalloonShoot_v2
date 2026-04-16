@@ -1,10 +1,15 @@
 import type { CameraLaneRole } from "../../shared/types/camera";
+import type { CaptureTelemetry } from "../../shared/types/captureTelemetry";
 import { requestCameraPermission } from "../camera/cameraPermission";
 import { enumerateVideoDevices } from "../camera/enumerateVideoDevices";
 import {
   createDevicePinnedStream,
   type DevicePinnedStream
 } from "../camera/createDevicePinnedStream";
+import {
+  createCaptureLoop,
+  type CaptureLoop
+} from "../camera/captureLoop";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,6 +35,8 @@ export interface WorkbenchState {
   sideAssignment: DeviceAssignment | undefined;
   frontStream: DevicePinnedStream | undefined;
   sideStream: DevicePinnedStream | undefined;
+  frontCaptureTelemetry: CaptureTelemetry | undefined;
+  sideCaptureTelemetry: CaptureTelemetry | undefined;
 }
 
 type StateListener = (state: WorkbenchState) => void;
@@ -49,6 +56,15 @@ export interface DiagnosticWorkbench {
   swapRoles(): Promise<void>;
   reselect(): void;
   destroy(): void;
+  /**
+   * Start capture loops on the given video elements.
+   * Called by the entry point after DOM attachment so that
+   * requestVideoFrameCallback can begin producing timestamps.
+   */
+  startCaptureLoops(
+    frontVideo: HTMLVideoElement,
+    sideVideo: HTMLVideoElement
+  ): void;
 }
 
 export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
@@ -58,11 +74,17 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     frontAssignment: undefined,
     sideAssignment: undefined,
     frontStream: undefined,
-    sideStream: undefined
+    sideStream: undefined,
+    frontCaptureTelemetry: undefined,
+    sideCaptureTelemetry: undefined
   };
 
   const listeners = new Set<StateListener>();
   let openGeneration = 0;
+
+  let frontCaptureLoop: CaptureLoop | undefined;
+  let sideCaptureLoop: CaptureLoop | undefined;
+  let telemetryRafId: number | undefined;
 
   const emit = (): void => {
     for (const fn of listeners) {
@@ -75,7 +97,55 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     emit();
   };
 
+  const destroyCaptureLoops = (): void => {
+    frontCaptureLoop?.destroy();
+    sideCaptureLoop?.destroy();
+    frontCaptureLoop = undefined;
+    sideCaptureLoop = undefined;
+  };
+
+  const stopTelemetryTick = (): void => {
+    if (telemetryRafId !== undefined) {
+      cancelAnimationFrame(telemetryRafId);
+      telemetryRafId = undefined;
+    }
+  };
+
+  const startTelemetryTick = (): void => {
+    stopTelemetryTick();
+
+    const tick = (): void => {
+      if (frontCaptureLoop === undefined && sideCaptureLoop === undefined) {
+        return;
+      }
+
+      const frontTelemetry = frontCaptureLoop?.getTelemetry();
+      const sideTelemetry = sideCaptureLoop?.getTelemetry();
+
+      const changed =
+        frontTelemetry !== state.frontCaptureTelemetry ||
+        sideTelemetry !== state.sideCaptureTelemetry;
+
+      if (changed) {
+        // Direct state mutation + emit to avoid full re-render thrashing;
+        // telemetry updates are display-only and high-frequency.
+        state = {
+          ...state,
+          frontCaptureTelemetry: frontTelemetry,
+          sideCaptureTelemetry: sideTelemetry
+        };
+        emit();
+      }
+
+      telemetryRafId = requestAnimationFrame(tick);
+    };
+
+    telemetryRafId = requestAnimationFrame(tick);
+  };
+
   const stopStreams = (): void => {
+    destroyCaptureLoops();
+    stopTelemetryTick();
     state.frontStream?.stop();
     state.sideStream?.stop();
   };
@@ -126,8 +196,42 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
         label: sideLabel
       },
       frontStream,
-      sideStream
+      sideStream,
+      frontCaptureTelemetry: undefined,
+      sideCaptureTelemetry: undefined
     });
+  };
+
+  /**
+   * Called from diagnostic-main after video elements are in the DOM
+   * and streams are attached. Creates capture loops that use
+   * requestVideoFrameCallback on the video elements.
+   */
+  const startCaptureLoops = (
+    frontVideo: HTMLVideoElement,
+    sideVideo: HTMLVideoElement
+  ): void => {
+    destroyCaptureLoops();
+
+    if (state.frontAssignment === undefined || state.sideAssignment === undefined) {
+      return;
+    }
+
+    frontCaptureLoop = createCaptureLoop({
+      video: frontVideo,
+      laneRole: "frontAim",
+      deviceId: state.frontAssignment.deviceId,
+      deviceLabel: state.frontAssignment.label
+    });
+
+    sideCaptureLoop = createCaptureLoop({
+      video: sideVideo,
+      laneRole: "sideTrigger",
+      deviceId: state.sideAssignment.deviceId,
+      deviceLabel: state.sideAssignment.label
+    });
+
+    startTelemetryTick();
   };
 
   return {
@@ -192,13 +296,17 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
         frontAssignment: undefined,
         sideAssignment: undefined,
         frontStream: undefined,
-        sideStream: undefined
+        sideStream: undefined,
+        frontCaptureTelemetry: undefined,
+        sideCaptureTelemetry: undefined
       });
     },
 
     destroy() {
       stopStreams();
       listeners.clear();
-    }
+    },
+
+    startCaptureLoops
   };
 };

@@ -5,7 +5,8 @@ describe("gameConfig", () => {
   it("exposes the PoC camera and input defaults", () => {
     expect(gameConfig.camera).toEqual({
       width: 640,
-      height: 480
+      height: 480,
+      stallThresholdMs: 500
     });
     expect(gameConfig.input).toEqual({
       smoothingAlpha: 0.28,

@@ -15,10 +15,14 @@ const INPUT_ARMED_ENTRY_CONFIDENCE_BONUS = 0.0;
 const INPUT_CONDITIONED_TRIGGER_PULL_FLOOR = -0.12;
 const INPUT_CONDITIONED_TRIGGER_RELEASE_FLOOR = -0.28;
 
+// Capture telemetry: a lane is "stalled" when no frame arrives within this window.
+const CAPTURE_STALL_THRESHOLD_MS = 500;
+
 export const gameConfig = {
   camera: {
     width: CAMERA_WIDTH,
-    height: CAMERA_HEIGHT
+    height: CAMERA_HEIGHT,
+    stallThresholdMs: CAPTURE_STALL_THRESHOLD_MS
   },
   input: {
     smoothingAlpha: INPUT_SMOOTHING_ALPHA,
