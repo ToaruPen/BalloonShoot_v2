@@ -4,6 +4,6 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/replay/**/*.test.ts"],
-    testTimeout: 60_000
+    testTimeout: 5_000
   }
 });
