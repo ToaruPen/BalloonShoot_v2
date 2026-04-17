@@ -35,7 +35,7 @@ interface MediaPipeHandTracker {
   ): Promise<HandDetection | undefined>;
 }
 
-export interface MediaPipeHandTrackerOptions {
+interface MediaPipeHandTrackerOptions {
   getFilterConfig: () => OneEuroFilterConfig;
 }
 
