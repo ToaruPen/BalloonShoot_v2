@@ -1,0 +1,143 @@
+#diagnostic-app * {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", "Hiragino Sans", sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  min-height: 100vh;
+}
+
+#diagnostic-app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+h2 {
+  font-size: 1.4rem;
+  margin-bottom: 0.75rem;
+  color: #7ec8e3;
+}
+
+h3 {
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  color: #a8d8ea;
+}
+
+.wb-screen {
+  text-align: center;
+  padding: 3rem 1rem;
+}
+
+.wb-screen p {
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+}
+
+.wb-error {
+  border: 2px solid #e74c3c;
+  border-radius: 8px;
+  padding: 2rem;
+  background: rgba(231, 76, 60, 0.1);
+}
+
+.wb-warning {
+  border: 2px solid #f39c12;
+  border-radius: 8px;
+  padding: 2rem;
+  background: rgba(243, 156, 18, 0.1);
+}
+
+.wb-btn {
+  display: inline-block;
+  margin: 1rem 0.5rem 0;
+  padding: 0.6rem 1.5rem;
+  font-size: 1rem;
+  border: none;
+  border-radius: 6px;
+  background: #3498db;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.wb-btn:hover {
+  background: #2980b9;
+}
+
+.wb-btn-secondary {
+  background: #555;
+}
+
+.wb-btn-secondary:hover {
+  background: #777;
+}
+
+.wb-select-row {
+  margin: 0.75rem 0;
+}
+
+.wb-select-row label {
+  display: block;
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+}
+
+.wb-select-row select {
+  width: 100%;
+  max-width: 400px;
+  padding: 0.4rem;
+  font-size: 0.95rem;
+  border-radius: 4px;
+  border: 1px solid #555;
+  background: #2a2a3e;
+  color: #eee;
+}
+
+.wb-previewing {
+  text-align: center;
+}
+
+.wb-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.wb-preview-lane {
+  background: #16213e;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.wb-preview-lane video {
+  width: 100%;
+  border-radius: 4px;
+  background: #000;
+}
+
+.wb-device-label {
+  font-size: 0.8rem;
+  color: #888;
+  margin-bottom: 0.5rem;
+}
+
+.wb-controls {
+  margin-top: 1rem;
+}
+
+.wb-inline-error {
+  border: 2px solid #e74c3c;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  background: rgba(231, 76, 60, 0.1);
+  text-align: left;
+}
