@@ -1,4 +1,4 @@
-import type { WorkbenchState } from "./DiagnosticWorkbench";
+import type { WorkbenchError, WorkbenchState } from "./DiagnosticWorkbench";
 import { escapeHTML } from "../../shared/browser/escapeHTML";
 
 const renderPermissionScreen = (): string => `
@@ -9,16 +9,45 @@ const renderPermissionScreen = (): string => `
   </div>
 `;
 
-const renderPermissionDenied = (): string => `
+const fallbackError: WorkbenchError = {
+  kind: "cameraOpenFailed",
+  title: "カメラを開始できません",
+  cause: "カメラ処理中に失敗しました。",
+  impact: "診断ワークベンチを続行できません。",
+  reproduction: "同じ操作をもう一度実行してください。",
+  nextAction: "ページをリロードしてリトライしてください。"
+};
+
+const renderErrorDetails = (error: WorkbenchError | undefined): string => {
+  const detail = error ?? fallbackError;
+
+  return `
   <div class="wb-screen wb-error">
-    <h2>カメラ許可が拒否されました</h2>
-    <p><strong>原因:</strong> ブラウザのカメラ権限が拒否されました。</p>
-    <p><strong>影響:</strong> フロント・サイド両方のキャプチャが開始できません。</p>
-    <p><strong>再現:</strong> リロードしてカメラ権限を拒否してください。</p>
-    <p><strong>対処:</strong> ブラウザのサイト設定でカメラ権限を許可し、リトライしてください。</p>
+    <h2>${escapeHTML(detail.title)}</h2>
+    <p><strong>原因:</strong> ${escapeHTML(detail.cause)}</p>
+    <p><strong>影響:</strong> ${escapeHTML(detail.impact)}</p>
+    <p><strong>再現:</strong> ${escapeHTML(detail.reproduction)}</p>
+    <p><strong>対処:</strong> ${escapeHTML(detail.nextAction)}</p>
     <button class="wb-btn" data-wb-action="requestPermission">リトライ</button>
   </div>
 `;
+};
+
+const renderInlineError = (error: WorkbenchError | undefined): string => {
+  if (error === undefined) {
+    return "";
+  }
+
+  return `
+    <div class="wb-inline-error" role="alert">
+      <strong>${escapeHTML(error.title)}</strong>
+      <p><strong>原因:</strong> ${escapeHTML(error.cause)}</p>
+      <p><strong>影響:</strong> ${escapeHTML(error.impact)}</p>
+      <p><strong>再現:</strong> ${escapeHTML(error.reproduction)}</p>
+      <p><strong>対処:</strong> ${escapeHTML(error.nextAction)}</p>
+    </div>
+  `;
+};
 
 const renderSingleCamera = (): string => `
   <div class="wb-screen wb-warning">
@@ -40,6 +69,7 @@ const renderDeviceSelection = (state: WorkbenchState): string => `
   <div class="wb-screen">
     <h2>カメラ選択</h2>
     <p>フロント（照準）とサイド（トリガー）にそれぞれ別のカメラを割り当ててください。</p>
+    ${renderInlineError(state.error)}
     <div class="wb-select-row">
       <label>
         フロント（照準）:
@@ -65,6 +95,7 @@ const renderDeviceSelection = (state: WorkbenchState): string => `
 const renderPreviewing = (state: WorkbenchState): string => `
   <div class="wb-previewing">
     <h2>ライブプレビュー</h2>
+    ${renderInlineError(state.error)}
     <div class="wb-preview-grid">
       <div class="wb-preview-lane">
         <h3>フロント（照準）</h3>
@@ -88,8 +119,13 @@ export const renderWorkbenchHTML = (state: WorkbenchState): string => {
   switch (state.screen) {
     case "permission":
       return renderPermissionScreen();
+    case "cameraUnsupported":
     case "permissionDenied":
-      return renderPermissionDenied();
+    case "cameraNotFound":
+    case "enumerationFailed":
+    case "cameraConstraintFailed":
+    case "cameraOpenFailed":
+      return renderErrorDetails(state.error);
     case "singleCamera":
       return renderSingleCamera();
     case "deviceSelection":

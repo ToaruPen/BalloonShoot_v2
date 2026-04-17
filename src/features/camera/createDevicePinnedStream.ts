@@ -14,7 +14,17 @@ export interface DevicePinnedStream {
 export const createDevicePinnedStream = async (
   deviceId: string
 ): Promise<DevicePinnedStream> => {
-  const stream = await navigator.mediaDevices.getUserMedia({
+  const mediaDevices = (
+    globalThis as {
+      readonly navigator?: { readonly mediaDevices?: Partial<MediaDevices> };
+    }
+  ).navigator?.mediaDevices;
+
+  if (mediaDevices === undefined || typeof mediaDevices.getUserMedia !== "function") {
+    throw new Error("navigator.mediaDevices.getUserMedia is unavailable.");
+  }
+
+  const stream = await mediaDevices.getUserMedia({
     video: {
       deviceId: { exact: deviceId },
       width: { ideal: gameConfig.camera.width },

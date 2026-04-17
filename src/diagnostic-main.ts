@@ -52,10 +52,15 @@ const handleClick = (e: MouseEvent): void => {
   }
 
   const action = actionEl.dataset["wbAction"];
+  const runAction = (actionPromise: Promise<void>): void => {
+    void actionPromise.catch((error: unknown) => {
+      console.error("Diagnostic workbench action failed", error);
+    });
+  };
 
   switch (action) {
     case "requestPermission":
-      void workbench.requestPermission();
+      runAction(workbench.requestPermission());
       break;
     case "confirmDevices": {
       const frontSelect =
@@ -75,11 +80,11 @@ const handleClick = (e: MouseEvent): void => {
         return;
       }
 
-      void workbench.assignDevices(frontId, sideId);
+      runAction(workbench.assignDevices(frontId, sideId));
       break;
     }
     case "swap":
-      void workbench.swapRoles();
+      runAction(workbench.swapRoles());
       break;
     case "reselect":
       workbench.reselect();

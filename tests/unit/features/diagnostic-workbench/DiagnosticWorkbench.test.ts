@@ -1,0 +1,250 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { requestCameraPermission } from "../../../../src/features/camera/cameraPermission";
+import { createDevicePinnedStream } from "../../../../src/features/camera/createDevicePinnedStream";
+import type { DevicePinnedStream } from "../../../../src/features/camera/createDevicePinnedStream";
+import { enumerateVideoDevices } from "../../../../src/features/camera/enumerateVideoDevices";
+import { createDiagnosticWorkbench } from "../../../../src/features/diagnostic-workbench/DiagnosticWorkbench";
+
+vi.mock("../../../../src/features/camera/cameraPermission", () => ({
+  requestCameraPermission: vi.fn()
+}));
+
+vi.mock("../../../../src/features/camera/enumerateVideoDevices", () => ({
+  enumerateVideoDevices: vi.fn()
+}));
+
+vi.mock("../../../../src/features/camera/createDevicePinnedStream", () => ({
+  createDevicePinnedStream: vi.fn()
+}));
+
+const createDevice = (deviceId: string, label: string): MediaDeviceInfo =>
+  ({
+    kind: "videoinput",
+    deviceId,
+    label,
+    groupId: `${deviceId}-group`,
+    toJSON: () => ({})
+  }) as MediaDeviceInfo;
+
+interface FakeDevicePinnedStream extends DevicePinnedStream {
+  readonly stopMock: ReturnType<typeof vi.fn>;
+}
+
+const createPinnedStream = (deviceId: string): FakeDevicePinnedStream => {
+  const stopMock = vi.fn();
+
+  return {
+    stream: { id: `${deviceId}-stream` } as MediaStream,
+    deviceId,
+    stopMock,
+    stop() {
+      stopMock();
+    }
+  };
+};
+
+const createDeferred = <T>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, resolve, reject };
+};
+
+const createCameraError = (name: string): Error =>
+  Object.assign(new Error(name), { name });
+
+const grantPermission = () => {
+  vi.mocked(requestCameraPermission).mockResolvedValue({ status: "granted" });
+};
+
+const enumerateTwoDevices = () => {
+  vi.mocked(enumerateVideoDevices).mockResolvedValue([
+    createDevice("front-id", "Front Camera"),
+    createDevice("side-id", "")
+  ]);
+};
+
+describe("createDiagnosticWorkbench", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders permissionDenied state for denied camera permission", async () => {
+    vi.mocked(requestCameraPermission).mockResolvedValue({
+      status: "denied",
+      error: createCameraError("NotAllowedError")
+    });
+
+    const workbench = createDiagnosticWorkbench();
+
+    await workbench.requestPermission();
+
+    expect(workbench.getState().screen).toBe("permissionDenied");
+    expect(workbench.getState().error?.kind).toBe("permissionDenied");
+    expect(enumerateVideoDevices).not.toHaveBeenCalled();
+  });
+
+  it("renders singleCamera when fewer than two video inputs are available", async () => {
+    grantPermission();
+    vi.mocked(enumerateVideoDevices).mockResolvedValue([
+      createDevice("front-id", "Front Camera")
+    ]);
+
+    const workbench = createDiagnosticWorkbench();
+
+    await workbench.requestPermission();
+
+    expect(workbench.getState().screen).toBe("singleCamera");
+    expect(workbench.getState().devices).toHaveLength(1);
+  });
+
+  it("renders deviceSelection after permission and two-camera enumeration", async () => {
+    grantPermission();
+    enumerateTwoDevices();
+
+    const workbench = createDiagnosticWorkbench();
+
+    await workbench.requestPermission();
+
+    expect(workbench.getState().screen).toBe("deviceSelection");
+    expect(workbench.getState().devices.map((d) => d.deviceId)).toEqual([
+      "front-id",
+      "side-id"
+    ]);
+  });
+
+  it("opens selected devices and assigns safe preview labels", async () => {
+    grantPermission();
+    enumerateTwoDevices();
+    const frontStream = createPinnedStream("front-id");
+    const sideStream = createPinnedStream("side-id");
+    vi.mocked(createDevicePinnedStream)
+      .mockResolvedValueOnce(frontStream)
+      .mockResolvedValueOnce(sideStream);
+
+    const workbench = createDiagnosticWorkbench();
+    await workbench.requestPermission();
+    await workbench.assignDevices("front-id", "side-id");
+
+    expect(workbench.getState()).toMatchObject({
+      screen: "previewing",
+      frontAssignment: { label: "Front Camera" },
+      sideAssignment: { label: "Camera 2" },
+      frontStream,
+      sideStream
+    });
+  });
+
+  it("keeps same-device assignment errors in UI state instead of rejecting", async () => {
+    grantPermission();
+    enumerateTwoDevices();
+
+    const workbench = createDiagnosticWorkbench();
+    await workbench.requestPermission();
+
+    await expect(workbench.assignDevices("front-id", "front-id")).resolves.toBeUndefined();
+    expect(workbench.getState().screen).toBe("deviceSelection");
+    expect(workbench.getState().error?.kind).toBe("distinctDevicesRequired");
+  });
+
+  it("stops a successful first stream when the paired side stream fails", async () => {
+    grantPermission();
+    enumerateTwoDevices();
+    const frontStream = createPinnedStream("front-id");
+    vi.mocked(createDevicePinnedStream)
+      .mockResolvedValueOnce(frontStream)
+      .mockRejectedValueOnce(createCameraError("OverconstrainedError"));
+
+    const workbench = createDiagnosticWorkbench();
+    await workbench.requestPermission();
+    await workbench.assignDevices("front-id", "side-id");
+
+    expect(frontStream.stopMock).toHaveBeenCalledOnce();
+    expect(workbench.getState().screen).toBe("cameraConstraintFailed");
+    expect(workbench.getState().error?.kind).toBe("cameraConstraintFailed");
+    expect(workbench.getState().frontStream).toBeUndefined();
+  });
+
+  it("keeps existing preview streams when swap opening fails", async () => {
+    grantPermission();
+    enumerateTwoDevices();
+    const frontStream = createPinnedStream("front-id");
+    const sideStream = createPinnedStream("side-id");
+    const attemptedSwapStream = createPinnedStream("side-id");
+    vi.mocked(createDevicePinnedStream)
+      .mockResolvedValueOnce(frontStream)
+      .mockResolvedValueOnce(sideStream)
+      .mockResolvedValueOnce(attemptedSwapStream)
+      .mockRejectedValueOnce(createCameraError("OverconstrainedError"));
+
+    const workbench = createDiagnosticWorkbench();
+    await workbench.requestPermission();
+    await workbench.assignDevices("front-id", "side-id");
+    await workbench.swapRoles();
+
+    expect(attemptedSwapStream.stopMock).toHaveBeenCalledOnce();
+    expect(frontStream.stopMock).not.toHaveBeenCalled();
+    expect(sideStream.stopMock).not.toHaveBeenCalled();
+    expect(workbench.getState().screen).toBe("previewing");
+    expect(workbench.getState().frontStream).toBe(frontStream);
+    expect(workbench.getState().sideStream).toBe(sideStream);
+    expect(workbench.getState().error?.kind).toBe("cameraConstraintFailed");
+  });
+
+  it("stops current and stale in-flight streams when reselect advances generation", async () => {
+    grantPermission();
+    enumerateTwoDevices();
+    const frontDeferred = createDeferred<DevicePinnedStream>();
+    const sideDeferred = createDeferred<DevicePinnedStream>();
+    const frontStream = createPinnedStream("front-id");
+    const sideStream = createPinnedStream("side-id");
+    vi.mocked(createDevicePinnedStream)
+      .mockReturnValueOnce(frontDeferred.promise)
+      .mockReturnValueOnce(sideDeferred.promise);
+
+    const workbench = createDiagnosticWorkbench();
+    await workbench.requestPermission();
+    const assignment = workbench.assignDevices("front-id", "side-id");
+
+    frontDeferred.resolve(frontStream);
+    await Promise.resolve();
+    workbench.reselect();
+    sideDeferred.resolve(sideStream);
+    await assignment;
+
+    expect(frontStream.stopMock).toHaveBeenCalledOnce();
+    expect(sideStream.stopMock).toHaveBeenCalledOnce();
+    expect(workbench.getState().screen).toBe("deviceSelection");
+    expect(workbench.getState().frontStream).toBeUndefined();
+  });
+
+  it("stops streams returned after destroy invalidates an in-flight open", async () => {
+    grantPermission();
+    enumerateTwoDevices();
+    const frontDeferred = createDeferred<DevicePinnedStream>();
+    const sideDeferred = createDeferred<DevicePinnedStream>();
+    const frontStream = createPinnedStream("front-id");
+    const sideStream = createPinnedStream("side-id");
+    vi.mocked(createDevicePinnedStream)
+      .mockReturnValueOnce(frontDeferred.promise)
+      .mockReturnValueOnce(sideDeferred.promise);
+
+    const workbench = createDiagnosticWorkbench();
+    await workbench.requestPermission();
+    const assignment = workbench.assignDevices("front-id", "side-id");
+
+    frontDeferred.resolve(frontStream);
+    await Promise.resolve();
+    workbench.destroy();
+    sideDeferred.resolve(sideStream);
+    await assignment;
+
+    expect(frontStream.stopMock).toHaveBeenCalledOnce();
+    expect(sideStream.stopMock).toHaveBeenCalledOnce();
+    expect(workbench.getState().screen).toBe("deviceSelection");
+  });
+});
