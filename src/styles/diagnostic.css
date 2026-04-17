@@ -132,3 +132,12 @@ h3 {
 .wb-controls {
   margin-top: 1rem;
 }
+
+.wb-inline-error {
+  border: 2px solid #e74c3c;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  background: rgba(231, 76, 60, 0.1);
+  text-align: left;
+}
