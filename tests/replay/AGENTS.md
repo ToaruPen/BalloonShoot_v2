@@ -2,11 +2,11 @@
 
 ## WHY
 
-- `tests/replay/` holds deterministic replay tests for the v2 pipeline: timestamp pairing, fusion degrade modes, side trigger FSM transitions.
+- `tests/replay/` holds deterministic sequence replays: fixed synthetic inputs flow through real v2 code and assert concrete behavior so regressions cannot hide behind tautologies.
 
 ## WHAT
 
-- A deterministic OneEuro-filter sequence replay that feeds a fixed sample stream through `createOneEuroFilter` and asserts stable smoothing behavior.
+- A OneEuro-filter sequence replay that feeds a fixed sample stream through `createOneEuroFilter` and pins down smoothing (step transition stays between the two input levels, rises monotonically, and never snaps to the raw level).
 
 ## HOW
 
@@ -16,4 +16,4 @@
 
 ## Future
 
-- Synthetic frame sequences for `input-fusion` and `side-trigger` arrive with the v2 lanes.
+- Synthetic frame sequences for `input-fusion` timestamp pairing / degrade modes and the `side-trigger` FSM arrive with their v2 lanes.
