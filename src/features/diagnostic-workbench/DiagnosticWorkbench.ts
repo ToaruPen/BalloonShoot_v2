@@ -90,6 +90,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
 
   const listeners = new Set<StateListener>();
   let openGeneration = 0;
+  let requestGeneration = 0;
 
   const emit = (): void => {
     for (const fn of listeners) {
@@ -338,9 +339,26 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     },
 
     async requestPermission() {
-      update({ screen: "permission", error: undefined });
+      requestGeneration += 1;
+      openGeneration += 1;
+      const myGeneration = requestGeneration;
+
+      stopCurrentStreams();
+      update({
+        screen: "permission",
+        devices: [],
+        frontAssignment: undefined,
+        sideAssignment: undefined,
+        frontStream: undefined,
+        sideStream: undefined,
+        error: undefined
+      });
 
       const result = await requestCameraPermission();
+
+      if (myGeneration !== requestGeneration) {
+        return;
+      }
 
       if (result.status !== "granted") {
         const error = createError(permissionErrorKindFor(result.status));
@@ -354,8 +372,16 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       try {
         devices = await enumerateVideoDevices();
       } catch {
+        if (myGeneration !== requestGeneration) {
+          return;
+        }
+
         const error = createError("enumerationFailed");
         update({ screen: "enumerationFailed", error });
+        return;
+      }
+
+      if (myGeneration !== requestGeneration) {
         return;
       }
 
@@ -397,6 +423,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     },
 
     reselect() {
+      requestGeneration += 1;
       openGeneration += 1;
       stopCurrentStreams();
       update({
@@ -410,6 +437,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     },
 
     destroy() {
+      requestGeneration += 1;
       openGeneration += 1;
       stopCurrentStreams();
       listeners.clear();

@@ -146,6 +146,71 @@ describe("createDiagnosticWorkbench", () => {
     ]);
   });
 
+  it("keeps newer permission results when an older permission request resolves later", async () => {
+    const firstPermission =
+      createDeferred<Awaited<ReturnType<typeof requestCameraPermission>>>();
+    vi.mocked(requestCameraPermission)
+      .mockReturnValueOnce(firstPermission.promise)
+      .mockResolvedValueOnce({ status: "granted" });
+    let enumerationCount = 0;
+    vi.mocked(enumerateVideoDevices).mockImplementation(() => {
+      enumerationCount += 1;
+      const devices =
+        enumerationCount === 1
+          ? [
+              createDevice("front-id", "Front Camera"),
+              createDevice("side-id", "Side Camera")
+            ]
+          : [createDevice("stale-id", "Stale Camera")];
+
+      return Promise.resolve(devices);
+    });
+
+    const workbench = createDiagnosticWorkbench();
+    const firstRequest = workbench.requestPermission();
+    const secondRequest = workbench.requestPermission();
+
+    await secondRequest;
+    expect(workbench.getState().screen).toBe("deviceSelection");
+    expect(workbench.getState().devices.map((d) => d.deviceId)).toEqual([
+      "front-id",
+      "side-id"
+    ]);
+
+    firstPermission.resolve({ status: "granted" });
+    await firstRequest;
+
+    expect(enumerateVideoDevices).toHaveBeenCalledOnce();
+    expect(workbench.getState().screen).toBe("deviceSelection");
+    expect(workbench.getState().devices.map((d) => d.deviceId)).toEqual([
+      "front-id",
+      "side-id"
+    ]);
+  });
+
+  it("ignores pending permission results after destroy", async () => {
+    const permission =
+      createDeferred<Awaited<ReturnType<typeof requestCameraPermission>>>();
+    vi.mocked(requestCameraPermission).mockReturnValueOnce(permission.promise);
+    enumerateTwoDevices();
+
+    const workbench = createDiagnosticWorkbench();
+    const listener = vi.fn();
+    workbench.subscribe(listener);
+
+    const request = workbench.requestPermission();
+    expect(listener).toHaveBeenCalledOnce();
+
+    workbench.destroy();
+    permission.resolve({ status: "granted" });
+    await request;
+
+    expect(enumerateVideoDevices).not.toHaveBeenCalled();
+    expect(listener).toHaveBeenCalledOnce();
+    expect(workbench.getState().screen).toBe("permission");
+    expect(workbench.getState().devices).toEqual([]);
+  });
+
   it("opens selected devices and assigns safe preview labels", async () => {
     grantPermission();
     enumerateTwoDevices();
@@ -222,6 +287,39 @@ describe("createDiagnosticWorkbench", () => {
     expect(workbench.getState().frontStream).toBe(frontStream);
     expect(workbench.getState().sideStream).toBe(sideStream);
     expect(workbench.getState().error?.kind).toBe("cameraConstraintFailed");
+  });
+
+  it("stops existing preview streams when requesting permission again", async () => {
+    grantPermission();
+    enumerateTwoDevices();
+    const frontStream = createPinnedStream("front-id");
+    const sideStream = createPinnedStream("side-id");
+    const permission =
+      createDeferred<Awaited<ReturnType<typeof requestCameraPermission>>>();
+    vi.mocked(createDevicePinnedStream)
+      .mockResolvedValueOnce(frontStream)
+      .mockResolvedValueOnce(sideStream);
+
+    const workbench = createDiagnosticWorkbench();
+    await workbench.requestPermission();
+    await workbench.assignDevices("front-id", "side-id");
+    vi.mocked(requestCameraPermission).mockReturnValueOnce(permission.promise);
+
+    const request = workbench.requestPermission();
+
+    expect(frontStream.stopMock).toHaveBeenCalledOnce();
+    expect(sideStream.stopMock).toHaveBeenCalledOnce();
+    expect(workbench.getState()).toMatchObject({
+      screen: "permission",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: undefined,
+      sideStream: undefined
+    });
+
+    permission.resolve({ status: "granted" });
+    await request;
   });
 
   it("stops current and stale in-flight streams when reselect advances generation", async () => {
