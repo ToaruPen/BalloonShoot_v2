@@ -6,7 +6,7 @@
 
 ## WHAT
 
-- A placeholder test keeping the `replay` CI gate green.
+- A deterministic OneEuro-filter sequence replay that feeds a fixed sample stream through `createOneEuroFilter` and asserts stable smoothing behavior.
 
 ## HOW
 
