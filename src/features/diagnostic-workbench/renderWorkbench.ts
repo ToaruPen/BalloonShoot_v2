@@ -121,6 +121,7 @@ export const renderWorkbenchHTML = (state: WorkbenchState): string => {
       return renderPermissionScreen();
     case "cameraUnsupported":
     case "permissionDenied":
+    case "permissionFailed":
     case "cameraNotFound":
     case "enumerationFailed":
     case "cameraConstraintFailed":

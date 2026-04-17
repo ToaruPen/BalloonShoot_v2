@@ -49,6 +49,32 @@ describe("requestCameraPermission", () => {
     expect(result.status).toBe("denied");
   });
 
+  it("returns notFound when no camera device is available", async () => {
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi
+          .fn()
+          .mockRejectedValue(createPermissionError("NotFoundError"))
+      }
+    });
+
+    const result = await requestCameraPermission();
+
+    expect(result.status).toBe("notFound");
+  });
+
+  it("returns failed for camera permission errors without a specific recovery path", async () => {
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        getUserMedia: vi.fn().mockRejectedValue(createPermissionError("AbortError"))
+      }
+    });
+
+    const result = await requestCameraPermission();
+
+    expect(result.status).toBe("failed");
+  });
+
   it("returns unsupported when mediaDevices or getUserMedia is missing", async () => {
     vi.stubGlobal("navigator", {});
 

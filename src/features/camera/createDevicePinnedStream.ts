@@ -2,8 +2,7 @@ import { gameConfig } from "../../shared/config/gameConfig";
 
 /**
  * Open a camera stream pinned to an exact deviceId.
- * The stream is tied to a generation counter so that stale requests
- * can be detected and cancelled.
+ * Callers own cancellation and stale-request handling around this helper.
  */
 export interface DevicePinnedStream {
   readonly stream: MediaStream;

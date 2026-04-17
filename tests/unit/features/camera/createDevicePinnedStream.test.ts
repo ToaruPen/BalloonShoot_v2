@@ -32,6 +32,14 @@ describe("createDevicePinnedStream", () => {
     expect(pinned.deviceId).toBe("front-device-id");
   });
 
+  it("throws when getUserMedia is unavailable", async () => {
+    vi.stubGlobal("navigator", {});
+
+    await expect(createDevicePinnedStream("front-device-id")).rejects.toThrow(
+      "navigator.mediaDevices.getUserMedia is unavailable."
+    );
+  });
+
   it("stops every track on the pinned stream", async () => {
     const firstTrack = createTrack();
     const secondTrack = createTrack();

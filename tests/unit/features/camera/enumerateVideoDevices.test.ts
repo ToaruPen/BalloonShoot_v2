@@ -40,4 +40,12 @@ describe("enumerateVideoDevices", () => {
 
     expect(result).toEqual([front, side]);
   });
+
+  it("throws when enumerateDevices is unavailable", async () => {
+    vi.stubGlobal("navigator", {});
+
+    await expect(enumerateVideoDevices()).rejects.toThrow(
+      "navigator.mediaDevices.enumerateDevices is unavailable."
+    );
+  });
 });

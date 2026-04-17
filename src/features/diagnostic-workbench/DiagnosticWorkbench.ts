@@ -14,6 +14,7 @@ export type WorkbenchScreen =
   | "permission"
   | "cameraUnsupported"
   | "permissionDenied"
+  | "permissionFailed"
   | "cameraNotFound"
   | "enumerationFailed"
   | "deviceSelection"
@@ -25,6 +26,7 @@ export type WorkbenchScreen =
 export type WorkbenchErrorKind =
   | "cameraUnsupported"
   | "permissionDenied"
+  | "permissionFailed"
   | "cameraNotFound"
   | "enumerationFailed"
   | "cameraConstraintFailed"
@@ -146,6 +148,15 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
           reproduction: "リロードしてカメラ権限を拒否してください。",
           nextAction: "ブラウザのサイト設定でカメラ権限を許可し、リトライしてください。"
         };
+      case "permissionFailed":
+        return {
+          kind,
+          title: "カメラ許可を確認できません",
+          cause: "許可確認用の getUserMedia が失敗しました。",
+          impact: "カメラ許可が完了せず、フロント・サイド両方のキャプチャ準備に進めません。",
+          reproduction: "カメラ許可操作後にブラウザまたは OS がカメラ開始を中断する状態でリトライしてください。",
+          nextAction: "カメラ接続、OS のカメラ権限、他アプリの使用状況を確認してからリトライしてください。"
+        };
       case "cameraNotFound":
         return {
           kind,
@@ -206,6 +217,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     switch (error.kind) {
       case "cameraUnsupported":
       case "permissionDenied":
+      case "permissionFailed":
       case "cameraNotFound":
       case "enumerationFailed":
       case "cameraConstraintFailed":
@@ -213,6 +225,24 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
         return error.kind;
       case "distinctDevicesRequired":
         return state.screen;
+    }
+  };
+
+  const permissionErrorKindFor = (
+    status: Exclude<
+      Awaited<ReturnType<typeof requestCameraPermission>>["status"],
+      "granted"
+    >
+  ): WorkbenchErrorKind => {
+    switch (status) {
+      case "unsupported":
+        return "cameraUnsupported";
+      case "denied":
+        return "permissionDenied";
+      case "notFound":
+        return "cameraNotFound";
+      case "failed":
+        return "permissionFailed";
     }
   };
 
@@ -313,14 +343,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       const result = await requestCameraPermission();
 
       if (result.status !== "granted") {
-        const error =
-          result.status === "unsupported"
-            ? createError("cameraUnsupported")
-            : result.status === "denied"
-              ? createError("permissionDenied")
-              : result.status === "notFound"
-                ? createError("cameraNotFound")
-                : createError("cameraOpenFailed");
+        const error = createError(permissionErrorKindFor(result.status));
 
         update({ screen: errorScreenFor(error), error });
         return;
@@ -336,7 +359,13 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
         return;
       }
 
-      if (devices.length < 2) {
+      if (devices.length === 0) {
+        const error = createError("cameraNotFound");
+        update({ screen: "cameraNotFound", devices, error });
+        return;
+      }
+
+      if (devices.length === 1) {
         update({ screen: "singleCamera", devices, error: undefined });
         return;
       }

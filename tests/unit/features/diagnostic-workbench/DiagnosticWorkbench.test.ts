@@ -88,7 +88,36 @@ describe("createDiagnosticWorkbench", () => {
     expect(enumerateVideoDevices).not.toHaveBeenCalled();
   });
 
-  it("renders singleCamera when fewer than two video inputs are available", async () => {
+  it("renders permissionFailed state for non-denied permission failures", async () => {
+    vi.mocked(requestCameraPermission).mockResolvedValue({
+      status: "failed",
+      error: createCameraError("AbortError")
+    });
+
+    const workbench = createDiagnosticWorkbench();
+
+    await workbench.requestPermission();
+
+    expect(workbench.getState().screen).toBe("permissionFailed");
+    expect(workbench.getState().error?.kind).toBe("permissionFailed");
+    expect(workbench.getState().error?.impact).toContain("カメラ許可");
+    expect(enumerateVideoDevices).not.toHaveBeenCalled();
+  });
+
+  it("renders cameraNotFound when no video inputs remain after permission", async () => {
+    grantPermission();
+    vi.mocked(enumerateVideoDevices).mockResolvedValue([]);
+
+    const workbench = createDiagnosticWorkbench();
+
+    await workbench.requestPermission();
+
+    expect(workbench.getState().screen).toBe("cameraNotFound");
+    expect(workbench.getState().devices).toEqual([]);
+    expect(workbench.getState().error?.kind).toBe("cameraNotFound");
+  });
+
+  it("renders singleCamera when exactly one video input is available", async () => {
     grantPermission();
     vi.mocked(enumerateVideoDevices).mockResolvedValue([
       createDevice("front-id", "Front Camera")

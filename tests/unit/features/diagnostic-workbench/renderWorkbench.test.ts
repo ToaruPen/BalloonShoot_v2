@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type {
   WorkbenchError,
+  WorkbenchScreen,
   WorkbenchState
 } from "../../../../src/features/diagnostic-workbench/DiagnosticWorkbench";
 import { renderWorkbenchHTML } from "../../../../src/features/diagnostic-workbench/renderWorkbench";
@@ -42,21 +43,46 @@ describe("renderWorkbenchHTML", () => {
     expect(html).toContain('data-wb-action="requestPermission"');
   });
 
-  it("renders diagnostic error screens with cause, impact, reproduction, and next action", () => {
+  it.each<Exclude<WorkbenchError["kind"], "distinctDevicesRequired">>([
+    "cameraUnsupported",
+    "permissionDenied",
+    "permissionFailed",
+    "cameraNotFound",
+    "enumerationFailed",
+    "cameraConstraintFailed",
+    "cameraOpenFailed"
+  ])(
+    "renders %s error screens with cause, impact, reproduction, and next action",
+    (kind) => {
+      const html = renderWorkbenchHTML(
+        createState({
+          screen: kind as WorkbenchScreen,
+          error: createError(kind)
+        })
+      );
+
+      expect(html).toContain("テストエラー");
+      expect(html).toContain("<strong>原因:</strong>");
+      expect(html).toContain("<strong>影響:</strong>");
+      expect(html).toContain("<strong>再現:</strong>");
+      expect(html).toContain("<strong>対処:</strong>");
+      expect(html).toContain("原因 &lt;script&gt;");
+      expect(html).not.toContain("原因 <script>");
+    }
+  );
+
+  it("renders diagnostic fallback error details when an error screen has no error object", () => {
     const html = renderWorkbenchHTML(
       createState({
-        screen: "cameraConstraintFailed",
-        error: createError("cameraConstraintFailed")
+        screen: "cameraConstraintFailed"
       })
     );
 
-    expect(html).toContain("テストエラー");
+    expect(html).toContain("カメラを開始できません");
     expect(html).toContain("<strong>原因:</strong>");
     expect(html).toContain("<strong>影響:</strong>");
     expect(html).toContain("<strong>再現:</strong>");
     expect(html).toContain("<strong>対処:</strong>");
-    expect(html).toContain("原因 &lt;script&gt;");
-    expect(html).not.toContain("原因 <script>");
   });
 
   it("renders a single-camera warning", () => {
@@ -78,6 +104,7 @@ describe("renderWorkbenchHTML", () => {
     );
 
     expect(html).toContain("Front &lt;script&gt;");
+    expect(html).toContain("Camera 2");
     expect(html).toContain('value="front&quot;&gt;&lt;script&gt;"');
     expect(html).not.toContain("Front <script>");
   });
