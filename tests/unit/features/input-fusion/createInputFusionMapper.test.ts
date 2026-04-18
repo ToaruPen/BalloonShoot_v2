@@ -116,6 +116,13 @@ describe("createInputFusionMapper", () => {
         .fusionRejectReason
     ).toBe("sideStale");
 
+    const frontStaleMapper = createInputFusionMapper();
+    frontStaleMapper.updateAimFrame(createAimFrame(100), context);
+    expect(
+      frontStaleMapper.updateTriggerFrame(createTriggerFrame(200), context)
+        .fusedFrame.fusionRejectReason
+    ).toBe("frontStale");
+
     const failedMapper = createInputFusionMapper();
     expect(
       failedMapper.updateAimFrame(createAimFrame(100), {
@@ -175,6 +182,18 @@ describe("createInputFusionMapper", () => {
     expect(result.fusedFrame.trigger?.timestamp.frameTimestampMs).toBe(100);
   });
 
+  it("treats unavailable fresh side frames as sideMissing", () => {
+    const mapper = createInputFusionMapper();
+
+    mapper.updateTriggerFrame(
+      createTriggerFrame(100, { triggerAvailability: "unavailable" }),
+      context
+    );
+    const result = mapper.updateAimFrame(createAimFrame(100), context);
+
+    expect(result.fusedFrame.fusionRejectReason).toBe("sideMissing");
+  });
+
   it("keeps the nearest side candidate when it is usable", () => {
     const mapper = createInputFusionMapper();
     const pairingContext = {
@@ -216,6 +235,18 @@ describe("createInputFusionMapper", () => {
     expectPairedDiagnosticContract(result);
     expect(result.fusedFrame.shotFired).toBe(true);
     expect(result.fusedFrame.aim?.timestamp.frameTimestampMs).toBe(100);
+  });
+
+  it("treats unavailable fresh front frames as frontMissing", () => {
+    const mapper = createInputFusionMapper();
+
+    mapper.updateAimFrame(
+      createAimFrame(100, { aimAvailability: "unavailable" }),
+      context
+    );
+    const result = mapper.updateTriggerFrame(createTriggerFrame(100), context);
+
+    expect(result.fusedFrame.fusionRejectReason).toBe("frontMissing");
   });
 
   it("does not expose side trigger data when timestamp gap falls back to frontOnlyAim", () => {

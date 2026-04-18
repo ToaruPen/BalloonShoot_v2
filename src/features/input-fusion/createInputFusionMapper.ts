@@ -98,6 +98,14 @@ const rejectReasonFor = (
     return "sideMissing";
   }
 
+  if (frontFrame.aimAvailability === "unavailable") {
+    return "frontMissing";
+  }
+
+  if (sideFrame.triggerAvailability === "unavailable") {
+    return "sideMissing";
+  }
+
   if (!isFresh(fusionTimestampMs, frontFrame, context.tuning.maxFrameAgeMs)) {
     return "frontStale";
   }
