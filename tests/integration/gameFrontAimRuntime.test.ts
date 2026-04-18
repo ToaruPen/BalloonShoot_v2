@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFrontAimGameRuntime } from "../../src/app/frontAimGameRuntime";
 import type { DevicePinnedStream } from "../../src/features/camera/createDevicePinnedStream";
 import type { MediaPipeHandTracker } from "../../src/features/hand-tracking/createMediaPipeHandTracker";
@@ -95,6 +95,10 @@ const createPinnedStream = (): DevicePinnedStream => ({
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("createFrontAimGameRuntime", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("maps a synthetic front detection to mirrored crosshair draw input", async () => {
     const video = createFakeVideo();
     const canvas = createCanvas();
@@ -156,6 +160,110 @@ describe("createFrontAimGameRuntime", () => {
     expect(drawGameFrame).toHaveBeenCalledWith(expect.anything(), {
       balloons: [],
       crosshair: undefined
+    });
+  });
+
+  it("logs createImageBitmap failures and recovers on the next frame", async () => {
+    const video = createFakeVideo();
+    const tracker = {
+      detect: vi.fn(() => Promise.resolve(undefined)),
+      cleanup: vi.fn()
+    };
+    const createImageBitmapFailure = new Error("bitmap failed");
+    const createImageBitmap = vi
+      .fn()
+      .mockRejectedValueOnce(createImageBitmapFailure)
+      .mockResolvedValue({
+        width: 640,
+        height: 480,
+        close: vi.fn()
+      } as unknown as ImageBitmap);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const runtime = createFrontAimGameRuntime({
+      deviceId: "front-device",
+      video: video as unknown as HTMLVideoElement,
+      canvas: createCanvas(),
+      createDevicePinnedStream: vi.fn(() =>
+        Promise.resolve(createPinnedStream())
+      ),
+      createMediaPipeHandTracker: vi.fn(() => Promise.resolve(tracker)),
+      createImageBitmap,
+      drawGameFrame: vi.fn()
+    });
+
+    runtime.start();
+    await flush();
+    video.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        "[front-aim runtime] processFrame failed",
+        createImageBitmapFailure
+      );
+      expect(video.requestVideoFrameCallback).toHaveBeenCalledTimes(2);
+    });
+
+    video.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(createImageBitmap).toHaveBeenCalledTimes(2);
+      expect(tracker.detect).toHaveBeenCalledOnce();
+    });
+  });
+
+  it("logs tracker detection failures and recovers on the next frame", async () => {
+    const video = createFakeVideo();
+    const firstBitmapClose = vi.fn();
+    const createImageBitmap = vi.fn(() =>
+      Promise.resolve({
+        width: 640,
+        height: 480,
+        close: firstBitmapClose
+      } as unknown as ImageBitmap)
+    );
+    const detectFailure = new Error("detect failed");
+    const tracker = {
+      detect: vi
+        .fn()
+        .mockRejectedValueOnce(detectFailure)
+        .mockResolvedValue(undefined),
+      cleanup: vi.fn()
+    };
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const runtime = createFrontAimGameRuntime({
+      deviceId: "front-device",
+      video: video as unknown as HTMLVideoElement,
+      canvas: createCanvas(),
+      createDevicePinnedStream: vi.fn(() =>
+        Promise.resolve(createPinnedStream())
+      ),
+      createMediaPipeHandTracker: vi.fn(() => Promise.resolve(tracker)),
+      createImageBitmap,
+      drawGameFrame: vi.fn()
+    });
+
+    runtime.start();
+    await flush();
+    video.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        "[front-aim runtime] processFrame failed",
+        detectFailure
+      );
+      expect(firstBitmapClose).toHaveBeenCalledOnce();
+      expect(video.requestVideoFrameCallback).toHaveBeenCalledTimes(2);
+    });
+
+    video.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(createImageBitmap).toHaveBeenCalledTimes(2);
+      expect(tracker.detect).toHaveBeenCalledTimes(2);
     });
   });
 

@@ -210,19 +210,30 @@ export const createFrontAimGameRuntime = ({
       return;
     }
 
-    const bitmap = await createBitmap(video);
-
-    if (isStopped()) {
-      bitmap.close();
-      return;
-    }
-
     let detection: HandDetection | undefined;
+    let bitmap: ImageBitmap | undefined;
+    let frameFailed = false;
 
     try {
+      bitmap = await createBitmap(video);
+
+      if (isStopped()) {
+        return;
+      }
+
       detection = await tracker.detect(bitmap, timestamp.frameTimestampMs);
+    } catch (error: unknown) {
+      frameFailed = true;
+      if (!isStopped()) {
+        console.error("[front-aim runtime] processFrame failed", error);
+      }
     } finally {
-      bitmap.close();
+      bitmap?.close();
+    }
+
+    if (frameFailed) {
+      schedule();
+      return;
     }
 
     if (isStopped()) {
