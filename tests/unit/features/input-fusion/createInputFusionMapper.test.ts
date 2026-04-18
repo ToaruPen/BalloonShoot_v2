@@ -74,6 +74,8 @@ describe("createInputFusionMapper", () => {
 
     expect(result.fusedFrame.fusionMode).toBe("frontOnlyAim");
     expect(result.fusedFrame.fusionRejectReason).toBe("sideMissing");
+    expect(result.fusedFrame.frontSource.rejectReason).toBe("none");
+    expect(result.fusedFrame.sideSource.rejectReason).toBe("sideMissing");
     expect(result.fusedFrame.shotFired).toBe(false);
   });
 
@@ -83,6 +85,8 @@ describe("createInputFusionMapper", () => {
 
     expect(result.fusedFrame.fusionMode).toBe("sideOnlyTriggerDiagnostic");
     expect(result.fusedFrame.fusionRejectReason).toBe("frontMissing");
+    expect(result.fusedFrame.frontSource.rejectReason).toBe("frontMissing");
+    expect(result.fusedFrame.sideSource.rejectReason).toBe("none");
     expect(result.fusedFrame.shotFired).toBe(false);
   });
 
@@ -104,24 +108,33 @@ describe("createInputFusionMapper", () => {
   it("rejects timestamp gaps, stale frames, and failed lanes explicitly", () => {
     const gapMapper = createInputFusionMapper();
     gapMapper.updateAimFrame(createAimFrame(100), context);
-    expect(
-      gapMapper.updateTriggerFrame(createTriggerFrame(160), context).fusedFrame
-        .fusionRejectReason
-    ).toBe("timestampGapTooLarge");
+    const timestampGap = gapMapper.updateTriggerFrame(
+      createTriggerFrame(160),
+      context
+    ).fusedFrame;
+    expect(timestampGap.fusionRejectReason).toBe("timestampGapTooLarge");
+    expect(timestampGap.frontSource.rejectReason).toBe("none");
+    expect(timestampGap.sideSource.rejectReason).toBe("none");
 
     const staleMapper = createInputFusionMapper();
     staleMapper.updateTriggerFrame(createTriggerFrame(100), context);
-    expect(
-      staleMapper.updateAimFrame(createAimFrame(200), context).fusedFrame
-        .fusionRejectReason
-    ).toBe("sideStale");
+    const sideStale = staleMapper.updateAimFrame(
+      createAimFrame(200),
+      context
+    ).fusedFrame;
+    expect(sideStale.fusionRejectReason).toBe("sideStale");
+    expect(sideStale.frontSource.rejectReason).toBe("none");
+    expect(sideStale.sideSource.rejectReason).toBe("sideStale");
 
     const frontStaleMapper = createInputFusionMapper();
     frontStaleMapper.updateAimFrame(createAimFrame(100), context);
-    expect(
-      frontStaleMapper.updateTriggerFrame(createTriggerFrame(200), context)
-        .fusedFrame.fusionRejectReason
-    ).toBe("frontStale");
+    const frontStale = frontStaleMapper.updateTriggerFrame(
+      createTriggerFrame(200),
+      context
+    ).fusedFrame;
+    expect(frontStale.fusionRejectReason).toBe("frontStale");
+    expect(frontStale.frontSource.rejectReason).toBe("frontStale");
+    expect(frontStale.sideSource.rejectReason).toBe("none");
 
     const failedMapper = createInputFusionMapper();
     expect(
@@ -192,6 +205,8 @@ describe("createInputFusionMapper", () => {
     const result = mapper.updateAimFrame(createAimFrame(100), context);
 
     expect(result.fusedFrame.fusionRejectReason).toBe("sideMissing");
+    expect(result.fusedFrame.frontSource.rejectReason).toBe("none");
+    expect(result.fusedFrame.sideSource.rejectReason).toBe("sideMissing");
   });
 
   it("keeps the nearest side candidate when it is usable", () => {
@@ -247,6 +262,8 @@ describe("createInputFusionMapper", () => {
     const result = mapper.updateTriggerFrame(createTriggerFrame(100), context);
 
     expect(result.fusedFrame.fusionRejectReason).toBe("frontMissing");
+    expect(result.fusedFrame.frontSource.rejectReason).toBe("frontMissing");
+    expect(result.fusedFrame.sideSource.rejectReason).toBe("none");
   });
 
   it("does not expose side trigger data when timestamp gap falls back to frontOnlyAim", () => {

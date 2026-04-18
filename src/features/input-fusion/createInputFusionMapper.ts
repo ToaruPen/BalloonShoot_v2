@@ -1,5 +1,8 @@
 import type { AimInputFrame } from "../../shared/types/aim";
-import type { LaneHealthStatus } from "../../shared/types/camera";
+import type {
+  FrameTimestamp,
+  LaneHealthStatus
+} from "../../shared/types/camera";
 import type {
   FusedGameInputFrame,
   FusionRejectReason,
@@ -38,6 +41,14 @@ export interface InputFusionMapper {
   ): FusionMapperResult;
   updateTriggerFrame(
     frame: TriggerInputFrame,
+    context: InputFusionMapperContext
+  ): FusionMapperResult;
+  updateAimUnavailable(
+    timestamp: FrameTimestamp,
+    context: InputFusionMapperContext
+  ): FusionMapperResult;
+  updateTriggerUnavailable(
+    timestamp: FrameTimestamp,
     context: InputFusionMapperContext
   ): FusionMapperResult;
   resetFrontLane(): void;
@@ -359,6 +370,29 @@ export const createInputFusionMapper = (): InputFusionMapper => {
         pair,
         latestAimFrame(buffers.frontFrames),
         frame,
+        context
+      );
+    },
+    updateAimUnavailable(timestamp, context) {
+      buffers.clearFront();
+
+      return buildResult(
+        timestamp.frameTimestampMs,
+        undefined,
+        undefined,
+        latestTriggerFrame(buffers.sideFrames),
+        context
+      );
+    },
+    updateTriggerUnavailable(timestamp, context) {
+      buffers.clearSide();
+      shotConsumption.reset();
+
+      return buildResult(
+        timestamp.frameTimestampMs,
+        undefined,
+        latestAimFrame(buffers.frontFrames),
+        undefined,
         context
       );
     },

@@ -172,6 +172,25 @@ const createHandDetection = () => {
   };
 };
 
+const createLowConfidenceHandDetection = () => {
+  const frame = {
+    ...createHandFrame(),
+    handedness: [
+      {
+        score: 0.1,
+        index: 0,
+        categoryName: "Right",
+        displayName: "Right"
+      }
+    ]
+  };
+
+  return {
+    rawFrame: frame,
+    filteredFrame: frame
+  };
+};
+
 const createHandDetectionWithWorld = (
   worldLandmarks: HandLandmarkSet
 ): HandDetection => {
@@ -814,6 +833,71 @@ describe("createLiveLandmarkInspection", () => {
     videos.frontVideo.fireFrame({ captureTime: 108, presentedFrames: 2 });
     await vi.waitFor(() => {
       expect(frontTracker.detect).toHaveBeenCalledTimes(2);
+      expect(liveInspection.getState().fusionFrame?.shotFired).toBe(false);
+    });
+  });
+
+  it("refreshes fusion snapshots when front tracking loses usable input after a shot", async () => {
+    const frontTracker = createFakeTracker();
+    const sideTracker = createFakeTracker();
+    frontTracker.detect
+      .mockResolvedValueOnce(createHandDetection())
+      .mockResolvedValueOnce(createLowConfidenceHandDetection());
+    sideTracker.detect
+      .mockResolvedValueOnce(createHandDetectionWithWorld(openWorldLandmarks()))
+      .mockResolvedValueOnce(
+        createHandDetectionWithWorld(pulledWorldLandmarks())
+      )
+      .mockResolvedValueOnce(
+        createHandDetectionWithWorld(pulledWorldLandmarks())
+      );
+    createMediaPipeHandTrackerMock
+      .mockResolvedValueOnce(frontTracker)
+      .mockResolvedValueOnce(sideTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.frontVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontAimFrame).toBeDefined();
+    });
+    videos.sideVideo.fireFrame({ captureTime: 102, presentedFrames: 1 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().sideTriggerFrame?.triggerEdge).toBe(
+        "none"
+      );
+    });
+    videos.sideVideo.fireFrame({ captureTime: 104, presentedFrames: 2 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().sideTriggerFrame?.triggerEdge).toBe(
+        "pullStarted"
+      );
+    });
+    videos.sideVideo.fireFrame({ captureTime: 106, presentedFrames: 3 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().fusionFrame?.fusionMode).toBe(
+        "pairedFrontAndSide"
+      );
+      expect(liveInspection.getState().fusionFrame?.shotFired).toBe(true);
+    });
+
+    videos.frontVideo.fireFrame({ captureTime: 108, presentedFrames: 2 });
+
+    await vi.waitFor(() => {
+      expect(frontTracker.detect).toHaveBeenCalledTimes(2);
+      expect(liveInspection.getState().frontAimFrame).toBeUndefined();
+      expect(liveInspection.getState().fusionFrame?.fusionMode).not.toBe(
+        "pairedFrontAndSide"
+      );
       expect(liveInspection.getState().fusionFrame?.shotFired).toBe(false);
     });
   });

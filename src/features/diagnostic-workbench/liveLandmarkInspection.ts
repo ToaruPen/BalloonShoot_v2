@@ -298,6 +298,12 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     );
   };
 
+  const currentFusionContext = () => ({
+    frontLaneHealth: inspectionState.frontLaneHealth,
+    sideLaneHealth: inspectionState.sideLaneHealth,
+    tuning: inspectionState.fusionTuning
+  });
+
   const setLaneDetection = (
     role: LaneTrackingOptions["role"],
     detection: FrontHandDetection | SideHandDetection | undefined,
@@ -312,22 +318,20 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       });
       const fusionResult =
         sideResult.triggerFrame === undefined
-          ? undefined
-          : inputFusionMapper.updateTriggerFrame(sideResult.triggerFrame, {
-              frontLaneHealth: inspectionState.frontLaneHealth,
-              sideLaneHealth: inspectionState.sideLaneHealth,
-              tuning: inspectionState.fusionTuning
-            });
+          ? inputFusionMapper.updateTriggerUnavailable(
+              timestamp,
+              currentFusionContext()
+            )
+          : inputFusionMapper.updateTriggerFrame(
+              sideResult.triggerFrame,
+              currentFusionContext()
+            );
       setInspection({
         sideDetection: detection as SideHandDetection | undefined,
         sideTriggerFrame: sideResult.triggerFrame,
         sideTriggerTelemetry: sideResult.telemetry,
-        ...(fusionResult === undefined
-          ? {}
-          : {
-              fusionFrame: fusionResult.fusedFrame,
-              fusionTelemetry: fusionResult.telemetry
-            })
+        fusionFrame: fusionResult.fusedFrame,
+        fusionTelemetry: fusionResult.telemetry
       });
       return;
     }
@@ -340,23 +344,21 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     });
     const fusionResult =
       frontResult.aimFrame === undefined
-        ? undefined
-        : inputFusionMapper.updateAimFrame(frontResult.aimFrame, {
-            frontLaneHealth: inspectionState.frontLaneHealth,
-            sideLaneHealth: inspectionState.sideLaneHealth,
-            tuning: inspectionState.fusionTuning
-          });
+        ? inputFusionMapper.updateAimUnavailable(
+            timestamp,
+            currentFusionContext()
+          )
+        : inputFusionMapper.updateAimFrame(
+            frontResult.aimFrame,
+            currentFusionContext()
+          );
 
     setInspection({
       frontDetection,
       frontAimFrame: frontResult.aimFrame,
       frontAimTelemetry: frontResult.telemetry,
-      ...(fusionResult === undefined
-        ? {}
-        : {
-            fusionFrame: fusionResult.fusedFrame,
-            fusionTelemetry: fusionResult.telemetry
-          })
+      fusionFrame: fusionResult.fusedFrame,
+      fusionTelemetry: fusionResult.telemetry
     });
   };
 
