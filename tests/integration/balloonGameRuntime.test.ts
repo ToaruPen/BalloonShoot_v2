@@ -1,11 +1,85 @@
 import { describe, expect, it, vi } from "vitest";
 import { createBalloonGameRuntime } from "../../src/app/balloonGameRuntime";
 import type { Balloon } from "../../src/features/gameplay/domain/balloon";
+import type { DevicePinnedStream } from "../../src/features/camera/createDevicePinnedStream";
+import { getFrontAimFilterConfig } from "../../src/features/front-aim";
+import type { MediaPipeHandTracker } from "../../src/features/hand-tracking/createMediaPipeHandTracker";
+import { getSideTriggerFilterConfig } from "../../src/features/side-trigger";
+import type { LaneHealthStatus } from "../../src/shared/types/camera";
 import type { FusedGameInputFrame } from "../../src/shared/types/fusion";
+import type { HandDetection, HandFrame } from "../../src/shared/types/hand";
+import type * as InputFusionModule from "../../src/features/input-fusion";
 import {
   createAimFrame,
   createTriggerFrame
 } from "../unit/features/input-fusion/testFactory";
+
+interface CapturedFusionContext {
+  readonly method:
+    | "updateAimFrame"
+    | "updateTriggerFrame"
+    | "updateAimUnavailable"
+    | "updateTriggerUnavailable";
+  readonly frontLaneHealth: LaneHealthStatus;
+  readonly sideLaneHealth: LaneHealthStatus;
+}
+
+const { capturedFusionContexts } = vi.hoisted(() => ({
+  capturedFusionContexts: [] as CapturedFusionContext[]
+}));
+
+vi.mock("../../src/features/input-fusion", async (importOriginal) => {
+  const actual = await importOriginal<typeof InputFusionModule>();
+
+  return {
+    ...actual,
+    createInputFusionMapper: () => {
+      const mapper = actual.createInputFusionMapper();
+      const capture = (
+        method: CapturedFusionContext["method"],
+        context: Omit<CapturedFusionContext, "method">
+      ): void => {
+        capturedFusionContexts.push({ method, ...context });
+      };
+
+      return {
+        updateAimFrame: (
+          ...args: Parameters<typeof mapper.updateAimFrame>
+        ): ReturnType<typeof mapper.updateAimFrame> => {
+          capture("updateAimFrame", args[1]);
+          return mapper.updateAimFrame(...args);
+        },
+        updateTriggerFrame: (
+          ...args: Parameters<typeof mapper.updateTriggerFrame>
+        ): ReturnType<typeof mapper.updateTriggerFrame> => {
+          capture("updateTriggerFrame", args[1]);
+          return mapper.updateTriggerFrame(...args);
+        },
+        updateAimUnavailable: (
+          ...args: Parameters<typeof mapper.updateAimUnavailable>
+        ): ReturnType<typeof mapper.updateAimUnavailable> => {
+          capture("updateAimUnavailable", args[1]);
+          return mapper.updateAimUnavailable(...args);
+        },
+        updateTriggerUnavailable: (
+          ...args: Parameters<typeof mapper.updateTriggerUnavailable>
+        ): ReturnType<typeof mapper.updateTriggerUnavailable> => {
+          capture("updateTriggerUnavailable", args[1]);
+          return mapper.updateTriggerUnavailable(...args);
+        },
+        resetFrontLane: (): void => {
+          mapper.resetFrontLane();
+        },
+        resetSideLane: (): void => {
+          mapper.resetSideLane();
+        },
+        resetAll: (): void => {
+          mapper.resetAll();
+        }
+      };
+    }
+  };
+});
 
 const createFusedFrame = (
   patch: Partial<FusedGameInputFrame> = {}
@@ -69,6 +143,103 @@ const createCanvas = () =>
     getContext: vi.fn(() => ({ canvas: { width: 640, height: 480 } }))
   }) as unknown as HTMLCanvasElement;
 
+const createVideoFrameMetadata = (
+  patch: Partial<VideoFrameCallbackMetadata> = {}
+): VideoFrameCallbackMetadata => ({
+  captureTime: 100,
+  expectedDisplayTime: 100,
+  height: 480,
+  mediaTime: 0,
+  presentedFrames: 1,
+  presentationTime: 100,
+  processingDuration: 0,
+  width: 640,
+  ...patch
+});
+
+interface FakeRuntimeVideo extends HTMLVideoElement {
+  readonly requestVideoFrameCallbackMock: ReturnType<typeof vi.fn>;
+  readonly cancelVideoFrameCallbackMock: ReturnType<typeof vi.fn>;
+  fireFrame(metadata?: Partial<VideoFrameCallbackMetadata>): void;
+}
+
+const createVideo = () => {
+  const callbacks = new Map<number, VideoFrameRequestCallback>();
+  let nextCallbackId = 1;
+  const requestVideoFrameCallbackMock = vi.fn(
+    (callback: VideoFrameRequestCallback) => {
+      const callbackId = nextCallbackId;
+      nextCallbackId += 1;
+      callbacks.set(callbackId, callback);
+      return callbackId;
+    }
+  );
+  const cancelVideoFrameCallbackMock = vi.fn((callbackId: number) => {
+    callbacks.delete(callbackId);
+  });
+
+  return {
+    readyState: 2,
+    videoWidth: 640,
+    videoHeight: 480,
+    srcObject: undefined,
+    requestVideoFrameCallback: requestVideoFrameCallbackMock,
+    requestVideoFrameCallbackMock,
+    cancelVideoFrameCallback: cancelVideoFrameCallbackMock,
+    cancelVideoFrameCallbackMock,
+    fireFrame(metadata: Partial<VideoFrameCallbackMetadata> = {}) {
+      const next = callbacks.entries().next();
+
+      if (next.done === true) {
+        throw new Error("No pending video frame callback");
+      }
+
+      const [callbackId, callback] = next.value;
+      callbacks.delete(callbackId);
+      callback(1000, createVideoFrameMetadata(metadata));
+    }
+  } as unknown as FakeRuntimeVideo;
+};
+
+const createHandFrame = (): HandFrame => ({
+  width: 640,
+  height: 480,
+  landmarks: {
+    wrist: { x: 0.5, y: 0.9, z: 0 },
+    indexMcp: { x: 0.5, y: 0.65, z: 0 },
+    indexTip: { x: 0.5, y: 0.5, z: 0 },
+    thumbIp: { x: 0.42, y: 0.7, z: 0 },
+    thumbTip: { x: 0.35, y: 0.68, z: 0 },
+    middleTip: { x: 0.55, y: 0.55, z: 0 },
+    ringTip: { x: 0.6, y: 0.58, z: 0 },
+    pinkyTip: { x: 0.65, y: 0.62, z: 0 }
+  }
+});
+
+const createHandDetection = (): HandDetection => {
+  const frame = createHandFrame();
+
+  return {
+    rawFrame: frame,
+    filteredFrame: frame
+  };
+};
+
+const createPinnedStream = (deviceId: string): DevicePinnedStream => ({
+  deviceId,
+  stream: { id: `${deviceId}-stream` } as MediaStream,
+  stop: vi.fn()
+});
+
+const createTracker = (
+  detect: MediaPipeHandTracker["detect"] = vi.fn(() =>
+    Promise.resolve(undefined)
+  )
+): MediaPipeHandTracker => ({
+  detect,
+  cleanup: vi.fn(() => Promise.resolve())
+});
+
 const createAudio = () => ({
   startBgm: vi.fn(() => Promise.resolve()),
   stopBgm: vi.fn(),
@@ -79,6 +250,131 @@ const createAudio = () => ({
 });
 
 describe("createBalloonGameRuntime", () => {
+  it("passes lane-specific filter configs to front and side game trackers", async () => {
+    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+    const raf = createRaf();
+    const createMediaPipeHandTracker = vi
+      .fn()
+      .mockResolvedValue(createTracker());
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: createVideo(),
+      sideVideo: createVideo(),
+      canvas: createCanvas(),
+      hudRoot: { innerHTML: "" } as HTMLElement,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      createDevicePinnedStream: (deviceId) =>
+        Promise.resolve(createPinnedStream(deviceId)),
+      createMediaPipeHandTracker
+    });
+
+    runtime.start();
+
+    await vi.waitFor(() => {
+      expect(createMediaPipeHandTracker).toHaveBeenCalledTimes(2);
+    });
+    expect(createMediaPipeHandTracker).toHaveBeenNthCalledWith(1, {
+      getFilterConfig: getFrontAimFilterConfig
+    });
+    expect(createMediaPipeHandTracker).toHaveBeenNthCalledWith(2, {
+      getFilterConfig: getSideTriggerFilterConfig
+    });
+
+    runtime.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it("restores front lane health before fusing after a transient frame error", async () => {
+    capturedFusionContexts.length = 0;
+    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+    const raf = createRaf();
+    const hudRoot = { innerHTML: "" } as HTMLElement;
+    const drawGameFrame = vi.fn();
+    const audio = createAudio();
+    const frontVideo = createVideo();
+    const sideVideo = createVideo();
+    const transientError = new Error("bitmap failed once");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const frontDetect = vi.fn(() => Promise.resolve(createHandDetection()));
+    const frontTracker = createTracker(frontDetect);
+    const sideTracker = createTracker();
+    const createMediaPipeHandTracker = vi
+      .fn()
+      .mockResolvedValueOnce(frontTracker)
+      .mockResolvedValueOnce(sideTracker);
+    const createImageBitmap = vi
+      .fn()
+      .mockRejectedValueOnce(transientError)
+      .mockResolvedValue({
+        width: 640,
+        height: 480,
+        close: vi.fn()
+      } as unknown as ImageBitmap);
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo,
+      sideVideo,
+      canvas: createCanvas(),
+      hudRoot,
+      nowMs: () => 0,
+      createAudioController: () => audio,
+      drawGameFrame,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      createDevicePinnedStream: (deviceId) =>
+        Promise.resolve(createPinnedStream(deviceId)),
+      createMediaPipeHandTracker,
+      createImageBitmap
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(frontVideo.requestVideoFrameCallbackMock).toHaveBeenCalledOnce();
+    });
+
+    frontVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+    await vi.waitFor(() => {
+      expect(frontVideo.requestVideoFrameCallbackMock).toHaveBeenCalledTimes(2);
+    });
+    expect(consoleError).toHaveBeenCalledWith(
+      "[balloon game runtime] processFrame failed",
+      transientError
+    );
+
+    frontVideo.fireFrame({ captureTime: 116, presentedFrames: 2 });
+    await vi.waitFor(() => {
+      expect(frontDetect).toHaveBeenCalledOnce();
+      expect(frontVideo.requestVideoFrameCallbackMock).toHaveBeenCalledTimes(3);
+    });
+    raf.fire(4_000);
+
+    expect(
+      capturedFusionContexts.find(
+        (context) => context.method === "updateAimFrame"
+      )
+    ).toMatchObject({
+      frontLaneHealth: "tracking",
+      sideLaneHealth: "tracking"
+    });
+    expect(drawGameFrame).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        crosshair: { x: 320, y: 240 }
+      })
+    );
+
+    runtime.destroy();
+    vi.unstubAllGlobals();
+  });
+
   it("processes one fused shot once across repeated render ticks", () => {
     const raf = createRaf();
     const hudRoot = { innerHTML: "" } as HTMLElement;

@@ -10,6 +10,8 @@ import {
   videoViewportSize
 } from "../../../../src/features/diagnostic-workbench/liveLandmarkInspection";
 import { renderWorkbenchHTML } from "../../../../src/features/diagnostic-workbench/renderWorkbench";
+import { getFrontAimFilterConfig } from "../../../../src/features/front-aim";
+import { getSideTriggerFilterConfig } from "../../../../src/features/side-trigger";
 import type {
   FrontHandDetection,
   HandDetection,
@@ -419,6 +421,38 @@ describe("createLiveLandmarkInspection", () => {
     await vi.waitFor(() => {
       expect(frontTracker.cleanup).toHaveBeenCalledOnce();
       expect(sideTracker.cleanup).toHaveBeenCalledOnce();
+    });
+  });
+
+  it("passes lane-specific filter configs to diagnostic trackers", async () => {
+    const frontTracker = createFakeTracker();
+    const sideTracker = createFakeTracker();
+    createMediaPipeHandTrackerMock
+      .mockResolvedValueOnce(frontTracker)
+      .mockResolvedValueOnce(sideTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.frontVideo.fireFrame();
+    videos.sideVideo.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(createMediaPipeHandTrackerMock).toHaveBeenCalledTimes(2);
+    });
+    expect(createMediaPipeHandTrackerMock).toHaveBeenNthCalledWith(1, {
+      getFilterConfig: getFrontAimFilterConfig
+    });
+    expect(createMediaPipeHandTrackerMock).toHaveBeenNthCalledWith(2, {
+      getFilterConfig: getSideTriggerFilterConfig
     });
   });
 

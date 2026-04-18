@@ -25,6 +25,7 @@ import {
 import {
   createSideTriggerMapper,
   defaultSideTriggerTuning,
+  getSideTriggerFilterConfig,
   toSideDetection,
   type SideTriggerMapper
 } from "../features/side-trigger";
@@ -48,10 +49,7 @@ import {
   type GameSession
 } from "../features/gameplay/domain/gameSession";
 import type { FusedGameInputFrame } from "../shared/types/fusion";
-import type {
-  FrameTimestamp,
-  LaneHealthStatus
-} from "../shared/types/camera";
+import type { FrameTimestamp, LaneHealthStatus } from "../shared/types/camera";
 import type { HandDetection } from "../shared/types/hand";
 import { renderGameHud } from "./gameHud";
 
@@ -83,7 +81,9 @@ interface BalloonGameRuntimeOptions {
     deviceId: string
   ) => Promise<DevicePinnedStream>;
   readonly createMediaPipeHandTracker?: typeof createMediaPipeHandTracker;
-  readonly createImageBitmap?: (source: HTMLVideoElement) => Promise<ImageBitmap>;
+  readonly createImageBitmap?: (
+    source: HTMLVideoElement
+  ) => Promise<ImageBitmap>;
 }
 
 export interface BalloonGameRuntime {
@@ -99,7 +99,9 @@ const viewportSizeFor = (
   canvas: HTMLCanvasElement
 ): { width: number; height: number } => ({
   width:
-    positiveDimension(canvas.clientWidth) ?? positiveDimension(canvas.width) ?? 1,
+    positiveDimension(canvas.clientWidth) ??
+    positiveDimension(canvas.width) ??
+    1,
   height:
     positiveDimension(canvas.clientHeight) ??
     positiveDimension(canvas.height) ??
@@ -299,8 +301,16 @@ export const createBalloonGameRuntime = ({
             timestamp
           });
     const viewport = resolveFrontAimViewportSize({
-      widthCandidates: [canvas.width, canvas.clientWidth, frontVideo.videoWidth],
-      heightCandidates: [canvas.height, canvas.clientHeight, frontVideo.videoHeight]
+      widthCandidates: [
+        canvas.width,
+        canvas.clientWidth,
+        frontVideo.videoWidth
+      ],
+      heightCandidates: [
+        canvas.height,
+        canvas.clientHeight,
+        frontVideo.videoHeight
+      ]
     });
     const frontResult = frontAimMapper.update({
       detection: frontDetection,
@@ -329,8 +339,8 @@ export const createBalloonGameRuntime = ({
         : toSideDetection(detection, {
             deviceId: sideDeviceId,
             streamId:
-              streams.find((stream) => stream.deviceId === sideDeviceId)
-                ?.stream.id ?? "side-stream",
+              streams.find((stream) => stream.deviceId === sideDeviceId)?.stream
+                .id ?? "side-stream",
             timestamp
           });
     const sideResult = sideTriggerMapper.update({
@@ -398,7 +408,12 @@ export const createBalloonGameRuntime = ({
     let tracker: MediaPipeHandTracker;
 
     try {
-      tracker = await createTracker({ getFilterConfig: getFrontAimFilterConfig });
+      tracker = await createTracker({
+        getFilterConfig:
+          role === "frontAim"
+            ? getFrontAimFilterConfig
+            : getSideTriggerFilterConfig
+      });
     } catch (error: unknown) {
       if (laneStillActive()) {
         console.error("[balloon game runtime] tracker startup failed", error);
@@ -478,6 +493,8 @@ export const createBalloonGameRuntime = ({
         if (!laneStillActive()) {
           return;
         }
+
+        setLaneHealth("tracking");
 
         if (role === "frontAim") {
           updateFrontFusion(detection, timestamp);

@@ -9,7 +9,6 @@ import {
   resolveFrontAimViewportSize,
   toFrontDetection
 } from "../front-aim";
-import { handPresenceConfidenceFor } from "../front-aim/frontAimDetectionConversion";
 import {
   coerceFusionTuningValue,
   createInputFusionMapper,
@@ -23,6 +22,7 @@ import {
   coerceSideTriggerTuningValue,
   createSideTriggerMapper,
   defaultSideTriggerTuning,
+  getSideTriggerFilterConfig,
   sideTriggerSliderMetadata,
   type SideTriggerMapper,
   type SideTriggerTuning,
@@ -38,6 +38,7 @@ import type {
   HandFrame,
   SideHandDetection
 } from "../../shared/types/hand";
+import { handPresenceConfidenceFor } from "../../shared/helpers/handConfidence";
 import type { WorkbenchState } from "./DiagnosticWorkbench";
 import { createLandmarkOverlayModel } from "./landmarkOverlay";
 import { renderFrontAimPanel } from "./renderFrontAimPanel";
@@ -189,7 +190,6 @@ const toSideDetection = (
   rawFrame: detection.rawFrame,
   filteredFrame: detection.filteredFrame,
   handPresenceConfidence: handPresenceConfidenceFor(detection),
-  // TODO(M4): Compute real side view quality when side trigger lands.
   sideViewQuality: "good"
 });
 
@@ -402,7 +402,10 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
 
     const getTracker = (): Promise<MediaPipeHandTracker> => {
       trackerPromise ??= createMediaPipeHandTracker({
-        getFilterConfig: getFrontAimFilterConfig
+        getFilterConfig:
+          options.role === "frontAim"
+            ? getFrontAimFilterConfig
+            : getSideTriggerFilterConfig
       });
       return trackerPromise;
     };

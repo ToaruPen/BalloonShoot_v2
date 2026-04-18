@@ -1,3 +1,4 @@
+import { handPresenceConfidenceFor } from "../../shared/helpers/handConfidence";
 import type { FrameTimestamp } from "../../shared/types/camera";
 import type { HandDetection, SideHandDetection } from "../../shared/types/hand";
 
@@ -6,12 +7,6 @@ interface ToSideDetectionOptions {
   readonly streamId: string;
   readonly timestamp: FrameTimestamp;
 }
-
-const handPresenceConfidenceFor = (detection: HandDetection): number => {
-  const scores = detection.rawFrame.handedness?.map((hand) => hand.score) ?? [];
-
-  return scores.length === 0 ? 1 : Math.max(...scores);
-};
 
 export const toSideDetection = (
   detection: HandDetection,
