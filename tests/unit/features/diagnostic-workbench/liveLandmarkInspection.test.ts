@@ -7,6 +7,14 @@ import { createDiagnosticWorkbench } from "../../../../src/features/diagnostic-w
 import type { DiagnosticWorkbench } from "../../../../src/features/diagnostic-workbench/DiagnosticWorkbench";
 import { createLiveLandmarkInspection } from "../../../../src/features/diagnostic-workbench/liveLandmarkInspection";
 import { renderWorkbenchHTML } from "../../../../src/features/diagnostic-workbench/renderWorkbench";
+import type {
+  HandDetection,
+  HandLandmarkSet
+} from "../../../../src/shared/types/hand";
+import {
+  openWorldLandmarks,
+  pulledWorldLandmarks
+} from "../side-trigger/testFactory";
 
 const { createMediaPipeHandTrackerMock } = vi.hoisted(() => ({
   createMediaPipeHandTrackerMock: vi.fn()
@@ -153,6 +161,22 @@ const createHandFrame = () => ({
 
 const createHandDetection = () => {
   const frame = createHandFrame();
+
+  return {
+    rawFrame: frame,
+    filteredFrame: frame
+  };
+};
+
+const createHandDetectionWithWorld = (
+  worldLandmarks: HandLandmarkSet
+): HandDetection => {
+  const frame = {
+    width: 640,
+    height: 480,
+    landmarks: worldLandmarks,
+    worldLandmarks
+  };
 
   return {
     rawFrame: frame,
@@ -396,7 +420,8 @@ describe("createLiveLandmarkInspection", () => {
 
   it("does not write stale detection results after stop while detect is in flight", async () => {
     const frontTracker = createFakeTracker();
-    const detectResult = createDeferred<ReturnType<typeof createHandDetection>>();
+    const detectResult =
+      createDeferred<ReturnType<typeof createHandDetection>>();
     const bitmapClose = vi.fn();
     frontTracker.detect.mockReturnValueOnce(detectResult.promise);
     vi.mocked(createImageBitmap).mockResolvedValueOnce({
@@ -429,5 +454,143 @@ describe("createLiveLandmarkInspection", () => {
       expect(bitmapClose).toHaveBeenCalledOnce();
     });
     expect(liveInspection.getState().frontDetection).toBeUndefined();
+  });
+
+  it("maps live side detections into trigger frames and telemetry", async () => {
+    const sideTracker = createFakeTracker();
+    sideTracker.detect
+      .mockResolvedValueOnce(createHandDetectionWithWorld(openWorldLandmarks()))
+      .mockResolvedValueOnce(
+        createHandDetectionWithWorld(pulledWorldLandmarks())
+      )
+      .mockResolvedValueOnce(
+        createHandDetectionWithWorld(pulledWorldLandmarks())
+      );
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(sideTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.sideVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().sideTriggerFrame?.sideTriggerPhase).toBe(
+        "SideTriggerOpenReady"
+      );
+    });
+
+    videos.sideVideo.fireFrame({ captureTime: 110, presentedFrames: 2 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().sideTriggerFrame?.triggerEdge).toBe(
+        "pullStarted"
+      );
+    });
+
+    videos.sideVideo.fireFrame({ captureTime: 120, presentedFrames: 3 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().sideTriggerFrame?.triggerEdge).toBe(
+        "shotCommitted"
+      );
+      expect(liveInspection.getState().sideTriggerTelemetry?.phase).toBe(
+        "SideTriggerPulledLatched"
+      );
+    });
+  });
+
+  it("passes live tuning changes to subsequent side trigger mapper updates", async () => {
+    const sideTracker = createFakeTracker();
+    sideTracker.detect
+      .mockResolvedValueOnce(createHandDetectionWithWorld(openWorldLandmarks()))
+      .mockResolvedValueOnce(
+        createHandDetectionWithWorld(pulledWorldLandmarks())
+      )
+      .mockResolvedValueOnce(
+        createHandDetectionWithWorld(pulledWorldLandmarks())
+      );
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(sideTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.setSideTriggerTuning("minPullDwellFrames", 3);
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+
+    videos.sideVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().sideTriggerFrame?.sideTriggerPhase).toBe(
+        "SideTriggerOpenReady"
+      );
+    });
+
+    videos.sideVideo.fireFrame({ captureTime: 110, presentedFrames: 2 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().sideTriggerFrame?.triggerEdge).toBe(
+        "pullStarted"
+      );
+    });
+
+    videos.sideVideo.fireFrame({ captureTime: 120, presentedFrames: 3 });
+    await vi.waitFor(() => {
+      expect(sideTracker.detect).toHaveBeenCalledTimes(3);
+      expect(liveInspection.getState().sideTriggerFrame?.sideTriggerPhase).toBe(
+        "SideTriggerPullCandidate"
+      );
+    });
+    expect(liveInspection.getState().sideTriggerFrame?.triggerEdge).toBe(
+      "none"
+    );
+  });
+
+  it("clears side trigger snapshots when leaving preview", async () => {
+    const sideTracker = createFakeTracker();
+    sideTracker.detect.mockResolvedValueOnce(
+      createHandDetectionWithWorld(openWorldLandmarks())
+    );
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(sideTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.sideVideo.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().sideTriggerFrame).toBeDefined();
+    });
+
+    liveInspection.sync({
+      screen: "deviceSelection",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: undefined,
+      sideStream: undefined,
+      error: undefined
+    });
+
+    expect(liveInspection.getState().sideTriggerFrame).toBeUndefined();
+    expect(liveInspection.getState().sideTriggerTelemetry).toBeUndefined();
   });
 });

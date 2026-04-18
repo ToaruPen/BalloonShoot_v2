@@ -178,6 +178,77 @@ h4 {
   margin-bottom: 0.4rem;
 }
 
+.wb-world-landmarks,
+.wb-trigger-panel,
+.wb-tuning-panel {
+  margin-top: 0.75rem;
+  border: 1px solid #31425f;
+  border-radius: 6px;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.wb-world-landmarks table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.76rem;
+}
+
+.wb-world-landmarks th,
+.wb-world-landmarks td {
+  padding: 0.25rem;
+  border-bottom: 1px solid #31425f;
+  text-align: left;
+}
+
+.wb-unavailable {
+  color: #c9d4dc;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.78rem;
+}
+
+.wb-trigger-grid,
+.wb-tuning-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.wb-trigger-value,
+.wb-tuning-control {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.76rem;
+}
+
+.wb-trigger-value span,
+.wb-tuning-control span {
+  color: #a8d8ea;
+  overflow-wrap: anywhere;
+}
+
+.wb-trigger-value strong,
+.wb-tuning-control output {
+  color: #fff;
+}
+
+.wb-tuning-control input {
+  width: 100%;
+}
+
+.wb-shot-committed {
+  margin-bottom: 0.5rem;
+  border-radius: 6px;
+  padding: 0.35rem;
+  background: #e74c3c;
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+}
+
 .wb-controls {
   margin-top: 1rem;
 }
@@ -193,7 +264,9 @@ h4 {
 
 @media (max-width: 780px) {
   .wb-preview-grid,
-  .wb-inspection-panes {
+  .wb-inspection-panes,
+  .wb-trigger-grid,
+  .wb-tuning-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -6,6 +6,7 @@ import type {
 } from "../../../../src/features/diagnostic-workbench/DiagnosticWorkbench";
 import { createLiveLandmarkInspection } from "../../../../src/features/diagnostic-workbench/liveLandmarkInspection";
 import { renderWorkbenchHTML } from "../../../../src/features/diagnostic-workbench/renderWorkbench";
+import { defaultSideTriggerTuning } from "../../../../src/features/side-trigger";
 import type {
   FrontHandDetection,
   HandFrame,
@@ -230,7 +231,10 @@ describe("renderWorkbenchHTML", () => {
         frontDetection: createFrontDetection(),
         sideDetection: createSideDetection(),
         frontLaneHealth: "tracking",
-        sideLaneHealth: "tracking"
+        sideLaneHealth: "tracking",
+        sideTriggerFrame: undefined,
+        sideTriggerTelemetry: undefined,
+        sideTriggerTuning: defaultSideTriggerTuning
       }
     );
 
@@ -244,5 +248,8 @@ describe("renderWorkbenchHTML", () => {
     expect(html).toContain("captureTime");
     expect(html).toContain("1240.0 ms");
     expect(html).toContain("expectedDisplayTime");
+    expect(html).toContain("サイド world landmarks");
+    expect(html).toContain("サイド trigger evidence");
+    expect(html).toContain("SIDE_TRIGGER_PULL_ENTER_THRESHOLD");
   });
 });

@@ -3,6 +3,15 @@ import {
   createMediaPipeHandTracker,
   type MediaPipeHandTracker
 } from "../hand-tracking/createMediaPipeHandTracker";
+import {
+  coerceSideTriggerTuningValue,
+  createSideTriggerMapper,
+  defaultSideTriggerTuning,
+  sideTriggerSliderMetadata,
+  type SideTriggerMapper,
+  type SideTriggerTuning,
+  type SideTriggerTuningKey
+} from "../side-trigger";
 import { gameConfig } from "../../shared/config/gameConfig";
 import type {
   FrameTimestamp,
@@ -16,6 +25,8 @@ import type {
 } from "../../shared/types/hand";
 import type { WorkbenchState } from "./DiagnosticWorkbench";
 import { createLandmarkOverlayModel } from "./landmarkOverlay";
+import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
+import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
 import type { WorkbenchInspectionState } from "./renderWorkbench";
 import { formatFrameTimestamp } from "./timestampFormat";
 
@@ -35,6 +46,8 @@ interface LaneTrackingOptions {
 interface LiveLandmarkInspection {
   getState(): WorkbenchInspectionState;
   sync(state: WorkbenchState): void;
+  setSideTriggerTuning(key: SideTriggerTuningKey, value: number): void;
+  resetSideTriggerTuning(): void;
   updateDom(): void;
   destroy(): void;
 }
@@ -50,7 +63,10 @@ const createInitialInspectionState = (): WorkbenchInspectionState => ({
   frontDetection: undefined,
   sideDetection: undefined,
   frontLaneHealth: "notStarted",
-  sideLaneHealth: "notStarted"
+  sideLaneHealth: "notStarted",
+  sideTriggerFrame: undefined,
+  sideTriggerTelemetry: undefined,
+  sideTriggerTuning: defaultSideTriggerTuning
 });
 
 const getFilterConfig = () => ({
@@ -64,6 +80,14 @@ const updateText = (id: string, value: string): void => {
 
   if (element !== null) {
     element.textContent = value;
+  }
+};
+
+const updateOuterHTML = (id: string, value: string): void => {
+  const element = document.querySelector<HTMLElement>(`#${id}`);
+
+  if (element !== null) {
+    element.outerHTML = value;
   }
 };
 
@@ -166,6 +190,7 @@ type LaneDetection = FrontHandDetection | SideHandDetection | undefined;
 export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   let inspectionState = createInitialInspectionState();
   let activeTracking: ActiveTracking | undefined;
+  let sideTriggerMapper: SideTriggerMapper = createSideTriggerMapper();
 
   const setInspection = (patch: Partial<WorkbenchInspectionState>): void => {
     inspectionState = { ...inspectionState, ...patch };
@@ -209,6 +234,17 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       inspectionState.sideDetection?.filteredFrame,
       "#34d399"
     );
+    updateOuterHTML(
+      "wb-side-world-landmarks",
+      renderSideWorldLandmarks(inspectionState.sideDetection)
+    );
+    updateOuterHTML(
+      "wb-side-trigger-panel",
+      renderSideTriggerPanel(
+        inspectionState.sideTriggerFrame,
+        inspectionState.sideTriggerTelemetry
+      )
+    );
   };
 
   const setLaneHealth = (
@@ -235,13 +271,26 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
 
   const setLaneDetection = (
     role: LaneTrackingOptions["role"],
-    detection: FrontHandDetection | SideHandDetection | undefined
+    detection: FrontHandDetection | SideHandDetection | undefined,
+    timestamp: FrameTimestamp
   ): void => {
-    setInspection(
-      role === "frontAim"
-        ? { frontDetection: detection as FrontHandDetection | undefined }
-        : { sideDetection: detection as SideHandDetection | undefined }
-    );
+    if (role === "sideTrigger") {
+      const sideResult = sideTriggerMapper.update({
+        detection: detection as SideHandDetection | undefined,
+        timestamp,
+        tuning: inspectionState.sideTriggerTuning
+      });
+      setInspection({
+        sideDetection: detection as SideHandDetection | undefined,
+        sideTriggerFrame: sideResult.triggerFrame,
+        sideTriggerTelemetry: sideResult.telemetry
+      });
+      return;
+    }
+
+    setInspection({
+      frontDetection: detection as FrontHandDetection | undefined
+    });
   };
 
   const runLaneDetection = async (
@@ -315,7 +364,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
           return;
         }
 
-        setLaneDetection(options.role, laneDetection);
+        setLaneDetection(options.role, laneDetection, timestamp);
         setLaneHealth(options.role, "tracking");
       } catch (error: unknown) {
         if (isStopped()) {
@@ -385,7 +434,12 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   };
 
   const resetTrackingState = (): void => {
-    inspectionState = createInitialInspectionState();
+    const { sideTriggerTuning } = inspectionState;
+    inspectionState = {
+      ...createInitialInspectionState(),
+      sideTriggerTuning
+    };
+    sideTriggerMapper = createSideTriggerMapper();
     updateDom();
   };
 
@@ -456,9 +510,30 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       return inspectionState;
     },
     sync,
+    setSideTriggerTuning(key, value) {
+      const metadata = sideTriggerSliderMetadata.find(
+        (item) => item.key === key
+      );
+
+      if (metadata === undefined) {
+        return;
+      }
+
+      const sideTriggerTuning: SideTriggerTuning = {
+        ...inspectionState.sideTriggerTuning,
+        [key]: coerceSideTriggerTuningValue(metadata, value)
+      };
+
+      setInspection({ sideTriggerTuning });
+      updateText(`wb-tuning-value-${key}`, String(sideTriggerTuning[key]));
+    },
+    resetSideTriggerTuning() {
+      setInspection({ sideTriggerTuning: defaultSideTriggerTuning });
+    },
     updateDom,
     destroy() {
       stopActiveTracking();
+      resetTrackingState();
     }
   };
 };
