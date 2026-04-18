@@ -1,3 +1,4 @@
+import type { TimestampSource } from "../../shared/types/camera";
 import {
   FUSION_MAX_FRAME_AGE_MS,
   FUSION_MAX_PAIR_DELTA_MS,
@@ -27,6 +28,15 @@ export const defaultFusionTuning: FusionTuning = {
   maxPairDeltaMs: FUSION_MAX_PAIR_DELTA_MS,
   maxFrameAgeMs: FUSION_MAX_FRAME_AGE_MS,
   recentFrameRetentionWindowMs: FUSION_RECENT_FRAME_RETENTION_WINDOW_MS
+};
+
+export const TIMESTAMP_SOURCE_CONFIDENCE_FACTOR: Record<
+  TimestampSource,
+  number
+> = {
+  requestVideoFrameCallbackCaptureTime: 1,
+  requestVideoFrameCallbackExpectedDisplayTime: 0.85,
+  performanceNowAtCallback: 0.6
 };
 
 export const fusionSliderMetadata: readonly FusionSliderMetadata[] = [

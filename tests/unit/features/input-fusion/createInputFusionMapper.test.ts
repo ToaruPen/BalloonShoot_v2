@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
+import type { AimInputFrame } from "../../../../src/shared/types/aim";
+import type { TimestampSource } from "../../../../src/shared/types/camera";
+import type { TriggerInputFrame } from "../../../../src/shared/types/trigger";
 import {
   createInputFusionMapper,
-  defaultFusionTuning
+  defaultFusionTuning,
+  TIMESTAMP_SOURCE_CONFIDENCE_FACTOR
 } from "../../../../src/features/input-fusion";
 import { createAimFrame, createTriggerFrame } from "./testFactory";
 
@@ -16,6 +20,39 @@ const context = {
   }
 };
 
+const aimWithTimestampSource = (
+  frame: AimInputFrame,
+  timestampSource: TimestampSource
+): AimInputFrame => ({
+  ...frame,
+  timestamp: {
+    ...frame.timestamp,
+    timestampSource
+  }
+});
+
+const triggerWithTimestampSource = (
+  frame: TriggerInputFrame,
+  timestampSource: TimestampSource
+): TriggerInputFrame => ({
+  ...frame,
+  timestamp: {
+    ...frame.timestamp,
+    timestampSource
+  }
+});
+
+const expectPairedDiagnosticContract = (
+  result: ReturnType<
+    ReturnType<typeof createInputFusionMapper>["updateAimFrame"]
+  >
+): void => {
+  expect(result.fusedFrame.fusionMode).toBe("pairedFrontAndSide");
+  expect(result.fusedFrame.fusionRejectReason).toBe("none");
+  expect(result.fusedFrame.frontSource.laneRole).toBe("frontAim");
+  expect(result.fusedFrame.sideSource.laneRole).toBe("sideTrigger");
+};
+
 describe("createInputFusionMapper", () => {
   it("emits pairedFrontAndSide when timestamps are close", () => {
     const mapper = createInputFusionMapper();
@@ -23,9 +60,10 @@ describe("createInputFusionMapper", () => {
     mapper.updateAimFrame(createAimFrame(100), context);
     const result = mapper.updateTriggerFrame(createTriggerFrame(115), context);
 
-    expect(result.fusedFrame.fusionMode).toBe("pairedFrontAndSide");
+    expectPairedDiagnosticContract(result);
     expect(result.fusedFrame.timeDeltaBetweenLanesMs).toBe(15);
     expect(result.fusedFrame.fusionTimestampMs).toBe(115);
+    expect(result.fusedFrame.trigger?.timestamp.frameTimestampMs).toBe(115);
     expect(result.telemetry.lastPairedFrontTimestampMs).toBe(100);
     expect(result.telemetry.lastPairedSideTimestampMs).toBe(115);
   });
@@ -105,6 +143,7 @@ describe("createInputFusionMapper", () => {
     expect(sideOnly.telemetry.shotEdgeConsumed).toBe(false);
 
     const paired = mapper.updateAimFrame(createAimFrame(108), context);
+    expectPairedDiagnosticContract(paired);
     expect(paired.fusedFrame.shotFired).toBe(true);
     expect(paired.telemetry.shotEdgeConsumed).toBe(true);
 
@@ -131,7 +170,7 @@ describe("createInputFusionMapper", () => {
 
     const result = mapper.updateAimFrame(createAimFrame(130), pairingContext);
 
-    expect(result.fusedFrame.fusionMode).toBe("pairedFrontAndSide");
+    expectPairedDiagnosticContract(result);
     expect(result.fusedFrame.shotFired).toBe(true);
     expect(result.fusedFrame.trigger?.timestamp.frameTimestampMs).toBe(100);
   });
@@ -151,7 +190,7 @@ describe("createInputFusionMapper", () => {
 
     const result = mapper.updateAimFrame(createAimFrame(130), pairingContext);
 
-    expect(result.fusedFrame.fusionMode).toBe("pairedFrontAndSide");
+    expectPairedDiagnosticContract(result);
     expect(result.fusedFrame.shotFired).toBe(false);
     expect(result.fusedFrame.trigger?.timestamp.frameTimestampMs).toBe(120);
   });
@@ -174,9 +213,90 @@ describe("createInputFusionMapper", () => {
       pairingContext
     );
 
-    expect(result.fusedFrame.fusionMode).toBe("pairedFrontAndSide");
+    expectPairedDiagnosticContract(result);
     expect(result.fusedFrame.shotFired).toBe(true);
     expect(result.fusedFrame.aim?.timestamp.frameTimestampMs).toBe(100);
+  });
+
+  it("does not expose side trigger data when timestamp gap falls back to frontOnlyAim", () => {
+    const mapper = createInputFusionMapper();
+    const gapContext = {
+      ...context,
+      tuning: {
+        ...context.tuning,
+        maxPairDeltaMs: 25,
+        maxFrameAgeMs: 250,
+        recentFrameRetentionWindowMs: 300
+      }
+    };
+
+    mapper.updateAimFrame(createAimFrame(100), gapContext);
+    const result = mapper.updateTriggerFrame(
+      createTriggerFrame(300),
+      gapContext
+    );
+
+    expect(result.fusedFrame.fusionMode).toBe("frontOnlyAim");
+    expect(result.fusedFrame.fusionRejectReason).toBe("timestampGapTooLarge");
+    expect(result.fusedFrame.trigger).toBeUndefined();
+  });
+
+  it("keeps paired trigger data when timestamps pair successfully", () => {
+    const mapper = createInputFusionMapper();
+
+    mapper.updateAimFrame(createAimFrame(100), context);
+    const result = mapper.updateTriggerFrame(createTriggerFrame(115), context);
+
+    expectPairedDiagnosticContract(result);
+    expect(result.fusedFrame.trigger?.timestamp.frameTimestampMs).toBe(115);
+    expect(result.fusedFrame.trigger?.laneRole).toBe("sideTrigger");
+  });
+
+  it("penalizes confidence when paired lanes use degraded timestamp sources", () => {
+    const captureMapper = createInputFusionMapper();
+    captureMapper.updateAimFrame(createAimFrame(100), context);
+    const captureResult = captureMapper.updateTriggerFrame(
+      createTriggerFrame(115),
+      context
+    );
+
+    const sidePerformanceMapper = createInputFusionMapper();
+    sidePerformanceMapper.updateAimFrame(createAimFrame(100), context);
+    const sidePerformanceResult = sidePerformanceMapper.updateTriggerFrame(
+      triggerWithTimestampSource(
+        createTriggerFrame(115),
+        "performanceNowAtCallback"
+      ),
+      context
+    );
+
+    const bothDegradedMapper = createInputFusionMapper();
+    bothDegradedMapper.updateAimFrame(
+      aimWithTimestampSource(
+        createAimFrame(100),
+        "requestVideoFrameCallbackExpectedDisplayTime"
+      ),
+      context
+    );
+    const bothDegradedResult = bothDegradedMapper.updateTriggerFrame(
+      triggerWithTimestampSource(
+        createTriggerFrame(115),
+        "performanceNowAtCallback"
+      ),
+      context
+    );
+
+    expect(captureResult.fusedFrame.inputConfidence).toBeCloseTo(0.7);
+    expect(sidePerformanceResult.fusedFrame.inputConfidence).toBeCloseTo(
+      0.7 * TIMESTAMP_SOURCE_CONFIDENCE_FACTOR.performanceNowAtCallback
+    );
+    expect(bothDegradedResult.fusedFrame.inputConfidence).toBeCloseTo(
+      0.7 *
+        Math.min(
+          TIMESTAMP_SOURCE_CONFIDENCE_FACTOR.requestVideoFrameCallbackExpectedDisplayTime,
+          TIMESTAMP_SOURCE_CONFIDENCE_FACTOR.performanceNowAtCallback
+        )
+    );
   });
 
   it("attributes laneFailed only to sources whose current lane health failed", () => {

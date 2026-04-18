@@ -6,12 +6,10 @@ export {
 export {
   coerceFusionTuningValue,
   defaultFusionTuning,
-  fusionSliderMetadata
+  fusionSliderMetadata,
+  TIMESTAMP_SOURCE_CONFIDENCE_FACTOR
 } from "./fusionConfig";
-export type {
-  FusionTuning,
-  FusionTuningKey
-} from "./fusionConfig";
+export type { FusionTuning, FusionTuningKey } from "./fusionConfig";
 export { createFusionFrameBuffers } from "./fusionFrameBuffers";
 export {
   pairAimWithSideFrames,

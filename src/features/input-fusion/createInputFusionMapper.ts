@@ -7,7 +7,10 @@ import type {
   FusionTelemetry
 } from "../../shared/types/fusion";
 import type { TriggerInputFrame } from "../../shared/types/trigger";
-import type { FusionTuning } from "./fusionConfig";
+import {
+  TIMESTAMP_SOURCE_CONFIDENCE_FACTOR,
+  type FusionTuning
+} from "./fusionConfig";
 import { createFusionFrameBuffers } from "./fusionFrameBuffers";
 import {
   type FusionFramePair,
@@ -116,6 +119,13 @@ const frontConfidence = (frame: AimInputFrame | undefined): number =>
 const sideConfidence = (frame: TriggerInputFrame | undefined): number =>
   frame?.shotCandidateConfidence ?? 0;
 
+const timestampSourceConfidenceFactor = (
+  frame: AimInputFrame | TriggerInputFrame | undefined
+): number =>
+  frame === undefined
+    ? 0
+    : TIMESTAMP_SOURCE_CONFIDENCE_FACTOR[frame.timestamp.timestampSource];
+
 const confidenceFor = (
   mode: FusedGameInputFrame["fusionMode"],
   frontFrame: AimInputFrame | undefined,
@@ -123,11 +133,25 @@ const confidenceFor = (
 ): number => {
   switch (mode) {
     case "pairedFrontAndSide":
-      return Math.min(frontConfidence(frontFrame), sideConfidence(sideFrame));
+      return (
+        Math.min(frontConfidence(frontFrame), sideConfidence(sideFrame)) *
+        Math.min(
+          timestampSourceConfidenceFactor(frontFrame),
+          timestampSourceConfidenceFactor(sideFrame)
+        )
+      );
     case "frontOnlyAim":
-      return frontConfidence(frontFrame) * 0.5;
+      return (
+        frontConfidence(frontFrame) *
+        0.5 *
+        timestampSourceConfidenceFactor(frontFrame)
+      );
     case "sideOnlyTriggerDiagnostic":
-      return sideConfidence(sideFrame) * 0.5;
+      return (
+        sideConfidence(sideFrame) *
+        0.5 *
+        timestampSourceConfidenceFactor(sideFrame)
+      );
     case "noUsableInput":
       return 0;
   }
@@ -262,7 +286,12 @@ export const createInputFusionMapper = (): InputFusionMapper => {
           ? pair?.timeDeltaBetweenLanesMs
           : undefined,
       aim: frontUsable ? frontFrame : undefined,
-      trigger: sideUsable ? sideFrame : undefined,
+      trigger:
+        (fusionMode === "pairedFrontAndSide" ||
+          fusionMode === "sideOnlyTriggerDiagnostic") &&
+        sideUsable
+          ? sideFrame
+          : undefined,
       shotFired,
       inputConfidence: confidenceFor(fusionMode, frontFrame, sideFrame),
       frontSource: frontSourceFor(
