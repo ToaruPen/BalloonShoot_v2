@@ -6,7 +6,9 @@
 
 ## WHAT
 
-- A OneEuro-filter sequence replay that feeds a fixed sample stream through `createOneEuroFilter` and pins down smoothing (step transition stays between the two input levels, rises monotonically, and never snaps to the raw level).
+- OneEuro-filter sequence replay.
+- Input-fusion timestamp pairing and degrade replay.
+- Fused gameplay replay for deterministic shot consumption and scoring.
 
 ## HOW
 

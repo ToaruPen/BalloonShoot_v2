@@ -5,10 +5,29 @@ import { registerHitScore, registerMissScore, type ScoreState } from "./scoring"
 interface ShotInput {
   x: number;
   y: number;
-  hit: boolean;
 }
 
-interface GameEngine {
+interface GameEngineOptions {
+  readonly width?: number;
+  readonly height?: number;
+  readonly durationMs?: number;
+}
+
+interface ViewportSize {
+  readonly width: number;
+  readonly height: number;
+}
+
+type ShotResult =
+  | {
+      readonly kind: "hit";
+      readonly balloonId: string;
+      readonly size: Balloon["size"];
+      readonly points: number;
+    }
+  | { readonly kind: "miss" };
+
+export interface GameEngine {
   timeRemainingMs: number;
   elapsedMs: number;
   balloons: Balloon[];
@@ -16,16 +35,41 @@ interface GameEngine {
   combo: number;
   multiplier: number;
   advance: (deltaMs: number, random: () => number) => void;
+  resizeViewport: (viewport: ViewportSize) => void;
+  reset: () => void;
   forceBalloons: (balloons: Balloon[]) => void;
   forceScore: (state: ScoreState) => void;
 }
 
-export const createGameEngine = (): GameEngine => {
+const defaultViewport: ViewportSize = {
+  width: 640,
+  height: 768
+};
+
+const clampRandom = (value: number): number => Math.min(1, Math.max(0, value));
+
+export const createGameEngine = ({
+  width = defaultViewport.width,
+  height = defaultViewport.height,
+  durationMs = 60_000
+}: GameEngineOptions = {}): GameEngine => {
   let nextBalloonId = 0;
   let spawnAccumulatorMs = 0;
+  let viewport = { width, height };
+
+  const resetMutableState = (): void => {
+    nextBalloonId = 0;
+    spawnAccumulatorMs = 0;
+    engine.timeRemainingMs = durationMs;
+    engine.elapsedMs = 0;
+    engine.balloons = [];
+    engine.score = 0;
+    engine.combo = 0;
+    engine.multiplier = 1;
+  };
 
   const engine: GameEngine = {
-    timeRemainingMs: 60_000,
+    timeRemainingMs: durationMs,
     elapsedMs: 0,
     balloons: [],
     score: 0,
@@ -38,24 +82,32 @@ export const createGameEngine = (): GameEngine => {
       const profile = getDifficultyProfile(engine.elapsedMs);
       spawnAccumulatorMs += deltaMs;
 
+      engine.balloons = engine.balloons
+        .map((balloon) => ({ ...balloon, y: balloon.y - balloon.vy * (deltaMs / 1_000) }))
+        .filter((balloon) => balloon.alive && balloon.y + balloon.radius > 0);
+
       while (spawnAccumulatorMs >= profile.spawnEveryMs) {
         spawnAccumulatorMs -= profile.spawnEveryMs;
         const isSmall = random() < profile.smallChance;
+        const radius = isSmall ? profile.smallRadius : profile.normalRadius;
 
         engine.balloons.push({
           id: `balloon-${String(nextBalloonId++)}`,
-          x: 80 + random() * 480,
-          y: 820,
-          radius: isSmall ? profile.smallRadius : profile.normalRadius,
+          x:
+            radius + clampRandom(random()) * Math.max(0, viewport.width - radius * 2),
+          y: viewport.height + radius,
+          radius,
           vy: profile.balloonSpeed,
           size: isSmall ? "small" : "normal",
           alive: true
         });
       }
-
-      engine.balloons = engine.balloons
-        .map((balloon) => ({ ...balloon, y: balloon.y - balloon.vy * (deltaMs / 1_000) }))
-        .filter((balloon) => balloon.alive && balloon.y + balloon.radius > -20);
+    },
+    resizeViewport: (nextViewport) => {
+      viewport = nextViewport;
+    },
+    reset: () => {
+      resetMutableState();
     },
     forceBalloons: (balloons) => {
       engine.balloons = balloons;
@@ -70,21 +122,25 @@ export const createGameEngine = (): GameEngine => {
   return engine;
 };
 
-export const registerShot = (engine: GameEngine, shot: ShotInput): void => {
-  if (!shot.hit) {
-    const nextScore = registerMissScore({
-      score: engine.score,
-      combo: engine.combo,
-      multiplier: engine.multiplier
-    });
+const registerMiss = (engine: GameEngine): ShotResult => {
+  const nextScore = registerMissScore({
+    score: engine.score,
+    combo: engine.combo,
+    multiplier: engine.multiplier
+  });
 
-    engine.score = nextScore.score;
-    engine.combo = nextScore.combo;
-    engine.multiplier = nextScore.multiplier;
-    return;
-  }
+  engine.score = nextScore.score;
+  engine.combo = nextScore.combo;
+  engine.multiplier = nextScore.multiplier;
 
-  const hitBalloon = engine.balloons.find((balloon) => {
+  return { kind: "miss" };
+};
+
+export const registerShot = (
+  engine: GameEngine,
+  shot: ShotInput
+): ShotResult => {
+  const hitBalloon = [...engine.balloons].reverse().find((balloon) => {
     if (!balloon.alive) {
       return false;
     }
@@ -96,11 +152,11 @@ export const registerShot = (engine: GameEngine, shot: ShotInput): void => {
   });
 
   if (!hitBalloon) {
-    registerShot(engine, { ...shot, hit: false });
-    return;
+    return registerMiss(engine);
   }
 
   hitBalloon.alive = false;
+  const previousScore = engine.score;
   const nextScore = registerHitScore(
     {
       score: engine.score,
@@ -113,4 +169,11 @@ export const registerShot = (engine: GameEngine, shot: ShotInput): void => {
   engine.score = nextScore.score;
   engine.combo = nextScore.combo;
   engine.multiplier = nextScore.multiplier;
+
+  return {
+    kind: "hit",
+    balloonId: hitBalloon.id,
+    size: hitBalloon.size,
+    points: engine.score - previousScore
+  };
 };

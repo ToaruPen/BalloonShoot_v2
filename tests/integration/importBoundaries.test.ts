@@ -134,12 +134,11 @@ describe("M5 import boundaries", () => {
     const imports = importsFrom(join(rootDir, "src/main.ts"));
 
     expect(imports.join("\n")).not.toContain("diagnostic-workbench");
-    expect(imports.join("\n")).not.toContain("input-fusion");
   });
 
-  it("keeps app files out of diagnostic workbench and input-fusion modules", () => {
+  it("keeps app files out of diagnostic workbench modules", () => {
     const appFiles = listSourceFiles(join(rootDir, "src/app"));
-    const forbidden = ["diagnostic-workbench", "input-fusion"];
+    const forbidden = ["diagnostic-workbench"];
     const offenders = appFiles.filter((file) =>
       importsFrom(file).some((specifier) =>
         forbidden.some((forbiddenPart) => specifier.includes(forbiddenPart))
@@ -149,14 +148,21 @@ describe("M5 import boundaries", () => {
     expect(offenders.map(relativeSourcePath)).toEqual([]);
   });
 
-  it("keeps gameplay from importing side-trigger and app shell directly", () => {
+  it("keeps gameplay from importing raw lanes, browser adapters, and app shell directly", () => {
     const gameplayFiles = listSourceFiles(
       join(rootDir, "src/features/gameplay")
     );
+    const forbidden = [
+      "front-aim",
+      "side-trigger",
+      "features/camera",
+      "hand-tracking",
+      "diagnostic-workbench"
+    ];
     const offenders = gameplayFiles.filter((file) =>
       importsFrom(file).some(
         (specifier) =>
-          specifier.includes("side-trigger") ||
+          forbidden.some((forbiddenPart) => specifier.includes(forbiddenPart)) ||
           importsForbiddenPath(file, specifier, join(rootDir, "src/app"))
       )
     );

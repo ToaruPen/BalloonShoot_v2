@@ -9,3 +9,4 @@ export type {
 } from "./sideTriggerConfig";
 export { createSideTriggerMapper } from "./createSideTriggerMapper";
 export type { SideTriggerMapper } from "./createSideTriggerMapper";
+export { toSideDetection } from "./sideTriggerDetectionConversion";

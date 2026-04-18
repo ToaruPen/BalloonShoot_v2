@@ -6,6 +6,14 @@ interface DrawState {
     x: number;
     y: number;
   } | undefined;
+  shotEffect?: {
+    x: number;
+    y: number;
+  } | undefined;
+  hitEffect?: {
+    x: number;
+    y: number;
+  } | undefined;
 }
 
 export const drawGameFrame = (ctx: CanvasRenderingContext2D, state: DrawState): void => {
@@ -20,6 +28,22 @@ export const drawGameFrame = (ctx: CanvasRenderingContext2D, state: DrawState): 
     ctx.fillStyle = balloon.size === "small" ? "#ff8a80" : "#4fc3f7";
     ctx.arc(balloon.x, balloon.y, balloon.radius, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  if (state.shotEffect !== undefined) {
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(state.shotEffect.x, state.shotEffect.y, 14, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  if (state.hitEffect !== undefined) {
+    ctx.strokeStyle = "#ffd166";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(state.hitEffect.x, state.hitEffect.y, 34, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   if (!state.crosshair) {
