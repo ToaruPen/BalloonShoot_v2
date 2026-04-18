@@ -31,7 +31,7 @@ interface LaneTrackingOptions {
   readonly streamId: string;
 }
 
-export interface LiveLandmarkInspection {
+interface LiveLandmarkInspection {
   getState(): WorkbenchInspectionState;
   sync(state: WorkbenchState): void;
   updateDom(): void;

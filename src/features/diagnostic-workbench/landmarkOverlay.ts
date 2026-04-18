@@ -1,19 +1,19 @@
 import type { HandFrame, HandLandmarkSet } from "../../shared/types/hand";
 
-export type OverlayLandmarkName = keyof HandLandmarkSet;
+type OverlayLandmarkName = keyof HandLandmarkSet;
 
-export interface LandmarkOverlayPoint {
+interface LandmarkOverlayPoint {
   readonly name: OverlayLandmarkName;
   readonly x: number;
   readonly y: number;
 }
 
-export interface LandmarkOverlayConnection {
+interface LandmarkOverlayConnection {
   readonly from: OverlayLandmarkName;
   readonly to: OverlayLandmarkName;
 }
 
-export interface LandmarkOverlayModel {
+interface LandmarkOverlayModel {
   readonly width: number;
   readonly height: number;
   readonly points: LandmarkOverlayPoint[];
@@ -31,7 +31,7 @@ const LANDMARK_NAMES = [
   "pinkyTip"
 ] as const satisfies readonly OverlayLandmarkName[];
 
-export const LANDMARK_CONNECTIONS = [
+const LANDMARK_CONNECTIONS = [
   { from: "wrist", to: "thumbIp" },
   { from: "thumbIp", to: "thumbTip" },
   { from: "wrist", to: "indexMcp" },
