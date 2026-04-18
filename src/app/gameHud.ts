@@ -6,6 +6,11 @@ interface GameHudResult {
   readonly bestCombo: number;
 }
 
+interface GameHudStatusAction {
+  readonly action: "reselectCameras";
+  readonly label: string;
+}
+
 interface GameHudViewModel {
   readonly score: number;
   readonly combo: number;
@@ -13,6 +18,7 @@ interface GameHudViewModel {
   readonly timeRemainingMs: number;
   readonly countdownLabel: CountdownLabel | undefined;
   readonly statusMessage: string | undefined;
+  readonly statusAction?: GameHudStatusAction | undefined;
   readonly result: GameHudResult | undefined;
 }
 
@@ -33,12 +39,17 @@ export const renderGameHud = ({
   timeRemainingMs,
   countdownLabel,
   statusMessage,
+  statusAction,
   result
 }: GameHudViewModel): string => {
+  const statusActionHtml =
+    statusAction === undefined
+      ? ""
+      : `<button class="screen-button hud-status-action" data-game-action="${escapeHTML(statusAction.action)}">${escapeHTML(statusAction.label)}</button>`;
   const status =
     statusMessage === undefined
       ? ""
-      : `<p class="hud-status">${escapeHTML(statusMessage)}</p>`;
+      : `<div class="hud-status-row"><p class="hud-status">${escapeHTML(statusMessage)}</p>${statusActionHtml}</div>`;
   const countdown =
     countdownLabel === undefined
       ? ""

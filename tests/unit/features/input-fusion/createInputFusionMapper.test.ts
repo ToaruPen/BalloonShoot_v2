@@ -383,6 +383,42 @@ describe("createInputFusionMapper", () => {
     expect(bothFailed.sideSource.rejectReason).toBe("laneFailed");
   });
 
+  it("locks captureLost lane health to laneFailed without pairing stale opposite frames", () => {
+    const frontLostMapper = createInputFusionMapper();
+    frontLostMapper.updateAimFrame(createAimFrame(100), context);
+    const frontLost = frontLostMapper.updateTriggerUnavailable(
+      createTriggerFrame(116).timestamp,
+      {
+        ...context,
+        frontLaneHealth: "captureLost"
+      }
+    ).fusedFrame;
+
+    expect(frontLost.fusionRejectReason).toBe("laneFailed");
+    expect(frontLost.frontSource.laneHealth).toBe("captureLost");
+    expect(frontLost.frontSource.rejectReason).toBe("laneFailed");
+    expect(frontLost.fusionMode).not.toBe("pairedFrontAndSide");
+
+    const sideLostMapper = createInputFusionMapper();
+    sideLostMapper.updateTriggerFrame(
+      createTriggerFrame(100, { triggerEdge: "shotCommitted" }),
+      context
+    );
+    const sideLost = sideLostMapper.updateAimUnavailable(
+      createAimFrame(116).timestamp,
+      {
+        ...context,
+        sideLaneHealth: "captureLost"
+      }
+    ).fusedFrame;
+
+    expect(sideLost.fusionRejectReason).toBe("laneFailed");
+    expect(sideLost.sideSource.laneHealth).toBe("captureLost");
+    expect(sideLost.sideSource.rejectReason).toBe("laneFailed");
+    expect(sideLost.fusionMode).not.toBe("pairedFrontAndSide");
+    expect(sideLost.shotFired).toBe(false);
+  });
+
   it("resets affected buffers and side shot consumption independently", () => {
     const mapper = createInputFusionMapper();
     const sideCommit = createTriggerFrame(100, {

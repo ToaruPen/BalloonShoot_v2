@@ -246,6 +246,45 @@ describe("renderWorkbenchHTML", () => {
     expect(html).toContain(`health: ${initialInspection.sideLaneHealth}`);
   });
 
+  it("renders captureLost as concise Japanese device loss copy while keeping raw health", () => {
+    const html = renderWorkbenchHTML(
+      createState({
+        screen: "previewing",
+        frontAssignment: {
+          role: "frontAim",
+          deviceId: "front-secret-device-id",
+          label: "Front Camera"
+        },
+        sideAssignment: {
+          role: "sideTrigger",
+          deviceId: "side-secret-device-id",
+          label: "Side Camera"
+        }
+      }),
+      {
+        frontDetection: undefined,
+        sideDetection: undefined,
+        frontLaneHealth: "captureLost",
+        sideLaneHealth: "tracking",
+        frontAimFrame: undefined,
+        frontAimTelemetry: undefined,
+        sideTriggerFrame: undefined,
+        sideTriggerTelemetry: undefined,
+        frontAimCalibration: defaultFrontAimCalibration,
+        sideTriggerCalibration: defaultSideTriggerCalibration,
+        sideTriggerTuning: defaultSideTriggerTuning,
+        fusionFrame: undefined,
+        fusionTelemetry: undefined,
+        fusionTuning: defaultFusionTuning
+      }
+    );
+
+    expect(html).toMatch(
+      /<p id="wb-front-health"[^>]*>health: captureLost \(カメラが切断されました\)<\/p>/
+    );
+    expect(html).not.toContain("front-secret-device-id");
+  });
+
   it("renders raw and filtered landmark inspection panes with timestamp readouts", () => {
     const html = renderWorkbenchHTML(
       createState({

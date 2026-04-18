@@ -6,6 +6,7 @@ test("home page runs production balloon game flow without diagnostic surfaces", 
   await page.addInitScript(() => {
     const callbacks = new Map<number, FrameRequestCallback>();
     let nextFrameId = 1;
+    const tracksByDeviceId = new Map<string, MediaStreamTrack[]>();
 
     Object.defineProperty(window, "requestAnimationFrame", {
       configurable: true,
@@ -50,7 +51,37 @@ test("home page runs production balloon game flow without diagnostic surfaces", 
               toJSON: () => ({})
             }
           ]),
-        getUserMedia: () => Promise.resolve(new MediaStream())
+        getUserMedia: (constraints: MediaStreamConstraints) => {
+          const videoConstraints = constraints.video;
+          const requestedDeviceId =
+            typeof videoConstraints === "object" &&
+            typeof videoConstraints.deviceId === "object" &&
+            "exact" in videoConstraints.deviceId
+              ? String(videoConstraints.deviceId.exact)
+              : "front-device-id";
+          const canvas = document.createElement("canvas");
+          canvas.width = 2;
+          canvas.height = 2;
+          const track = canvas.captureStream(15).getVideoTracks()[0];
+          if (track === undefined) {
+            throw new Error("fake camera track was not created");
+          }
+
+          tracksByDeviceId.set(requestedDeviceId, [
+            ...(tracksByDeviceId.get(requestedDeviceId) ?? []),
+            track
+          ]);
+
+          return Promise.resolve(new MediaStream([track]));
+        }
+      }
+    });
+    Object.defineProperty(window, "__endFakeCameraTrack", {
+      configurable: true,
+      value: (deviceId: string) => {
+        const track = tracksByDeviceId.get(deviceId)?.at(-1);
+        track?.stop();
+        track?.dispatchEvent(new Event("ended"));
       }
     });
   });
@@ -60,7 +91,9 @@ test("home page runs production balloon game flow without diagnostic surfaces", 
   await expect(
     page.getByRole("heading", { name: "BalloonShoot v2" })
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "カメラを開始" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "カメラを開始" })
+  ).toBeVisible();
   await expect(page.getByRole("link", { name: "diagnostic.html" })).toHaveCount(
     0
   );
@@ -96,16 +129,35 @@ test("home page runs production balloon game flow without diagnostic surfaces", 
 
   const baseNow = await page.evaluate(() => performance.now());
   await page.evaluate((nowMs) => {
-    (window as unknown as { __fireGameFrame: (now: number) => void }).__fireGameFrame(
-      nowMs
-    );
+    (
+      window as unknown as { __fireGameFrame: (now: number) => void }
+    ).__fireGameFrame(nowMs);
   }, baseNow + 4_000);
   await expect(page.locator("#game-hud")).toContainText("残り");
 
+  await page.evaluate(() => {
+    (
+      window as unknown as { __endFakeCameraTrack: (deviceId: string) => void }
+    ).__endFakeCameraTrack("front-device-id");
+  });
   await page.evaluate((nowMs) => {
-    (window as unknown as { __fireGameFrame: (now: number) => void }).__fireGameFrame(
-      nowMs
-    );
+    (
+      window as unknown as { __fireGameFrame: (now: number) => void }
+    ).__fireGameFrame(nowMs);
+  }, baseNow + 4_016);
+  await expect(page.locator("#game-hud")).toContainText(
+    "カメラが切断されました"
+  );
+  await expect(
+    page.getByRole("button", { name: "カメラを選び直す" })
+  ).toBeVisible();
+  await expect(page.locator("#game-hud")).not.toContainText("captureLost");
+  await expect(page.locator("#game-hud")).not.toContainText("laneFailed");
+
+  await page.evaluate((nowMs) => {
+    (
+      window as unknown as { __fireGameFrame: (now: number) => void }
+    ).__fireGameFrame(nowMs);
   }, baseNow + 64_000);
   await expect(page.getByRole("heading", { name: "結果" })).toBeVisible();
   await expect(page.getByRole("button", { name: "もう一度" })).toBeVisible();

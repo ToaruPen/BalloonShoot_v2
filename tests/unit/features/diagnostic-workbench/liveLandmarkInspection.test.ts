@@ -27,6 +27,7 @@ import {
   openWorldLandmarks,
   pulledWorldLandmarks
 } from "../side-trigger/testFactory";
+import { FakeTrack } from "../../../helpers/fakeTrack";
 
 const { createMediaPipeHandTrackerMock } = vi.hoisted(() => ({
   createMediaPipeHandTrackerMock: vi.fn()
@@ -105,8 +106,16 @@ const createDevice = (deviceId: string, label: string): MediaDeviceInfo =>
     toJSON: () => ({})
   }) as MediaDeviceInfo;
 
-const createPinnedStream = (deviceId: string): DevicePinnedStream => ({
-  stream: { id: `${deviceId}-stream` } as MediaStream,
+const createPinnedStream = (
+  deviceId: string,
+  tracks: readonly FakeTrack[] = [],
+  streamId = `${deviceId}-stream`
+): DevicePinnedStream => ({
+  stream: {
+    id: streamId,
+    getVideoTracks: vi.fn(() => [...tracks]),
+    getTracks: vi.fn(() => [...tracks])
+  } as unknown as MediaStream,
   deviceId,
   stop: vi.fn()
 });
@@ -420,6 +429,117 @@ describe("createLiveLandmarkInspection", () => {
     ).toHaveBeenCalledOnce();
   });
 
+  it("retains MediaPipe trackers when passive devicechange keeps the same preview streams", async () => {
+    const frontTracker = createFakeTracker();
+    const sideTracker = createFakeTracker();
+    createMediaPipeHandTrackerMock
+      .mockResolvedValueOnce(frontTracker)
+      .mockResolvedValueOnce(sideTracker)
+      .mockResolvedValue(createFakeTracker());
+    const frontStream = createPinnedStream("front-id");
+    const sideStream = createPinnedStream("side-id");
+    vi.mocked(createDevicePinnedStream)
+      .mockResolvedValueOnce(frontStream)
+      .mockResolvedValueOnce(sideStream);
+    const workbench = createDiagnosticWorkbench();
+    const liveInspection = createLiveLandmarkInspection();
+    let currentVideos: ReturnType<typeof installPreviewVideos> | undefined;
+    const render = (): void => {
+      const state = workbench.getState();
+      renderWorkbenchHTML(state, liveInspection.getState());
+
+      if (state.screen === "previewing") {
+        currentVideos = installPreviewVideos();
+        attachVideoStreams(workbench, currentVideos);
+      }
+
+      liveInspection.sync(state);
+      liveInspection.updateDom();
+    };
+
+    workbench.subscribe(render);
+    await workbench.requestPermission();
+    await workbench.assignDevices("front-id", "side-id");
+
+    const initialVideos = currentVideos;
+    expect(initialVideos).toBeDefined();
+    if (initialVideos === undefined) {
+      throw new Error("preview videos should be installed");
+    }
+    initialVideos.frontVideo.fireFrame();
+    initialVideos.sideVideo.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(createMediaPipeHandTrackerMock).toHaveBeenCalledTimes(2);
+    });
+    vi.mocked(enumerateVideoDevices).mockResolvedValueOnce([
+      createDevice("front-id", "Front Camera"),
+      createDevice("side-id", "Side Camera"),
+      createDevice("extra-id", "Extra Camera")
+    ]);
+
+    await workbench.refreshDevicesFromDeviceChange();
+
+    const rerenderedVideos = currentVideos;
+    expect(rerenderedVideos).toBeDefined();
+    if (rerenderedVideos === undefined) {
+      throw new Error("rerendered preview videos should be installed");
+    }
+    expect(rerenderedVideos.frontVideo).not.toBe(initialVideos.frontVideo);
+    expect(rerenderedVideos.sideVideo).not.toBe(initialVideos.sideVideo);
+    rerenderedVideos.frontVideo.fireFrame();
+    rerenderedVideos.sideVideo.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(frontTracker.detect).toHaveBeenCalledTimes(2);
+      expect(sideTracker.detect).toHaveBeenCalledTimes(2);
+    });
+    expect(createMediaPipeHandTrackerMock).toHaveBeenCalledTimes(2);
+    expect(frontTracker.cleanup).not.toHaveBeenCalled();
+    expect(sideTracker.cleanup).not.toHaveBeenCalled();
+  });
+
+  it("does not double-schedule a rebound video after an in-flight frame finishes", async () => {
+    const detection = createDeferred<HandDetection | undefined>();
+    const frontTracker = createFakeTracker();
+    frontTracker.detect.mockReturnValueOnce(detection.promise);
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(frontTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const previewState = {
+      screen: "previewing" as const,
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    };
+    const initialVideos = installPreviewVideos();
+
+    liveInspection.sync(previewState);
+    initialVideos.frontVideo.fireFrame();
+    await vi.waitFor(() => {
+      expect(frontTracker.detect).toHaveBeenCalledOnce();
+    });
+
+    const reboundVideos = installPreviewVideos();
+    liveInspection.sync(previewState);
+
+    expect(
+      reboundVideos.frontVideo.requestVideoFrameCallback
+    ).toHaveBeenCalledOnce();
+
+    detection.resolve(undefined);
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontLaneHealth).toBe("tracking");
+    });
+    await Promise.resolve();
+
+    expect(
+      reboundVideos.frontVideo.requestVideoFrameCallback
+    ).toHaveBeenCalledOnce();
+  });
+
   it("preserves calibration when the same preview session re-renders fresh video elements", () => {
     const liveInspection = createLiveLandmarkInspection();
     const previewState = {
@@ -483,6 +603,86 @@ describe("createLiveLandmarkInspection", () => {
       expect(frontTracker.cleanup).toHaveBeenCalledOnce();
       expect(sideTracker.cleanup).toHaveBeenCalledOnce();
     });
+  });
+
+  it("sets front lane to captureLost and clears stale aim snapshots when its track ends", async () => {
+    const frontTrack = new FakeTrack("front-track");
+    const frontTracker = createFakeTracker();
+    frontTracker.detect.mockResolvedValueOnce(createHandDetection());
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(frontTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id", [frontTrack]),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.frontVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontAimFrame).toBeDefined();
+    });
+    frontTrack.fireEnded();
+
+    await vi.waitFor(() => {
+      expect(frontTracker.cleanup).toHaveBeenCalledOnce();
+    });
+    expect(liveInspection.getState().frontLaneHealth).toBe("captureLost");
+    expect(liveInspection.getState().frontDetection).toBeUndefined();
+    expect(liveInspection.getState().frontAimFrame).toBeUndefined();
+    expect(liveInspection.getState().frontAimTelemetry).toBeUndefined();
+    expect(liveInspection.getState().fusionFrame?.fusionRejectReason).toBe(
+      "laneFailed"
+    );
+    expect(liveInspection.getState().fusionFrame?.frontSource.laneHealth).toBe(
+      "captureLost"
+    );
+    expect(videos.frontVideo.cancelVideoFrameCallback).toHaveBeenCalledOnce();
+    expect(frontTrack.listenerCount()).toBe(0);
+  });
+
+  it("sets side lane to captureLost and clears stale trigger snapshots when its track ends", async () => {
+    const sideTrack = new FakeTrack("side-track");
+    const sideTracker = setupSideTrackerSequence();
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id", [sideTrack]),
+      error: undefined
+    });
+    videos.sideVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().sideTriggerFrame).toBeDefined();
+    });
+    sideTrack.fireEnded();
+
+    await vi.waitFor(() => {
+      expect(sideTracker.cleanup).toHaveBeenCalledOnce();
+    });
+    expect(liveInspection.getState().sideLaneHealth).toBe("captureLost");
+    expect(liveInspection.getState().sideDetection).toBeUndefined();
+    expect(liveInspection.getState().sideTriggerFrame).toBeUndefined();
+    expect(liveInspection.getState().sideTriggerTelemetry).toBeUndefined();
+    expect(liveInspection.getState().fusionFrame?.fusionRejectReason).toBe(
+      "laneFailed"
+    );
+    expect(liveInspection.getState().fusionFrame?.sideSource.laneHealth).toBe(
+      "captureLost"
+    );
+    expect(liveInspection.getState().fusionFrame?.shotFired).toBe(false);
+    expect(sideTrack.listenerCount()).toBe(0);
   });
 
   it("passes lane-specific filter configs to diagnostic trackers", async () => {
@@ -1161,14 +1361,15 @@ describe("createLiveLandmarkInspection", () => {
     });
   });
 
-  it("keeps calibration during non-preview syncs until a preview session is left", () => {
+  it("preserves calibration across same-device reselection after capture loss", () => {
+    const frontTrack = new FakeTrack("front-track");
     const liveInspection = createLiveLandmarkInspection();
     const previewState = {
       screen: "previewing" as const,
       devices: [],
       frontAssignment: undefined,
       sideAssignment: undefined,
-      frontStream: createPinnedStream("front-id"),
+      frontStream: createPinnedStream("front-id", [frontTrack]),
       sideStream: createPinnedStream("side-id"),
       error: undefined
     };
@@ -1181,20 +1382,71 @@ describe("createLiveLandmarkInspection", () => {
       sideStream: undefined,
       error: undefined
     };
+    const sameDevicePreviewState = {
+      ...previewState,
+      frontStream: createPinnedStream(
+        "front-id",
+        [],
+        "front-id-reconnected-stream"
+      )
+    };
 
+    installPreviewVideos();
+    liveInspection.sync(previewState);
     liveInspection.setFrontAimCalibration("centerX", 0.6);
     liveInspection.setSideTriggerCalibration("openPoseDistance", 1);
+    frontTrack.fireEnded();
+
+    expect(liveInspection.getState().frontLaneHealth).toBe("captureLost");
+
     liveInspection.sync(deviceSelectionState);
+    installPreviewVideos();
+    liveInspection.sync(sameDevicePreviewState);
 
     expect(liveInspection.getState().frontAimCalibration.center.x).toBe(0.6);
     expect(
       liveInspection.getState().sideTriggerCalibration.openPose
         .normalizedThumbDistance
     ).toBe(1);
+  });
+
+  it("resets calibration when a different device is selected after capture loss", () => {
+    const frontTrack = new FakeTrack("front-track");
+    const liveInspection = createLiveLandmarkInspection();
+    const initialPreviewState = {
+      screen: "previewing" as const,
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id", [frontTrack]),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    };
+    const deviceSelectionState = {
+      screen: "deviceSelection" as const,
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: undefined,
+      sideStream: undefined,
+      error: undefined
+    };
+    const differentPreviewState = {
+      ...initialPreviewState,
+      frontStream: createPinnedStream("front-replacement-id")
+    };
 
     installPreviewVideos();
-    liveInspection.sync(previewState);
+    liveInspection.sync(initialPreviewState);
+    liveInspection.setFrontAimCalibration("centerX", 0.6);
+    liveInspection.setSideTriggerCalibration("openPoseDistance", 1);
+    frontTrack.fireEnded();
+
+    expect(liveInspection.getState().frontLaneHealth).toBe("captureLost");
+
     liveInspection.sync(deviceSelectionState);
+    installPreviewVideos();
+    liveInspection.sync(differentPreviewState);
 
     expect(liveInspection.getState().frontAimCalibration).toEqual(
       defaultFrontAimCalibration

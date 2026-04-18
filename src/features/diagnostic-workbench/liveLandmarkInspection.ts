@@ -1,4 +1,5 @@
 import { createFrameTimestamp } from "../camera/frameTimestamp";
+import { observeTrackEnded } from "../camera/observeTrackEnded";
 import {
   createMediaPipeHandTracker,
   type MediaPipeHandTracker
@@ -57,7 +58,10 @@ import { renderFusionPanel } from "./renderFusionPanel";
 import { renderSideTriggerCalibrationControls } from "./renderSideTriggerCalibrationControls";
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
-import type { WorkbenchInspectionState } from "./renderWorkbench";
+import {
+  formatLaneHealthLabel,
+  type WorkbenchInspectionState
+} from "./renderWorkbench";
 import { formatFrameTimestamp } from "./timestampFormat";
 
 interface FrameTimingLike {
@@ -69,6 +73,7 @@ interface FrameTimingLike {
 interface LaneTrackingOptions {
   readonly role: "frontAim" | "sideTrigger";
   readonly video: HTMLVideoElement;
+  readonly stream: MediaStream;
   readonly deviceId: string;
   readonly streamId: string;
 }
@@ -93,8 +98,14 @@ interface LiveLandmarkInspection {
 
 interface ActiveTracking {
   readonly key: string;
-  readonly frontVideo: HTMLVideoElement;
-  readonly sideVideo: HTMLVideoElement;
+  frontVideo: HTMLVideoElement;
+  sideVideo: HTMLVideoElement;
+  bindVideos(frontVideo: HTMLVideoElement, sideVideo: HTMLVideoElement): void;
+  stop(): void;
+}
+
+interface LaneTracking {
+  bindVideo(video: HTMLVideoElement): void;
   stop(): void;
 }
 
@@ -266,7 +277,9 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   let frontAimMapper = createFrontAimMapper();
   let sideTriggerMapper: SideTriggerMapper = createSideTriggerMapper();
   let inputFusionMapper: InputFusionMapper = createInputFusionMapper();
-  let syncedScreen: WorkbenchState["screen"] | undefined;
+  let lastPreviewDeviceIds:
+    | { readonly frontDeviceId: string; readonly sideDeviceId: string }
+    | undefined;
 
   const setInspection = (patch: Partial<WorkbenchInspectionState>): void => {
     inspectionState = { ...inspectionState, ...patch };
@@ -274,8 +287,14 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   };
 
   const updateDom = (): void => {
-    updateText("wb-front-health", `health: ${inspectionState.frontLaneHealth}`);
-    updateText("wb-side-health", `health: ${inspectionState.sideLaneHealth}`);
+    updateText(
+      "wb-front-health",
+      `health: ${formatLaneHealthLabel(inspectionState.frontLaneHealth)}`
+    );
+    updateText(
+      "wb-side-health",
+      `health: ${formatLaneHealthLabel(inspectionState.sideLaneHealth)}`
+    );
     updateText(
       "wb-front-timestamp",
       formatFrameTimestamp(
@@ -382,6 +401,12 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     tuning: context.fusionTuning
   });
 
+  const timestampNow = (): FrameTimestamp => {
+    const now = performance.now();
+
+    return createFrameTimestamp({ expectedDisplayTime: now }, now);
+  };
+
   const setLaneDetection = (
     role: LaneTrackingOptions["role"],
     detection: FrontHandDetection | SideHandDetection | undefined,
@@ -470,14 +495,15 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     }
   };
 
-  const startLaneTracking = (
-    options: LaneTrackingOptions
-  ): { stop(): void } => {
+  const startLaneTracking = (options: LaneTrackingOptions): LaneTracking => {
+    let video = options.video;
     let stopped = false;
     let cleanupStarted = false;
     let callbackId: number | undefined;
     let timeoutId: number | undefined;
     let trackerPromise: Promise<MediaPipeHandTracker> | undefined;
+    let videoGeneration = 0;
+    const trackEndedObserver: { current?: { stop(): void } } = {};
 
     setLaneHealth(options.role, "capturing");
 
@@ -493,7 +519,30 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
 
     const isStopped = (): boolean => stopped;
 
+    const cancelScheduledFrame = (): void => {
+      if (
+        callbackId !== undefined &&
+        typeof video.cancelVideoFrameCallback === "function"
+      ) {
+        video.cancelVideoFrameCallback(callbackId);
+        callbackId = undefined;
+      }
+
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+        timeoutId = undefined;
+      }
+    };
+
     const processFrame = async (metadata: FrameTimingLike): Promise<void> => {
+      const frameVideoGeneration = videoGeneration;
+
+      const scheduleIfCurrentVideo = (): void => {
+        if (frameVideoGeneration === videoGeneration) {
+          schedule();
+        }
+      };
+
       if (isStopped()) {
         return;
       }
@@ -502,8 +551,8 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       const context = frameCalibrationContext();
       setLaneTimestamp(options.role, timestamp);
 
-      if (!videoReadyForBitmap(options.video)) {
-        schedule();
+      if (!videoReadyForBitmap(video)) {
+        scheduleIfCurrentVideo();
         return;
       }
 
@@ -529,7 +578,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
 
         const laneDetection = await runLaneDetection(
           tracker,
-          options,
+          { ...options, video },
           timestamp
         );
 
@@ -542,7 +591,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
           options.role,
           laneDetection,
           timestamp,
-          options.video,
+          video,
           context
         );
       } catch (error: unknown) {
@@ -552,11 +601,11 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
 
         console.error("Diagnostic lane tracking failed", error);
         setLaneHealth(options.role, "failed");
-        schedule();
+        scheduleIfCurrentVideo();
         return;
       }
 
-      schedule();
+      scheduleIfCurrentVideo();
     };
 
     const schedule = (): void => {
@@ -564,8 +613,8 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
         return;
       }
 
-      if (typeof options.video.requestVideoFrameCallback === "function") {
-        callbackId = options.video.requestVideoFrameCallback(
+      if (typeof video.requestVideoFrameCallback === "function") {
+        callbackId = video.requestVideoFrameCallback(
           (_now, metadata) => {
             void processFrame(metadata);
           }
@@ -591,24 +640,74 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
         });
     };
 
+    const updateLaneUnavailableForCaptureLoss = (): void => {
+      const context = frameCalibrationContext();
+      const timestamp = timestampNow();
+      const fusionResult =
+        options.role === "frontAim"
+          ? inputFusionMapper.updateAimUnavailable(timestamp, {
+              ...currentFusionContext(context),
+              frontLaneHealth: "captureLost"
+            })
+          : inputFusionMapper.updateTriggerUnavailable(timestamp, {
+              ...currentFusionContext(context),
+              sideLaneHealth: "captureLost"
+            });
+
+      setInspection(
+        options.role === "frontAim"
+          ? {
+              frontLaneHealth: "captureLost",
+              frontDetection: undefined,
+              frontAimFrame: undefined,
+              frontAimTelemetry: undefined,
+              frontFrameTimestamp: timestamp,
+              fusionFrame: fusionResult.fusedFrame,
+              fusionTelemetry: fusionResult.telemetry
+            }
+          : {
+              sideLaneHealth: "captureLost",
+              sideDetection: undefined,
+              sideTriggerFrame: undefined,
+              sideTriggerTelemetry: undefined,
+              sideFrameTimestamp: timestamp,
+              fusionFrame: fusionResult.fusedFrame,
+              fusionTelemetry: fusionResult.telemetry
+            }
+      );
+    };
+
+    const stopLane = (): void => {
+      stopped = true;
+      cancelScheduledFrame();
+      trackEndedObserver.current?.stop();
+      cleanupTracker();
+    };
+
+    trackEndedObserver.current = observeTrackEnded(options.stream, () => {
+      if (stopped) {
+        return;
+      }
+
+      stopLane();
+      updateLaneUnavailableForCaptureLoss();
+    });
+
     schedule();
 
     return {
+      bindVideo(nextVideo) {
+        if (stopped || nextVideo === video) {
+          return;
+        }
+
+        cancelScheduledFrame();
+        video = nextVideo;
+        videoGeneration += 1;
+        schedule();
+      },
       stop() {
-        stopped = true;
-
-        if (
-          callbackId !== undefined &&
-          typeof options.video.cancelVideoFrameCallback === "function"
-        ) {
-          options.video.cancelVideoFrameCallback(callbackId);
-        }
-
-        if (timeoutId !== undefined) {
-          window.clearTimeout(timeoutId);
-        }
-
-        cleanupTracker();
+        stopLane();
       }
     };
   };
@@ -644,20 +743,39 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     activeTracking = undefined;
   };
 
-  const sync = (state: WorkbenchState): void => {
-    const previousScreen = syncedScreen;
-    syncedScreen = state.screen;
+  const deviceIdsFor = (
+    state: WorkbenchState
+  ):
+    | { readonly frontDeviceId: string; readonly sideDeviceId: string }
+    | undefined => {
+    if (state.frontStream === undefined || state.sideStream === undefined) {
+      return undefined;
+    }
 
+    return {
+      frontDeviceId: state.frontStream.deviceId,
+      sideDeviceId: state.sideStream.deviceId
+    };
+  };
+
+  const deviceIdsChanged = (
+    previous:
+      | { readonly frontDeviceId: string; readonly sideDeviceId: string }
+      | undefined,
+    next: { readonly frontDeviceId: string; readonly sideDeviceId: string }
+  ): boolean =>
+    previous !== undefined &&
+    (previous.frontDeviceId !== next.frontDeviceId ||
+      previous.sideDeviceId !== next.sideDeviceId);
+
+  const sync = (state: WorkbenchState): void => {
     if (
       state.screen !== "previewing" ||
       state.frontStream === undefined ||
       state.sideStream === undefined
     ) {
       stopActiveTracking();
-      resetTrackingState({
-        resetCalibration:
-          previousScreen === "previewing" && state.screen === "deviceSelection"
-      });
+      resetTrackingState();
       return;
     }
 
@@ -670,41 +788,57 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       return;
     }
 
-    const key = `${state.frontStream.stream.id}:${state.sideStream.stream.id}`;
+    const key = JSON.stringify([
+      [state.frontStream.deviceId, state.frontStream.stream.id],
+      [state.sideStream.deviceId, state.sideStream.stream.id]
+    ]);
 
-    if (
-      activeTracking?.key === key &&
-      activeTracking.frontVideo === frontVideo &&
-      activeTracking.sideVideo === sideVideo
-    ) {
+    if (activeTracking?.key === key) {
+      activeTracking.bindVideos(frontVideo, sideVideo);
       return;
     }
 
     stopActiveTracking();
-    resetTrackingState();
+    const nextDeviceIds = deviceIdsFor(state);
+    resetTrackingState({
+      resetCalibration:
+        nextDeviceIds === undefined
+          ? false
+          : deviceIdsChanged(lastPreviewDeviceIds, nextDeviceIds)
+    });
+    lastPreviewDeviceIds = nextDeviceIds;
 
     const frontLane = startLaneTracking({
       role: "frontAim",
       video: frontVideo,
+      stream: state.frontStream.stream,
       deviceId: state.frontStream.deviceId,
       streamId: state.frontStream.stream.id
     });
     const sideLane = startLaneTracking({
       role: "sideTrigger",
       video: sideVideo,
+      stream: state.sideStream.stream,
       deviceId: state.sideStream.deviceId,
       streamId: state.sideStream.stream.id
     });
 
-    activeTracking = {
+    const tracking: ActiveTracking = {
       key,
       frontVideo,
       sideVideo,
+      bindVideos(nextFrontVideo, nextSideVideo) {
+        frontLane.bindVideo(nextFrontVideo);
+        sideLane.bindVideo(nextSideVideo);
+        tracking.frontVideo = nextFrontVideo;
+        tracking.sideVideo = nextSideVideo;
+      },
       stop() {
         frontLane.stop();
         sideLane.stop();
       }
     };
+    activeTracking = tracking;
   };
 
   return {
@@ -802,7 +936,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     destroy() {
       stopActiveTracking();
       resetTrackingState({ resetCalibration: true });
-      syncedScreen = undefined;
+      lastPreviewDeviceIds = undefined;
     }
   };
 };

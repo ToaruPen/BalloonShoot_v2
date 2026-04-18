@@ -7,6 +7,7 @@ import {
   type DevicePinnedStream
 } from "../features/camera/createDevicePinnedStream";
 import { createFrameTimestamp } from "../features/camera/frameTimestamp";
+import { observeTrackEnded } from "../features/camera/observeTrackEnded";
 import {
   createFrontAimMapper,
   defaultFrontAimCalibration,
@@ -160,6 +161,14 @@ const statusMessageForFusedFrame = (
     return "入力を準備中";
   }
 
+  if (
+    frame.fusionRejectReason === "laneFailed" &&
+    (frame.frontSource.laneHealth === "captureLost" ||
+      frame.sideSource.laneHealth === "captureLost")
+  ) {
+    return "カメラが切断されました";
+  }
+
   if (frame.fusionRejectReason !== "none") {
     return degradedInputMessages[frame.fusionRejectReason];
   }
@@ -218,6 +227,18 @@ export const createBalloonGameRuntime = ({
   const trackers: MediaPipeHandTracker[] = [];
   const laneStops: (() => void)[] = [];
 
+  const safeCleanupTracker = (tracker: MediaPipeHandTracker): void => {
+    removeItem(trackers, tracker);
+
+    try {
+      void Promise.resolve(tracker.cleanup()).catch((error: unknown) => {
+        console.error("[balloon game runtime] tracker cleanup failed", error);
+      });
+    } catch (error: unknown) {
+      console.error("[balloon game runtime] tracker cleanup failed", error);
+    }
+  };
+
   if (initialBalloons !== undefined) {
     engine.forceBalloons([...initialBalloons]);
   }
@@ -232,6 +253,10 @@ export const createBalloonGameRuntime = ({
 
   const renderHud = (): void => {
     const currentFusedFrame = readFusedInputFrame?.() ?? latestFusedFrame;
+    const statusMessage =
+      session.state === "playing"
+        ? statusMessageForFusedFrame(currentFusedFrame)
+        : undefined;
 
     const hudHtml = renderGameHud({
       score: engine.score,
@@ -239,9 +264,10 @@ export const createBalloonGameRuntime = ({
       multiplier: engine.multiplier,
       timeRemainingMs: session.timeRemainingMs,
       countdownLabel: session.countdownLabel,
-      statusMessage:
-        session.state === "playing"
-          ? statusMessageForFusedFrame(currentFusedFrame)
+      statusMessage,
+      statusAction:
+        statusMessage === "カメラが切断されました"
+          ? { action: "reselectCameras", label: "カメラを選び直す" }
           : undefined,
       result:
         session.state === "result"
@@ -433,6 +459,9 @@ export const createBalloonGameRuntime = ({
     let timeoutId: number | undefined;
     let laneStopped = false;
     let consecutiveFrameErrors = 0;
+    const trackEndedObserver: { current?: { stop(): void } } = {};
+    let laneResourcesReleased = false;
+    let tracker: MediaPipeHandTracker | undefined;
     const laneStillActive = (): boolean => !stopped && !laneStopped;
 
     const setLaneHealth = (health: LaneHealthStatus): void => {
@@ -445,6 +474,7 @@ export const createBalloonGameRuntime = ({
 
     const stopLane = (): void => {
       laneStopped = true;
+      trackEndedObserver.current?.stop();
 
       if (
         callbackId !== undefined &&
@@ -471,7 +501,51 @@ export const createBalloonGameRuntime = ({
     streams.push(stream);
     video.srcObject = stream.stream;
 
-    let tracker: MediaPipeHandTracker;
+    const timestampNow = (): FrameTimestamp => {
+      const now = performance.now();
+
+      return createFrameTimestamp({ expectedDisplayTime: now }, now);
+    };
+
+    const updateUnavailable = (timestamp: FrameTimestamp): void => {
+      if (role === "frontAim") {
+        latestFusedFrame = inputFusionMapper.updateAimUnavailable(
+          timestamp,
+          currentFusionContext()
+        ).fusedFrame;
+      } else {
+        latestFusedFrame = inputFusionMapper.updateTriggerUnavailable(
+          timestamp,
+          currentFusionContext()
+        ).fusedFrame;
+      }
+    };
+
+    const releaseLaneResources = (): void => {
+      if (laneResourcesReleased) {
+        return;
+      }
+
+      laneResourcesReleased = true;
+      stopLane();
+      removeItem(laneStops, stopLane);
+      removeItem(streams, stream);
+      stream.stop();
+
+      if (tracker !== undefined) {
+        safeCleanupTracker(tracker);
+      }
+    };
+
+    trackEndedObserver.current = observeTrackEnded(stream.stream, () => {
+      if (!laneStillActive()) {
+        return;
+      }
+
+      setLaneHealth("captureLost");
+      updateUnavailable(timestampNow());
+      releaseLaneResources();
+    });
 
     try {
       tracker = await createTracker({
@@ -485,27 +559,17 @@ export const createBalloonGameRuntime = ({
         console.error("[balloon game runtime] tracker startup failed", error);
         setLaneHealth("failed");
       }
-      stream.stop();
+      releaseLaneResources();
       return;
     }
 
     if (!laneStillActive()) {
-      stream.stop();
-      void tracker.cleanup();
+      safeCleanupTracker(tracker);
       return;
     }
 
     trackers.push(tracker);
     setLaneHealth("tracking");
-
-    const releaseLaneResources = (): void => {
-      stopLane();
-      removeItem(laneStops, stopLane);
-      removeItem(streams, stream);
-      removeItem(trackers, tracker);
-      stream.stop();
-      void tracker.cleanup();
-    };
 
     const scheduleVideoFrame = (): void => {
       if (!laneStillActive()) {
@@ -524,26 +588,17 @@ export const createBalloonGameRuntime = ({
       }, VIDEO_FRAME_FALLBACK_INTERVAL_MS);
     };
 
-    const updateUnavailable = (timestamp: FrameTimestamp): void => {
-      if (role === "frontAim") {
-        latestFusedFrame = inputFusionMapper.updateAimUnavailable(
-          timestamp,
-          currentFusionContext()
-        ).fusedFrame;
-      } else {
-        latestFusedFrame = inputFusionMapper.updateTriggerUnavailable(
-          timestamp,
-          currentFusionContext()
-        ).fusedFrame;
-      }
-    };
-
     async function processVideoFrame(metadata: FrameTimingLike): Promise<void> {
       if (!laneStillActive()) {
         return;
       }
 
       const timestamp = createFrameTimestamp(metadata, performance.now());
+      const activeTracker = tracker;
+
+      if (activeTracker === undefined) {
+        return;
+      }
 
       if (!videoReadyForBitmap(video)) {
         updateUnavailable(timestamp);
@@ -560,7 +615,7 @@ export const createBalloonGameRuntime = ({
           return;
         }
 
-        const detection = await tracker.detect(
+        const detection = await activeTracker.detect(
           bitmap,
           timestamp.frameTimestampMs
         );
@@ -633,8 +688,8 @@ export const createBalloonGameRuntime = ({
     }
     streams.length = 0;
 
-    for (const tracker of trackers) {
-      void tracker.cleanup();
+    for (const tracker of [...trackers]) {
+      safeCleanupTracker(tracker);
     }
     trackers.length = 0;
 
