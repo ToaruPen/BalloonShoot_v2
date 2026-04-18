@@ -37,16 +37,18 @@ const BASE_LANDMARKS_FRAME_2 = BASE_LANDMARKS_FRAME_1.map((landmark) => {
   return landmark;
 });
 
-const WORLD_LANDMARKS_FRAME_1: TestLandmark[] = BASE_LANDMARKS_FRAME_1.map((landmark) => {
-  if ("x" in landmark) {
-    return {
-      x: landmark.x + 0.1,
-      y: landmark.y + 0.1,
-      z: landmark.z + 0.1
-    };
+const WORLD_LANDMARKS_FRAME_1: TestLandmark[] = BASE_LANDMARKS_FRAME_1.map(
+  (landmark) => {
+    if ("x" in landmark) {
+      return {
+        x: landmark.x + 0.1,
+        y: landmark.y + 0.1,
+        z: landmark.z + 0.1
+      };
+    }
+    return landmark;
   }
-  return landmark;
-});
+);
 
 const WORLD_LANDMARKS_FRAME_2 = WORLD_LANDMARKS_FRAME_1.map((landmark) => {
   if ("x" in landmark) {
@@ -93,12 +95,13 @@ const createExpectedFrame = (
 });
 
 const { createFromOptions, forVisionTasks } = vi.hoisted(() => ({
-  createFromOptions: vi.fn(() =>
+  createFromOptions: vi.fn<() => Promise<unknown>>(() =>
     Promise.resolve({
-      detectForVideo: vi.fn(() => ({ landmarks: [BASE_LANDMARKS_FRAME_1] }))
+      detectForVideo: vi.fn(() => ({ landmarks: [BASE_LANDMARKS_FRAME_1] })),
+      close: vi.fn()
     })
   ),
-  forVisionTasks: vi.fn(() => Promise.resolve("vision"))
+  forVisionTasks: vi.fn<() => Promise<unknown>>(() => Promise.resolve("vision"))
 }));
 
 vi.mock("@mediapipe/tasks-vision", () => ({
@@ -125,12 +128,20 @@ const LANDMARK_NAMES = [
   "pinkyTip"
 ] as const;
 
-type HandLandmarkSet = Record<(typeof LANDMARK_NAMES)[number], { x: number; y: number; z: number }>;
+type HandLandmarkSet = Record<
+  (typeof LANDMARK_NAMES)[number],
+  { x: number; y: number; z: number }
+>;
 
 interface ExpectedFrame {
   width: number;
   height: number;
-  handedness?: { score: number; index: number; categoryName: string; displayName: string }[];
+  handedness?: {
+    score: number;
+    index: number;
+    categoryName: string;
+    displayName: string;
+  }[];
   landmarks: HandLandmarkSet;
   worldLandmarks?: HandLandmarkSet;
 }
@@ -361,6 +372,22 @@ describe("createMediaPipeHandTracker", () => {
     await expect(tracker.detect(bitmap, 0)).resolves.toBeUndefined();
   });
 
+  it("closes the underlying hand landmarker during cleanup", async () => {
+    const close = vi.fn();
+    createFromOptions.mockResolvedValueOnce({
+      detectForVideo: vi.fn(() => ({ landmarks: [] })),
+      close
+    });
+
+    const tracker = await createMediaPipeHandTracker({
+      getFilterConfig: PASS_THROUGH_CONFIG
+    });
+
+    await tracker.cleanup();
+
+    expect(close).toHaveBeenCalledOnce();
+  });
+
   it("smooths per-landmark x/y/z values on the filtered frame while keeping raw untouched", async () => {
     const detectForVideo = vi
       .fn()
@@ -396,7 +423,9 @@ describe("createMediaPipeHandTracker", () => {
 
     expect(first.filteredFrame.worldLandmarks?.indexTip.x).toBeCloseTo(0.6);
     expect(second.rawFrame.worldLandmarks?.indexTip.x).toBeCloseTo(0.7);
-    expect(second.filteredFrame.worldLandmarks?.indexTip.x).toBeGreaterThan(0.6);
+    expect(second.filteredFrame.worldLandmarks?.indexTip.x).toBeGreaterThan(
+      0.6
+    );
     expect(second.filteredFrame.worldLandmarks?.indexTip.x).toBeLessThan(0.61);
 
     expect(first.filteredFrame.worldLandmarks?.wrist.y).toBeCloseTo(0.3);

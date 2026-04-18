@@ -17,6 +17,7 @@ import type {
 import type { WorkbenchState } from "./DiagnosticWorkbench";
 import { createLandmarkOverlayModel } from "./landmarkOverlay";
 import type { WorkbenchInspectionState } from "./renderWorkbench";
+import { formatFrameTimestamp } from "./timestampFormat";
 
 interface FrameTimingLike {
   readonly captureTime?: number;
@@ -38,6 +39,13 @@ interface LiveLandmarkInspection {
   destroy(): void;
 }
 
+interface ActiveTracking {
+  readonly key: string;
+  readonly frontVideo: HTMLVideoElement;
+  readonly sideVideo: HTMLVideoElement;
+  stop(): void;
+}
+
 const createInitialInspectionState = (): WorkbenchInspectionState => ({
   frontDetection: undefined,
   sideDetection: undefined,
@@ -50,34 +58,6 @@ const getFilterConfig = () => ({
   beta: gameConfig.input.handFilterBeta,
   dCutoff: gameConfig.input.handFilterDCutoff
 });
-
-const timestampSourceLabel = (
-  source: FrameTimestamp["timestampSource"]
-): string => {
-  switch (source) {
-    case "requestVideoFrameCallbackCaptureTime":
-      return "captureTime";
-    case "requestVideoFrameCallbackExpectedDisplayTime":
-      return "expectedDisplayTime";
-    case "performanceNowAtCallback":
-      return "performance.now";
-  }
-};
-
-const formatTimestamp = (timestamp: FrameTimestamp | undefined): string => {
-  if (timestamp === undefined) {
-    return "timestamp: 未取得";
-  }
-
-  const presentedFrames =
-    timestamp.presentedFrames === undefined
-      ? "presentedFrames: unavailable"
-      : `presentedFrames: ${String(timestamp.presentedFrames)}`;
-
-  return `${timestamp.frameTimestampMs.toFixed(1)} ms / ${timestampSourceLabel(
-    timestamp.timestampSource
-  )} / ${presentedFrames}`;
-};
 
 const updateText = (id: string, value: string): void => {
   const element = document.querySelector<HTMLElement>(`#${id}`);
@@ -156,6 +136,7 @@ const toFrontDetection = (
   rawFrame: detection.rawFrame,
   filteredFrame: detection.filteredFrame,
   handPresenceConfidence: handPresenceConfidenceFor(detection),
+  // TODO(M5): Compute real front tracking quality when front aim lands.
   trackingQuality: "good"
 });
 
@@ -171,6 +152,7 @@ const toSideDetection = (
   rawFrame: detection.rawFrame,
   filteredFrame: detection.filteredFrame,
   handPresenceConfidence: handPresenceConfidenceFor(detection),
+  // TODO(M4): Compute real side view quality when side trigger lands.
   sideViewQuality: "good"
 });
 
@@ -181,7 +163,7 @@ const videoReadyForBitmap = (video: HTMLVideoElement): boolean =>
 
 export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   let inspectionState = createInitialInspectionState();
-  let activeTracking: { readonly key: string; stop(): void } | undefined;
+  let activeTracking: ActiveTracking | undefined;
 
   const setInspection = (patch: Partial<WorkbenchInspectionState>): void => {
     inspectionState = { ...inspectionState, ...patch };
@@ -193,14 +175,14 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     updateText("wb-side-health", `health: ${inspectionState.sideLaneHealth}`);
     updateText(
       "wb-front-timestamp",
-      formatTimestamp(
+      formatFrameTimestamp(
         inspectionState.frontDetection?.timestamp ??
           inspectionState.frontFrameTimestamp
       )
     );
     updateText(
       "wb-side-timestamp",
-      formatTimestamp(
+      formatFrameTimestamp(
         inspectionState.sideDetection?.timestamp ??
           inspectionState.sideFrameTimestamp
       )
@@ -289,6 +271,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     options: LaneTrackingOptions
   ): { stop(): void } => {
     let stopped = false;
+    let cleanupStarted = false;
     let callbackId: number | undefined;
     let timeoutId: number | undefined;
     let trackerPromise: Promise<MediaPipeHandTracker> | undefined;
@@ -300,8 +283,10 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       return trackerPromise;
     };
 
+    const isStopped = (): boolean => stopped;
+
     const processFrame = async (metadata: FrameTimingLike): Promise<void> => {
-      if (stopped) {
+      if (isStopped()) {
         return;
       }
 
@@ -315,7 +300,17 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
 
       try {
         const tracker = await getTracker();
+
+        if (isStopped()) {
+          return;
+        }
+
         await runLaneDetection(tracker, options, timestamp);
+
+        if (isStopped()) {
+          return;
+        }
+
         setLaneHealth(options.role, "tracking");
       } catch (error: unknown) {
         console.error("Diagnostic lane tracking failed", error);
@@ -345,6 +340,19 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       }, 66);
     };
 
+    const cleanupTracker = (): void => {
+      if (cleanupStarted || trackerPromise === undefined) {
+        return;
+      }
+
+      cleanupStarted = true;
+      void trackerPromise
+        .then((tracker) => tracker.cleanup())
+        .catch((error: unknown) => {
+          console.error("Diagnostic lane tracker cleanup failed", error);
+        });
+    };
+
     schedule();
 
     return {
@@ -361,6 +369,8 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
         if (timeoutId !== undefined) {
           window.clearTimeout(timeoutId);
         }
+
+        cleanupTracker();
       }
     };
   };
@@ -397,7 +407,11 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
 
     const key = `${state.frontStream.stream.id}:${state.sideStream.stream.id}`;
 
-    if (activeTracking?.key === key) {
+    if (
+      activeTracking?.key === key &&
+      activeTracking.frontVideo === frontVideo &&
+      activeTracking.sideVideo === sideVideo
+    ) {
       return;
     }
 
@@ -419,6 +433,8 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
 
     activeTracking = {
       key,
+      frontVideo,
+      sideVideo,
       stop() {
         frontLane.stop();
         sideLane.stop();

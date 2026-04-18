@@ -2,13 +2,13 @@ import type { WorkbenchError, WorkbenchState } from "./DiagnosticWorkbench";
 import { escapeHTML } from "../../shared/browser/escapeHTML";
 import type {
   FrameTimestamp,
-  LaneHealthStatus,
-  TimestampSource
+  LaneHealthStatus
 } from "../../shared/types/camera";
 import type {
   FrontHandDetection,
   SideHandDetection
 } from "../../shared/types/hand";
+import { formatFrameTimestamp } from "./timestampFormat";
 
 export interface WorkbenchInspectionState {
   readonly frontDetection: FrontHandDetection | undefined;
@@ -115,38 +115,6 @@ const defaultInspectionState: WorkbenchInspectionState = {
   sideLaneHealth: "capturing"
 };
 
-const timestampSourceLabel = (source: TimestampSource): string => {
-  switch (source) {
-    case "requestVideoFrameCallbackCaptureTime":
-      return "captureTime";
-    case "requestVideoFrameCallbackExpectedDisplayTime":
-      return "expectedDisplayTime";
-    case "performanceNowAtCallback":
-      return "performance.now";
-  }
-};
-
-const formatFrameTimestamp = (
-  timestamp: FrameTimestamp | undefined
-): string => {
-  if (timestamp === undefined) {
-    return "timestamp: 未取得";
-  }
-
-  const presentedFrames =
-    timestamp.presentedFrames === undefined
-      ? "presentedFrames: unavailable"
-      : `presentedFrames: ${String(timestamp.presentedFrames)}`;
-
-  return [
-    `${timestamp.frameTimestampMs.toFixed(1)} ms`,
-    timestampSourceLabel(timestamp.timestampSource),
-    presentedFrames
-  ]
-    .map(escapeHTML)
-    .join(" / ");
-};
-
 const renderInspectionPane = (
   lanePrefix: "front" | "side",
   kind: "raw" | "filtered"
@@ -179,7 +147,7 @@ const renderInspectionLane = (
     <h3>${title}</h3>
     <p class="wb-device-label">${escapeHTML(deviceLabel)}</p>
     <p id="wb-${lanePrefix}-health" class="wb-lane-health">health: ${escapeHTML(health)}</p>
-    <p id="wb-${lanePrefix}-timestamp" class="wb-timestamp-readout">${formatFrameTimestamp(timestamp)}</p>
+    <p id="wb-${lanePrefix}-timestamp" class="wb-timestamp-readout">${escapeHTML(formatFrameTimestamp(timestamp))}</p>
     <div class="wb-inspection-panes">
       ${renderInspectionPane(lanePrefix, "raw")}
       ${renderInspectionPane(lanePrefix, "filtered")}

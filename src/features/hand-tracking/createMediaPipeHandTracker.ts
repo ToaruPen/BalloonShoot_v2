@@ -33,6 +33,7 @@ export interface MediaPipeHandTracker {
     bitmap: ImageBitmap,
     frameAtMs: number
   ): Promise<HandDetection | undefined>;
+  cleanup(): Promise<void> | void;
 }
 
 interface MediaPipeHandTrackerOptions {
@@ -301,13 +302,14 @@ export const createMediaPipeHandTracker = async (
   options: MediaPipeHandTrackerOptions
 ): Promise<MediaPipeHandTracker> => {
   const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
-  const handLandmarker = await HandLandmarker.createFromOptions(vision, {
-    baseOptions: {
-      modelAssetPath: "/models/hand_landmarker.task"
-    },
-    numHands: 1,
-    runningMode: "VIDEO"
-  });
+  let handLandmarker: HandLandmarker | undefined =
+    await HandLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "/models/hand_landmarker.task"
+      },
+      numHands: 1,
+      runningMode: "VIDEO"
+    });
   const filters = createSpaceFilters(options.getFilterConfig);
 
   return {
@@ -315,6 +317,10 @@ export const createMediaPipeHandTracker = async (
       bitmap: ImageBitmap,
       frameAtMs: number
     ): Promise<HandDetection | undefined> {
+      if (handLandmarker === undefined) {
+        throw new Error("MediaPipe hand tracker has already been cleaned up.");
+      }
+
       const raw = toHandFrame(
         handLandmarker.detectForVideo(bitmap, frameAtMs),
         {
@@ -331,6 +337,11 @@ export const createMediaPipeHandTracker = async (
       const filtered = filterHandFrame(raw, filters, frameAtMs);
 
       return Promise.resolve({ rawFrame: raw, filteredFrame: filtered });
+    },
+
+    cleanup() {
+      handLandmarker?.close();
+      handLandmarker = undefined;
     }
   };
 };
