@@ -38,10 +38,6 @@ export const observeTrackEnded = (
   const cleanup: (() => void)[] = [];
 
   for (const track of videoTracksFor(stream)) {
-    if (track.kind !== "video") {
-      continue;
-    }
-
     const handler = (): void => {
       callback({
         trackId: track.id,

@@ -411,6 +411,39 @@ describe("createDiagnosticWorkbench", () => {
     ).toEqual(["front-id", "side-id", "fresh-id"]);
   });
 
+  it("ignores stale devicechange results after assigning devices", async () => {
+    grantPermission();
+    enumerateTwoDevices();
+    const frontStream = createPinnedStream("front-id");
+    const sideStream = createPinnedStream("side-id");
+    vi.mocked(createDevicePinnedStream)
+      .mockResolvedValueOnce(frontStream)
+      .mockResolvedValueOnce(sideStream);
+    const workbench = createDiagnosticWorkbench();
+    await workbench.requestPermission();
+
+    const staleRefresh = createDeferred<MediaDeviceInfo[]>();
+    vi.mocked(enumerateVideoDevices).mockReturnValueOnce(staleRefresh.promise);
+
+    const refresh = workbench.refreshDevicesFromDeviceChange();
+    await workbench.assignDevices("front-id", "side-id");
+
+    staleRefresh.resolve([
+      createDevice("stale-front", "Stale Front"),
+      createDevice("stale-side", "Stale Side")
+    ]);
+    await refresh;
+
+    expect(workbench.getState()).toMatchObject({
+      screen: "previewing",
+      frontStream,
+      sideStream
+    });
+    expect(
+      workbench.getState().devices.map((device) => device.deviceId)
+    ).toEqual(["front-id", "side-id"]);
+  });
+
   it("stops existing preview streams when requesting permission again", async () => {
     grantPermission();
     enumerateTwoDevices();

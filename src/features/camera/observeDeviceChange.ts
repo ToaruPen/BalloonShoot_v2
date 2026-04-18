@@ -21,7 +21,7 @@ export const observeDeviceChange = (
   if (mediaDevices === undefined) {
     return {
       stop() {
-        return undefined;
+        return;
       }
     };
   }

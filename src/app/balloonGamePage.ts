@@ -376,13 +376,13 @@ export const createBalloonGamePage = ({
         const devices = await enumerateDevices();
 
         if (devices.length < 2) {
-          commit({
-            ...initialState(),
-            screen: "error",
-            errorTitle: "カメラが1台しか検出されません",
-            errorCause: "このゲームには2台のカメラが必要です。",
-            errorNextAction: "別のカメラを接続してからリトライしてください。"
-          });
+          commit(
+            buildCameraErrorState(
+              "カメラが1台しか検出されません",
+              "このゲームには2台のカメラが必要です。",
+              "別のカメラを接続してからリトライしてください。"
+            )
+          );
           return;
         }
 
@@ -395,13 +395,13 @@ export const createBalloonGamePage = ({
           selectionError: undefined
         });
       } catch (error: unknown) {
-        commit({
-          ...initialState(),
-          screen: "error",
-          errorTitle: "カメラ一覧を取得できません",
-          errorCause: error instanceof Error ? error.message : String(error),
-          errorNextAction: "カメラ接続を確認してからリトライしてください。"
-        });
+        commit(
+          buildCameraErrorState(
+            "カメラ一覧を取得できません",
+            error instanceof Error ? error.message : String(error),
+            "カメラ接続を確認してからリトライしてください。"
+          )
+        );
       }
     },
     selectCameras(frontDeviceId, sideDeviceId) {

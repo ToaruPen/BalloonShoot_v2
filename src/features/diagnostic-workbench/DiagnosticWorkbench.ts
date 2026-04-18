@@ -95,6 +95,10 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
   let deviceRefreshGeneration = 0;
   let permissionGranted = false;
 
+  const invalidateDeviceRefresh = (): void => {
+    deviceRefreshGeneration += 1;
+  };
+
   const emit = (): void => {
     for (const fn of listeners) {
       fn(state);
@@ -432,6 +436,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     async requestPermission() {
       requestGeneration += 1;
       openGeneration += 1;
+      invalidateDeviceRefresh();
       permissionGranted = false;
       const myGeneration = requestGeneration;
 
@@ -494,6 +499,8 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     },
 
     async assignDevices(frontDeviceId: string, sideDeviceId: string) {
+      invalidateDeviceRefresh();
+
       if (frontDeviceId === sideDeviceId) {
         update({ error: createError("distinctDevicesRequired") });
         return;
@@ -511,7 +518,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
         return;
       }
 
-      deviceRefreshGeneration += 1;
+      invalidateDeviceRefresh();
       const myGeneration = deviceRefreshGeneration;
 
       let devices: MediaDeviceInfo[];
@@ -535,6 +542,8 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     },
 
     async swapRoles() {
+      invalidateDeviceRefresh();
+
       const { frontAssignment, sideAssignment } = state;
 
       if (frontAssignment === undefined || sideAssignment === undefined) {
@@ -551,6 +560,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     reselect() {
       requestGeneration += 1;
       openGeneration += 1;
+      invalidateDeviceRefresh();
       stopCurrentStreams();
       update({
         screen: "deviceSelection",
@@ -565,7 +575,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     destroy() {
       requestGeneration += 1;
       openGeneration += 1;
-      deviceRefreshGeneration += 1;
+      invalidateDeviceRefresh();
       permissionGranted = false;
       stopCurrentStreams();
       listeners.clear();
