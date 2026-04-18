@@ -21,6 +21,42 @@ const goodEvidence = (
 });
 
 describe("updateSideTriggerState", () => {
+  const noHandEvidence = (): SideTriggerEvidence =>
+    goodEvidence({
+      sideHandDetected: false,
+      sideViewQuality: "lost",
+      pullEvidenceScalar: 0,
+      releaseEvidenceScalar: 0,
+      triggerPostureConfidence: 0,
+      shotCandidateConfidence: 0,
+      rejectReason: "handNotDetected"
+    });
+
+  const pulledEvidence = (): SideTriggerEvidence =>
+    goodEvidence({
+      pullEvidenceScalar: 0.9,
+      releaseEvidenceScalar: 0.1,
+      shotCandidateConfidence: 0.9
+    });
+
+  const openEvidence = (): SideTriggerEvidence =>
+    goodEvidence({ releaseEvidenceScalar: 0.9, pullEvidenceScalar: 0.1 });
+
+  const driveToPulledLatched = () => {
+    let state = createInitialSideTriggerState();
+
+    for (const evidence of [goodEvidence(), pulledEvidence(), pulledEvidence()]) {
+      state = updateSideTriggerState(
+        state,
+        evidence,
+        defaultSideTriggerTuning
+      ).state;
+    }
+
+    expect(state.phase).toBe("SideTriggerPulledLatched");
+    return state;
+  };
+
   it("transitions from no hand to open ready after stable acceptable open pose", () => {
     let state = createInitialSideTriggerState();
 
@@ -82,6 +118,49 @@ describe("updateSideTriggerState", () => {
     expect(held.state.phase).toBe("SideTriggerPulledLatched");
   });
 
+  it("commits on the candidate entry frame when pull dwell tuning is one frame", () => {
+    const tuning = {
+      ...defaultSideTriggerTuning,
+      minPullDwellFrames: 1
+    };
+    const open = updateSideTriggerState(
+      createInitialSideTriggerState(),
+      goodEvidence(),
+      tuning
+    ).state;
+
+    const commit = updateSideTriggerState(open, pulledEvidence(), tuning);
+
+    expect(commit.edge).toContain("pullStarted");
+    expect(commit.edge).toContain("shotCommitted");
+    expect(commit.state.phase).toBe("SideTriggerPulledLatched");
+    expect(commit.state.triggerPulled).toBe(true);
+    expect(commit.state.dwellFrameCounts.pullDwellFrames).toBe(1);
+  });
+
+  it("keeps the default two-frame pull dwell behavior", () => {
+    const tuning = {
+      ...defaultSideTriggerTuning,
+      minPullDwellFrames: 2
+    };
+    let state = updateSideTriggerState(
+      createInitialSideTriggerState(),
+      goodEvidence(),
+      tuning
+    ).state;
+
+    const pullStart = updateSideTriggerState(state, pulledEvidence(), tuning);
+
+    expect(pullStart.edge).toBe("pullStarted");
+    expect(pullStart.state.phase).toBe("SideTriggerPullCandidate");
+
+    state = pullStart.state;
+    const commit = updateSideTriggerState(state, pulledEvidence(), tuning);
+
+    expect(commit.edge).toBe("shotCommitted");
+    expect(commit.state.phase).toBe("SideTriggerPulledLatched");
+  });
+
   it("requires release dwell and cooldown before returning to open ready", () => {
     let state = createInitialSideTriggerState();
 
@@ -135,6 +214,48 @@ describe("updateSideTriggerState", () => {
     expect(state.phase).toBe("SideTriggerOpenReady");
   });
 
+  it("confirms release on the candidate entry frame when release dwell tuning is one frame", () => {
+    const tuning = {
+      ...defaultSideTriggerTuning,
+      minReleaseDwellFrames: 1
+    };
+    const pulled = driveToPulledLatched();
+
+    const releaseConfirmed = updateSideTriggerState(
+      pulled,
+      openEvidence(),
+      tuning
+    );
+
+    expect(releaseConfirmed.edge).toBe("releaseConfirmed");
+    expect(releaseConfirmed.state.phase).toBe("SideTriggerCooldown");
+    expect(releaseConfirmed.state.triggerPulled).toBe(false);
+    expect(releaseConfirmed.state.dwellFrameCounts.releaseDwellFrames).toBe(1);
+  });
+
+  it("keeps the default two-frame release dwell behavior", () => {
+    const tuning = {
+      ...defaultSideTriggerTuning,
+      minReleaseDwellFrames: 2
+    };
+    let state = driveToPulledLatched();
+
+    const releaseStart = updateSideTriggerState(state, openEvidence(), tuning);
+
+    expect(releaseStart.edge).toBe("none");
+    expect(releaseStart.state.phase).toBe("SideTriggerReleaseCandidate");
+
+    state = releaseStart.state;
+    const releaseConfirmed = updateSideTriggerState(
+      state,
+      openEvidence(),
+      tuning
+    );
+
+    expect(releaseConfirmed.edge).toBe("releaseConfirmed");
+    expect(releaseConfirmed.state.phase).toBe("SideTriggerCooldown");
+  });
+
   it("does not treat hand loss as release", () => {
     const pulled = updateSideTriggerState(
       updateSideTriggerState(
@@ -175,6 +296,50 @@ describe("updateSideTriggerState", () => {
     expect(lost.edge).toBe("none");
     expect(lost.state.phase).toBe("SideTriggerRecoveringAfterLoss");
     expect(lost.state.triggerPulled).toBe(true);
+  });
+
+  it("restores a latched trigger after brief hand loss when reacquired still pulled", () => {
+    let state = driveToPulledLatched();
+
+    for (let i = 0; i < defaultSideTriggerTuning.lostHandGraceFrames - 1; i += 1) {
+      state = updateSideTriggerState(
+        state,
+        noHandEvidence(),
+        defaultSideTriggerTuning
+      ).state;
+    }
+
+    const recovered = updateSideTriggerState(
+      state,
+      pulledEvidence(),
+      defaultSideTriggerTuning
+    );
+
+    expect(recovered.edge).toBe("none");
+    expect(recovered.state.phase).toBe("SideTriggerPulledLatched");
+    expect(recovered.state.triggerPulled).toBe(true);
+  });
+
+  it("drops preserved pull state after brief hand loss when reacquired clearly open", () => {
+    let state = driveToPulledLatched();
+
+    for (let i = 0; i < defaultSideTriggerTuning.lostHandGraceFrames - 1; i += 1) {
+      state = updateSideTriggerState(
+        state,
+        noHandEvidence(),
+        defaultSideTriggerTuning
+      ).state;
+    }
+
+    const recovered = updateSideTriggerState(
+      state,
+      openEvidence(),
+      defaultSideTriggerTuning
+    );
+
+    expect(recovered.edge).toBe("none");
+    expect(recovered.state.phase).toBe("SideTriggerOpenReady");
+    expect(recovered.state.triggerPulled).toBe(false);
   });
 
   it("blocks shot commitment when side view quality is rejected", () => {

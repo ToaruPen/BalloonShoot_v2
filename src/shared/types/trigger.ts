@@ -14,6 +14,7 @@ export type SideTriggerPhase =
 export type TriggerEdge =
   | "none"
   | "pullStarted"
+  | "pullStarted+shotCommitted"
   | "shotCommitted"
   | "releaseConfirmed";
 

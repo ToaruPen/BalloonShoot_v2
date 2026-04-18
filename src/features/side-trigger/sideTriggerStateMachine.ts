@@ -12,6 +12,7 @@ export interface SideTriggerMachineState {
   readonly triggerPulled: boolean;
   readonly dwellFrameCounts: SideTriggerDwellFrameCounts;
   readonly lastRejectReason: SideTriggerRejectReason | undefined;
+  readonly recoveringFromPhase?: SideTriggerPhase;
 }
 
 interface SideTriggerMachineResult {
@@ -69,6 +70,10 @@ const noHandResult = (
   }
 
   const lostHandFrames = previous.dwellFrameCounts.lostHandFrames + 1;
+  const recoveringFromPhase =
+    previous.phase === "SideTriggerRecoveringAfterLoss"
+      ? previous.recoveringFromPhase
+      : previous.phase;
 
   if (lostHandFrames > tuning.lostHandGraceFrames) {
     return result({
@@ -87,7 +92,80 @@ const noHandResult = (
       releaseDwellFrames: 0,
       lostHandFrames
     }),
-    lastRejectReason: rejectReason ?? "handNotDetected"
+    lastRejectReason: rejectReason ?? "handNotDetected",
+    ...(recoveringFromPhase === undefined ? {} : { recoveringFromPhase })
+  });
+};
+
+const enterPullCandidate = (
+  previous: SideTriggerMachineState,
+  tuning: SideTriggerTuning
+): SideTriggerMachineResult => {
+  const pullDwellFrames = 1;
+
+  if (pullDwellFrames >= tuning.minPullDwellFrames) {
+    return result(
+      {
+        phase: "SideTriggerPulledLatched",
+        triggerPulled: true,
+        dwellFrameCounts: withCounts(previous, {
+          pullDwellFrames,
+          releaseDwellFrames: 0,
+          lostHandFrames: 0,
+          cooldownRemainingFrames: 0
+        }),
+        lastRejectReason: undefined
+      },
+      "pullStarted+shotCommitted"
+    );
+  }
+
+  return result(
+    {
+      phase: "SideTriggerPullCandidate",
+      triggerPulled: false,
+      dwellFrameCounts: withCounts(previous, {
+        pullDwellFrames,
+        releaseDwellFrames: 0,
+        lostHandFrames: 0,
+        cooldownRemainingFrames: 0
+      }),
+      lastRejectReason: undefined
+    },
+    "pullStarted"
+  );
+};
+
+const enterReleaseCandidate = (
+  previous: SideTriggerMachineState,
+  tuning: SideTriggerTuning
+): SideTriggerMachineResult => {
+  const releaseDwellFrames = 1;
+
+  if (releaseDwellFrames >= tuning.minReleaseDwellFrames) {
+    return result(
+      {
+        phase: "SideTriggerCooldown",
+        triggerPulled: false,
+        dwellFrameCounts: withCounts(previous, {
+          releaseDwellFrames,
+          cooldownRemainingFrames: tuning.shotCooldownFrames,
+          lostHandFrames: 0
+        }),
+        lastRejectReason: undefined
+      },
+      "releaseConfirmed"
+    );
+  }
+
+  return result({
+    phase: "SideTriggerReleaseCandidate",
+    triggerPulled: true,
+    dwellFrameCounts: withCounts(previous, {
+      releaseDwellFrames,
+      lostHandFrames: 0
+    }),
+    lastRejectReason: undefined
   });
 };
 
@@ -135,20 +213,7 @@ const openReady = (
   }
 
   if (evidence.pullEvidenceScalar >= tuning.pullEnterThreshold) {
-    return result(
-      {
-        phase: "SideTriggerPullCandidate",
-        triggerPulled: false,
-        dwellFrameCounts: withCounts(previous, {
-          pullDwellFrames: 1,
-          releaseDwellFrames: 0,
-          lostHandFrames: 0,
-          cooldownRemainingFrames: 0
-        }),
-        lastRejectReason: undefined
-      },
-      "pullStarted"
-    );
+    return enterPullCandidate(previous, tuning);
   }
 
   return result({
@@ -216,15 +281,7 @@ const pulledLatched = (
   }
 
   if (evidence.releaseEvidenceScalar >= tuning.releaseEnterThreshold) {
-    return result({
-      phase: "SideTriggerReleaseCandidate",
-      triggerPulled: true,
-      dwellFrameCounts: withCounts(previous, {
-        releaseDwellFrames: 1,
-        lostHandFrames: 0
-      }),
-      lastRejectReason: undefined
-    });
+    return enterReleaseCandidate(previous, tuning);
   }
 
   return result({
@@ -305,6 +362,54 @@ const cooldown = (
   });
 };
 
+const recoveringAfterLoss = (
+  previous: SideTriggerMachineState,
+  evidence: SideTriggerEvidence,
+  tuning: SideTriggerTuning
+): SideTriggerMachineResult => {
+  if (!poseUsable(evidence, tuning)) {
+    return poseSearching(previous, evidence, tuning);
+  }
+
+  if (!previous.triggerPulled) {
+    return poseSearching(previous, evidence, tuning);
+  }
+
+  if (previous.recoveringFromPhase === "SideTriggerReleaseCandidate") {
+    if (evidence.releaseEvidenceScalar >= tuning.releaseExitThreshold) {
+      return enterReleaseCandidate(previous, tuning);
+    }
+
+    if (evidence.pullEvidenceScalar >= tuning.pullExitThreshold) {
+      return result({
+        phase: "SideTriggerPulledLatched",
+        triggerPulled: true,
+        dwellFrameCounts: withCounts(previous, {
+          releaseDwellFrames: 0,
+          lostHandFrames: 0
+        }),
+        lastRejectReason: undefined
+      });
+    }
+
+    return poseSearching(previous, evidence, tuning);
+  }
+
+  if (evidence.pullEvidenceScalar >= tuning.pullExitThreshold) {
+    return result({
+      phase: "SideTriggerPulledLatched",
+      triggerPulled: true,
+      dwellFrameCounts: withCounts(previous, {
+        releaseDwellFrames: 0,
+        lostHandFrames: 0
+      }),
+      lastRejectReason: undefined
+    });
+  }
+
+  return poseSearching(previous, evidence, tuning);
+};
+
 export const updateSideTriggerState = (
   previous: SideTriggerMachineState,
   evidence: SideTriggerEvidence,
@@ -317,8 +422,9 @@ export const updateSideTriggerState = (
   switch (previous.phase) {
     case "SideTriggerNoHand":
     case "SideTriggerPoseSearching":
-    case "SideTriggerRecoveringAfterLoss":
       return poseSearching(previous, evidence, tuning);
+    case "SideTriggerRecoveringAfterLoss":
+      return recoveringAfterLoss(previous, evidence, tuning);
     case "SideTriggerOpenReady":
       return openReady(previous, evidence, tuning);
     case "SideTriggerPullCandidate":

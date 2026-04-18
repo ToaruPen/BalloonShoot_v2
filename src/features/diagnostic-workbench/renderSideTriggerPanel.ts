@@ -30,7 +30,7 @@ export const renderSideTriggerPanel = (
   const edge = triggerFrame?.triggerEdge ?? telemetry?.edge ?? "none";
   const counts = triggerFrame?.dwellFrameCounts ?? telemetry?.dwellFrameCounts;
   const shotCommitted =
-    edge === "shotCommitted"
+    edge.includes("shotCommitted")
       ? '<p class="wb-shot-committed">SHOT COMMITTED</p>'
       : "";
 
