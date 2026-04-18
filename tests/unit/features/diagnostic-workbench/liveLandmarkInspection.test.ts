@@ -136,6 +136,30 @@ const createFakeTracker = (): FakeTracker => ({
   cleanup: vi.fn()
 });
 
+const createHandFrame = () => ({
+  width: 640,
+  height: 480,
+  landmarks: {
+    wrist: { x: 0.1, y: 0.2, z: 0 },
+    thumbIp: { x: 0.2, y: 0.3, z: 0 },
+    thumbTip: { x: 0.3, y: 0.4, z: 0 },
+    indexMcp: { x: 0.4, y: 0.5, z: 0 },
+    indexTip: { x: 0.5, y: 0.6, z: 0 },
+    middleTip: { x: 0.6, y: 0.7, z: 0 },
+    ringTip: { x: 0.7, y: 0.8, z: 0 },
+    pinkyTip: { x: 0.8, y: 0.9, z: 0 }
+  }
+});
+
+const createHandDetection = () => {
+  const frame = createHandFrame();
+
+  return {
+    rawFrame: frame,
+    filteredFrame: frame
+  };
+};
+
 const createDeferred = <T>() => {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
@@ -368,5 +392,42 @@ describe("createLiveLandmarkInspection", () => {
     });
     expect(frontTracker.detect).not.toHaveBeenCalled();
     expect(sideTracker.detect).not.toHaveBeenCalled();
+  });
+
+  it("does not write stale detection results after stop while detect is in flight", async () => {
+    const frontTracker = createFakeTracker();
+    const detectResult = createDeferred<ReturnType<typeof createHandDetection>>();
+    const bitmapClose = vi.fn();
+    frontTracker.detect.mockReturnValueOnce(detectResult.promise);
+    vi.mocked(createImageBitmap).mockResolvedValueOnce({
+      width: 640,
+      height: 480,
+      close: bitmapClose
+    } as ImageBitmap);
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(frontTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.frontVideo.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(frontTracker.detect).toHaveBeenCalledOnce();
+    });
+    liveInspection.destroy();
+    detectResult.resolve(createHandDetection());
+
+    await vi.waitFor(() => {
+      expect(bitmapClose).toHaveBeenCalledOnce();
+    });
+    expect(liveInspection.getState().frontDetection).toBeUndefined();
   });
 });

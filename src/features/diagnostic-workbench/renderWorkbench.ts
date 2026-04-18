@@ -111,8 +111,8 @@ const renderDeviceSelection = (state: WorkbenchState): string => `
 const defaultInspectionState: WorkbenchInspectionState = {
   frontDetection: undefined,
   sideDetection: undefined,
-  frontLaneHealth: "capturing",
-  sideLaneHealth: "capturing"
+  frontLaneHealth: "notStarted",
+  sideLaneHealth: "notStarted"
 };
 
 const renderInspectionPane = (

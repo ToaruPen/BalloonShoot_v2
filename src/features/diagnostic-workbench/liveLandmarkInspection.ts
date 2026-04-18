@@ -161,6 +161,8 @@ const videoReadyForBitmap = (video: HTMLVideoElement): boolean =>
   video.videoWidth > 0 &&
   video.videoHeight > 0;
 
+type LaneDetection = FrontHandDetection | SideHandDetection | undefined;
+
 export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   let inspectionState = createInitialInspectionState();
   let activeTracking: ActiveTracking | undefined;
@@ -246,7 +248,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     tracker: MediaPipeHandTracker,
     options: LaneTrackingOptions,
     timestamp: FrameTimestamp
-  ): Promise<void> => {
+  ): Promise<LaneDetection> => {
     const bitmap = await createImageBitmap(options.video);
 
     try {
@@ -254,14 +256,12 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
         bitmap,
         timestamp.frameTimestampMs
       );
-      const laneDetection =
-        detection === undefined
-          ? undefined
-          : options.role === "frontAim"
-            ? toFrontDetection(detection, options, timestamp)
-            : toSideDetection(detection, options, timestamp);
 
-      setLaneDetection(options.role, laneDetection);
+      return detection === undefined
+        ? undefined
+        : options.role === "frontAim"
+          ? toFrontDetection(detection, options, timestamp)
+          : toSideDetection(detection, options, timestamp);
     } finally {
       bitmap.close();
     }
@@ -305,14 +305,23 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
           return;
         }
 
-        await runLaneDetection(tracker, options, timestamp);
+        const laneDetection = await runLaneDetection(
+          tracker,
+          options,
+          timestamp
+        );
 
         if (isStopped()) {
           return;
         }
 
+        setLaneDetection(options.role, laneDetection);
         setLaneHealth(options.role, "tracking");
       } catch (error: unknown) {
+        if (isStopped()) {
+          return;
+        }
+
         console.error("Diagnostic lane tracking failed", error);
         setLaneHealth(options.role, "failed");
         return;

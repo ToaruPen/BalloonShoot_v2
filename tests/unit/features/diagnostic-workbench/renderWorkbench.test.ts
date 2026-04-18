@@ -4,6 +4,7 @@ import type {
   WorkbenchScreen,
   WorkbenchState
 } from "../../../../src/features/diagnostic-workbench/DiagnosticWorkbench";
+import { createLiveLandmarkInspection } from "../../../../src/features/diagnostic-workbench/liveLandmarkInspection";
 import { renderWorkbenchHTML } from "../../../../src/features/diagnostic-workbench/renderWorkbench";
 import type {
   FrontHandDetection,
@@ -186,6 +187,28 @@ describe("renderWorkbenchHTML", () => {
     expect(html).toContain("Side &lt;Camera&gt;");
     expect(html).not.toContain(rawFrontId.slice(0, 8));
     expect(html).not.toContain(rawSideId.slice(0, 8));
+  });
+
+  it("uses initial inspection health values when preview inspection is omitted", () => {
+    const initialInspection = createLiveLandmarkInspection().getState();
+    const html = renderWorkbenchHTML(
+      createState({
+        screen: "previewing",
+        frontAssignment: {
+          role: "frontAim",
+          deviceId: "front-id",
+          label: "Front Camera"
+        },
+        sideAssignment: {
+          role: "sideTrigger",
+          deviceId: "side-id",
+          label: "Side Camera"
+        }
+      })
+    );
+
+    expect(html).toContain(`health: ${initialInspection.frontLaneHealth}`);
+    expect(html).toContain(`health: ${initialInspection.sideLaneHealth}`);
   });
 
   it("renders raw and filtered landmark inspection panes with timestamp readouts", () => {
