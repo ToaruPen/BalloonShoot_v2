@@ -14,12 +14,35 @@ const installFakeCameras = async (
 ): Promise<void> => {
   await page.addInitScript(
     ({ fakeDevices, fakeMode }) => {
+      let devices = fakeDevices;
+      const events = new EventTarget();
+
+      Object.defineProperty(window, "__setFakeCameraDevices", {
+        configurable: true,
+        value: (nextDevices: FakeCameraDevice[]) => {
+          devices = nextDevices;
+          events.dispatchEvent(new Event("devicechange"));
+        }
+      });
+
       Object.defineProperty(navigator, "mediaDevices", {
         configurable: true,
         value: {
+          addEventListener: (
+            type: string,
+            listener: EventListenerOrEventListenerObject
+          ) => {
+            events.addEventListener(type, listener);
+          },
+          removeEventListener: (
+            type: string,
+            listener: EventListenerOrEventListenerObject
+          ) => {
+            events.removeEventListener(type, listener);
+          },
           enumerateDevices: () =>
             Promise.resolve(
-              fakeDevices.map((device) => ({
+              devices.map((device) => ({
                 kind: "videoinput",
                 deviceId: device.deviceId,
                 label: device.label,
@@ -118,8 +141,22 @@ test("diagnostic workbench runs permission, device selection, previews, swap, an
     "Front Camera"
   );
 
+  await page.evaluate(() => {
+    (
+      window as unknown as {
+        __setFakeCameraDevices: (devices: FakeCameraDevice[]) => void;
+      }
+    ).__setFakeCameraDevices([
+      { deviceId: "front-device-id", label: "Front Camera" },
+      { deviceId: "side-device-id", label: "Side Camera" },
+      { deviceId: "replugged-device-id", label: "Replugged Camera" }
+    ]);
+  });
   await page.getByRole("button", { name: "再選択" }).click();
   await expect(page.getByRole("heading", { name: "カメラ選択" })).toBeVisible();
+  await expect(page.locator("#wb-front-select")).toContainText(
+    "Replugged Camera"
+  );
 });
 
 test("diagnostic workbench shows permission denial details", async ({

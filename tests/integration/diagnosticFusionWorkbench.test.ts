@@ -57,4 +57,39 @@ describe("diagnostic fusion workbench integration", () => {
       /<span>shot edge consumed<\/span>\s*<strong>true<\/strong>/
     );
   });
+
+  it("renders a device loss and recovery cycle through diagnostic fusion panels", () => {
+    const mapper = createInputFusionMapper();
+
+    mapper.updateAimFrame(createAimFrame(100), context);
+    const lost = mapper.updateTriggerUnavailable(
+      createTriggerFrame(112).timestamp,
+      {
+        ...context,
+        sideLaneHealth: "captureLost"
+      }
+    );
+    const lostHtml = renderFusionPanel(lost.fusedFrame, lost.telemetry);
+
+    expect(lostHtml).toMatch(
+      /<span>reject reason<\/span>\s*<strong>laneFailed<\/strong>/
+    );
+    expect(lostHtml).toMatch(
+      /<span>side lane health<\/span>\s*<strong>captureLost<\/strong>/
+    );
+
+    const recovered = mapper.updateTriggerFrame(
+      createTriggerFrame(116),
+      context
+    );
+    const recoveredHtml = renderFusionPanel(
+      recovered.fusedFrame,
+      recovered.telemetry
+    );
+
+    expect(recoveredHtml).toContain("pairedFrontAndSide");
+    expect(recoveredHtml).toMatch(
+      /<span>reject reason<\/span>\s*<strong>none<\/strong>/
+    );
+  });
 });

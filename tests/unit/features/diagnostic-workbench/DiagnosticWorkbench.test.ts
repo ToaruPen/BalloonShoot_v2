@@ -131,6 +131,25 @@ describe("createDiagnosticWorkbench", () => {
     expect(workbench.getState().devices).toHaveLength(1);
   });
 
+  it("refreshes single-camera selection to device selection on devicechange", async () => {
+    grantPermission();
+    vi.mocked(enumerateVideoDevices)
+      .mockResolvedValueOnce([createDevice("front-id", "Front Camera")])
+      .mockResolvedValueOnce([
+        createDevice("front-id", "Front Camera"),
+        createDevice("side-id", "Side Camera")
+      ]);
+    const workbench = createDiagnosticWorkbench();
+
+    await workbench.requestPermission();
+    await workbench.refreshDevicesFromDeviceChange();
+
+    expect(workbench.getState().screen).toBe("deviceSelection");
+    expect(
+      workbench.getState().devices.map((device) => device.deviceId)
+    ).toEqual(["front-id", "side-id"]);
+  });
+
   it("renders deviceSelection after permission and two-camera enumeration", async () => {
     grantPermission();
     enumerateTwoDevices();
@@ -240,7 +259,9 @@ describe("createDiagnosticWorkbench", () => {
     const workbench = createDiagnosticWorkbench();
     await workbench.requestPermission();
 
-    await expect(workbench.assignDevices("front-id", "front-id")).resolves.toBeUndefined();
+    await expect(
+      workbench.assignDevices("front-id", "front-id")
+    ).resolves.toBeUndefined();
     expect(workbench.getState().screen).toBe("deviceSelection");
     expect(workbench.getState().error?.kind).toBe("distinctDevicesRequired");
   });
@@ -287,6 +308,63 @@ describe("createDiagnosticWorkbench", () => {
     expect(workbench.getState().frontStream).toBe(frontStream);
     expect(workbench.getState().sideStream).toBe(sideStream);
     expect(workbench.getState().error?.kind).toBe("cameraConstraintFailed");
+  });
+
+  it("refreshes devices while previewing without opening replacement streams", async () => {
+    grantPermission();
+    enumerateTwoDevices();
+    const frontStream = createPinnedStream("front-id");
+    const sideStream = createPinnedStream("side-id");
+    vi.mocked(createDevicePinnedStream)
+      .mockResolvedValueOnce(frontStream)
+      .mockResolvedValueOnce(sideStream);
+    const workbench = createDiagnosticWorkbench();
+    await workbench.requestPermission();
+    await workbench.assignDevices("front-id", "side-id");
+    vi.mocked(enumerateVideoDevices).mockResolvedValueOnce([
+      createDevice("front-id", "Front Camera"),
+      createDevice("side-id", "Side Camera"),
+      createDevice("replugged-id", "Replugged Camera")
+    ]);
+
+    await workbench.refreshDevicesFromDeviceChange();
+
+    expect(workbench.getState().screen).toBe("previewing");
+    expect(
+      workbench.getState().devices.map((device) => device.deviceId)
+    ).toEqual(["front-id", "side-id", "replugged-id"]);
+    expect(workbench.getState().frontStream).toBe(frontStream);
+    expect(workbench.getState().sideStream).toBe(sideStream);
+    expect(createDevicePinnedStream).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores stale devicechange enumeration results", async () => {
+    grantPermission();
+    enumerateTwoDevices();
+    const workbench = createDiagnosticWorkbench();
+    await workbench.requestPermission();
+
+    const firstRefresh = createDeferred<MediaDeviceInfo[]>();
+    vi.mocked(enumerateVideoDevices)
+      .mockReturnValueOnce(firstRefresh.promise)
+      .mockResolvedValueOnce([
+        createDevice("front-id", "Front Camera"),
+        createDevice("side-id", "Side Camera"),
+        createDevice("fresh-id", "Fresh Camera")
+      ]);
+
+    const stale = workbench.refreshDevicesFromDeviceChange();
+    const fresh = workbench.refreshDevicesFromDeviceChange();
+    await fresh;
+    firstRefresh.resolve([
+      createDevice("stale-front", "Stale Front"),
+      createDevice("stale-side", "Stale Side")
+    ]);
+    await stale;
+
+    expect(
+      workbench.getState().devices.map((device) => device.deviceId)
+    ).toEqual(["front-id", "side-id", "fresh-id"]);
   });
 
   it("stops existing preview streams when requesting permission again", async () => {

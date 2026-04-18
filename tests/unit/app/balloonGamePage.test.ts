@@ -11,6 +11,7 @@ const createDevice = (deviceId: string, label: string): MediaDeviceInfo =>
   }) as MediaDeviceInfo;
 
 const createRoot = () => {
+  let clickListener: ((event: Event) => void) | undefined;
   const elements = new Map<string, unknown>([
     ["#game-camera-feed-front", {} as HTMLVideoElement],
     ["#game-camera-feed-side", {} as HTMLVideoElement],
@@ -20,12 +21,25 @@ const createRoot = () => {
 
   return {
     innerHTML: "",
-    addEventListener: vi.fn(),
+    addEventListener: vi.fn((type: string, listener: EventListener) => {
+      if (type === "click") {
+        clickListener = listener as (event: Event) => void;
+      }
+    }),
     removeEventListener: vi.fn(),
-    querySelector: vi.fn((selector: string) => elements.get(selector) ?? null)
+    querySelector: vi.fn((selector: string) => elements.get(selector) ?? null),
+    clickAction(action: string) {
+      clickListener?.({
+        target: {
+          getAttribute: (name: string) =>
+            name === "data-game-action" ? action : null
+        }
+      } as unknown as Event);
+    }
   } as unknown as HTMLElement & {
     innerHTML: string;
     querySelector: ReturnType<typeof vi.fn>;
+    clickAction(action: string): void;
   };
 };
 
@@ -119,5 +133,46 @@ describe("createBalloonGamePage", () => {
       })
     );
     expect(runtime.start).toHaveBeenCalledOnce();
+  });
+
+  it("reselects cameras from the running page while preserving available previous selections", async () => {
+    const root = createRoot();
+    const runtime = { start: vi.fn(), retry: vi.fn(), destroy: vi.fn() };
+    const enumerateVideoDevices = vi
+      .fn()
+      .mockResolvedValueOnce([
+        createDevice("front", "Front Camera"),
+        createDevice("side", "Side Camera")
+      ])
+      .mockResolvedValueOnce([
+        createDevice("front", "Front Camera"),
+        createDevice("replacement", "Replacement Camera")
+      ]);
+    const page = createBalloonGamePage({
+      requestCameraPermission: vi.fn(() =>
+        Promise.resolve({ status: "granted" as const })
+      ),
+      enumerateVideoDevices,
+      createBalloonGameRuntime: vi.fn(() => runtime)
+    });
+
+    page.mount(root);
+    await page.requestCameraAccess();
+    page.selectCameras("front", "side");
+    root.clickAction("reselectCameras");
+
+    await vi.waitFor(() => {
+      expect(root.innerHTML).toContain("カメラ選択");
+      expect(root.innerHTML).toContain(
+        "切断されたカメラを選び直してください。"
+      );
+    });
+    expect(runtime.destroy).toHaveBeenCalledOnce();
+    expect(root.innerHTML).toMatch(
+      /<option value="front" selected>Front Camera<\/option>/
+    );
+    expect(root.innerHTML).toMatch(
+      /<option value="replacement" selected>Replacement Camera<\/option>/
+    );
   });
 });

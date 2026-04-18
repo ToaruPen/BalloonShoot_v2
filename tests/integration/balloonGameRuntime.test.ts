@@ -232,12 +232,55 @@ interface FakePinnedStream extends DevicePinnedStream {
   readonly stopMock: ReturnType<typeof vi.fn>;
 }
 
-const createPinnedStream = (deviceId: string): FakePinnedStream => {
+class FakeTrack {
+  readonly id: string;
+  readonly kind = "video";
+  readonly label: string;
+  readyState: MediaStreamTrackState = "live";
+  private readonly endedListeners = new Set<EventListener>();
+
+  constructor(id: string, label = id) {
+    this.id = id;
+    this.label = label;
+  }
+
+  addEventListener(type: string, listener: EventListener): void {
+    if (type === "ended") {
+      this.endedListeners.add(listener);
+    }
+  }
+
+  removeEventListener(type: string, listener: EventListener): void {
+    if (type === "ended") {
+      this.endedListeners.delete(listener);
+    }
+  }
+
+  fireEnded(): void {
+    this.readyState = "ended";
+    for (const listener of this.endedListeners) {
+      listener(new Event("ended"));
+    }
+  }
+
+  listenerCount(): number {
+    return this.endedListeners.size;
+  }
+}
+
+const createPinnedStream = (
+  deviceId: string,
+  tracks: readonly FakeTrack[] = []
+): FakePinnedStream => {
   const stopMock = vi.fn();
 
   return {
     deviceId,
-    stream: { id: `${deviceId}-stream` } as MediaStream,
+    stream: {
+      id: `${deviceId}-stream`,
+      getVideoTracks: vi.fn(() => [...tracks]),
+      getTracks: vi.fn(() => [...tracks])
+    } as unknown as MediaStream,
     stop: stopMock,
     stopMock
   };
@@ -724,6 +767,173 @@ describe("createBalloonGameRuntime", () => {
     expect(frontTracker.cleanupMock).toHaveBeenCalledOnce();
     expect(sideStream.stopMock).not.toHaveBeenCalled();
     expect(sideTracker.cleanupMock).not.toHaveBeenCalled();
+
+    runtime.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it("marks the front lane captureLost, clears fusion, and leaves side resources active when the front track ends", async () => {
+    capturedFusionContexts.length = 0;
+    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+    const raf = createRaf();
+    const hudRoot = { innerHTML: "" } as HTMLElement;
+    const frontTrack = new FakeTrack("front-track");
+    const frontStream = createPinnedStream("front", [frontTrack]);
+    const sideStream = createPinnedStream("side", [
+      new FakeTrack("side-track")
+    ]);
+    const frontTracker = createTracker(() =>
+      Promise.resolve(createHandDetection())
+    );
+    const sideTracker = createTracker(() =>
+      Promise.resolve(createHandDetection())
+    );
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: createVideo(),
+      sideVideo: createVideo(),
+      canvas: createCanvas(),
+      hudRoot,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      createDevicePinnedStream: vi
+        .fn()
+        .mockResolvedValueOnce(frontStream)
+        .mockResolvedValueOnce(sideStream),
+      createMediaPipeHandTracker: vi
+        .fn()
+        .mockResolvedValueOnce(frontTracker)
+        .mockResolvedValueOnce(sideTracker)
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(frontTrack.listenerCount()).toBe(1);
+    });
+    frontTrack.fireEnded();
+
+    await vi.waitFor(() => {
+      expect(frontTracker.cleanupMock).toHaveBeenCalledOnce();
+    });
+    raf.fire(4_000);
+
+    expect(capturedFusionContexts.at(-1)).toMatchObject({
+      method: "updateAimUnavailable",
+      frontLaneHealth: "captureLost",
+      sideLaneHealth: "tracking"
+    });
+    expect(frontStream.stopMock).toHaveBeenCalledOnce();
+    expect(sideStream.stopMock).not.toHaveBeenCalled();
+    expect(sideTracker.cleanupMock).not.toHaveBeenCalled();
+    expect(frontTrack.listenerCount()).toBe(0);
+    expect(hudRoot.innerHTML).toContain("カメラが切断されました");
+    expect(hudRoot.innerHTML).not.toContain("captureLost");
+
+    runtime.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it("retry after capture loss starts fresh lanes and clears the laneFailed context", async () => {
+    capturedFusionContexts.length = 0;
+    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+    const raf = createRaf();
+    const frontVideo = createVideo();
+    const sideVideo = createVideo();
+    const oldFrontTrack = new FakeTrack("old-front-track");
+    const oldFrontStream = createPinnedStream("front", [oldFrontTrack]);
+    const oldSideStream = createPinnedStream("side", [
+      new FakeTrack("old-side-track")
+    ]);
+    const newFrontStream = createPinnedStream("front", [
+      new FakeTrack("new-front-track")
+    ]);
+    const newSideStream = createPinnedStream("side", [
+      new FakeTrack("new-side-track")
+    ]);
+    const restartedFrontDetect = vi.fn(() =>
+      Promise.resolve(createHandDetection())
+    );
+    const restartedSideDetect = vi.fn(() =>
+      Promise.resolve(createHandDetection())
+    );
+    const oldFrontTracker = createTracker();
+    const oldSideTracker = createTracker();
+    const newFrontTracker = createTracker(restartedFrontDetect);
+    const newSideTracker = createTracker(restartedSideDetect);
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo,
+      sideVideo,
+      canvas: createCanvas(),
+      hudRoot: { innerHTML: "" } as HTMLElement,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      createDevicePinnedStream: vi
+        .fn()
+        .mockResolvedValueOnce(oldFrontStream)
+        .mockResolvedValueOnce(oldSideStream)
+        .mockResolvedValueOnce(newFrontStream)
+        .mockResolvedValueOnce(newSideStream),
+      createMediaPipeHandTracker: vi
+        .fn()
+        .mockResolvedValueOnce(oldFrontTracker)
+        .mockResolvedValueOnce(oldSideTracker)
+        .mockResolvedValueOnce(newFrontTracker)
+        .mockResolvedValueOnce(newSideTracker),
+      createImageBitmap: vi.fn(() =>
+        Promise.resolve({
+          width: 640,
+          height: 480,
+          close: vi.fn()
+        } as unknown as ImageBitmap)
+      )
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(oldFrontTrack.listenerCount()).toBe(1);
+    });
+    oldFrontTrack.fireEnded();
+    await vi.waitFor(() => {
+      expect(oldFrontTracker.cleanupMock).toHaveBeenCalledOnce();
+    });
+
+    runtime.retry();
+    await vi.waitFor(() => {
+      expect(frontVideo.requestVideoFrameCallbackMock).toHaveBeenCalledTimes(2);
+      expect(sideVideo.requestVideoFrameCallbackMock).toHaveBeenCalledTimes(2);
+    });
+    expect(oldFrontTrack.listenerCount()).toBe(0);
+
+    frontVideo.fireFrame({ captureTime: 64_100, presentedFrames: 2 });
+    sideVideo.fireFrame({ captureTime: 64_100, presentedFrames: 2 });
+    await vi.waitFor(() => {
+      expect(restartedFrontDetect).toHaveBeenCalledOnce();
+      expect(restartedSideDetect).toHaveBeenCalledOnce();
+    });
+
+    expect(
+      capturedFusionContexts.filter(
+        (context) =>
+          context.method === "updateAimFrame" ||
+          context.method === "updateTriggerFrame"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          frontLaneHealth: "tracking",
+          sideLaneHealth: "tracking"
+        })
+      ])
+    );
 
     runtime.destroy();
     vi.unstubAllGlobals();

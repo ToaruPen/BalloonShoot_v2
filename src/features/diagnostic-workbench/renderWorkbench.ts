@@ -8,10 +8,7 @@ import type {
   FusedGameInputFrame,
   FusionTelemetry
 } from "../../shared/types/fusion";
-import type {
-  AimInputFrame,
-  FrontAimTelemetry
-} from "../../shared/types/aim";
+import type { AimInputFrame, FrontAimTelemetry } from "../../shared/types/aim";
 import type {
   FrontHandDetection,
   SideHandDetection
@@ -20,10 +17,7 @@ import type {
   SideTriggerTelemetry,
   TriggerInputFrame
 } from "../../shared/types/trigger";
-import {
-  defaultFusionTuning,
-  type FusionTuning
-} from "../input-fusion";
+import { defaultFusionTuning, type FusionTuning } from "../input-fusion";
 import {
   defaultFrontAimCalibration,
   type FrontAimCalibration
@@ -190,6 +184,23 @@ const renderInspectionPane = (
   `;
 };
 
+export const formatLaneHealthLabel = (health: LaneHealthStatus): string => {
+  switch (health) {
+    case "captureLost":
+      return `${health} (カメラが切断されました)`;
+    case "failed":
+      return `${health} (カメラ処理に失敗しました)`;
+    case "stalled":
+      return `${health} (カメラ入力が停止しています)`;
+    case "notStarted":
+    case "waitingForPermission":
+    case "waitingForDeviceSelection":
+    case "capturing":
+    case "tracking":
+      return health;
+  }
+};
+
 const renderInspectionLane = (
   lanePrefix: "front" | "side",
   title: string,
@@ -201,7 +212,7 @@ const renderInspectionLane = (
   <section class="wb-preview-lane wb-inspection-lane">
     <h3>${title}</h3>
     <p class="wb-device-label">${escapeHTML(deviceLabel)}</p>
-    <p id="wb-${lanePrefix}-health" class="wb-lane-health">health: ${escapeHTML(health)}</p>
+    <p id="wb-${lanePrefix}-health" class="wb-lane-health">health: ${escapeHTML(formatLaneHealthLabel(health))}</p>
     <p id="wb-${lanePrefix}-timestamp" class="wb-timestamp-readout">${escapeHTML(formatFrameTimestamp(timestamp))}</p>
     <div class="wb-inspection-panes">
       ${renderInspectionPane(lanePrefix, "raw")}

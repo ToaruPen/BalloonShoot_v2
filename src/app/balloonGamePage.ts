@@ -148,6 +148,19 @@ const errorStateForPermission = (result: PermissionResult): GamePageState => {
   };
 };
 
+const hasDeviceId = (
+  devices: readonly MediaDeviceInfo[],
+  deviceId: string | undefined
+): deviceId is string =>
+  deviceId !== undefined &&
+  devices.some((device) => device.deviceId === deviceId);
+
+const firstDeviceIdExcept = (
+  devices: readonly MediaDeviceInfo[],
+  excludedDeviceId: string | undefined
+): string | undefined =>
+  devices.find((device) => device.deviceId !== excludedDeviceId)?.deviceId;
+
 export const createBalloonGamePage = ({
   requestCameraPermission: requestPermission = requestCameraPermission,
   enumerateVideoDevices: enumerateDevices = enumerateVideoDevices,
@@ -165,10 +178,7 @@ export const createBalloonGamePage = ({
     }
   };
 
-  const startRuntime = (
-    frontDeviceId: string,
-    sideDeviceId: string
-  ): void => {
+  const startRuntime = (frontDeviceId: string, sideDeviceId: string): void => {
     if (root === undefined) {
       return;
     }
@@ -218,6 +228,59 @@ export const createBalloonGamePage = ({
     runtime.start();
   };
 
+  const reselectCameras = async (): Promise<void> => {
+    runtime?.destroy();
+    runtime = undefined;
+
+    try {
+      const devices = await enumerateDevices();
+
+      if (devices.length < 2) {
+        commit({
+          ...initialState(),
+          screen: "error",
+          errorTitle: "カメラが1台しか検出されません",
+          errorCause: "このゲームには2台のカメラが必要です。",
+          errorNextAction: "別のカメラを接続してからリトライしてください。"
+        });
+        return;
+      }
+
+      const previousFrontId = state.selectedFrontDeviceId;
+      const previousSideId = state.selectedSideDeviceId;
+      const selectedFrontDeviceId = hasDeviceId(devices, previousFrontId)
+        ? previousFrontId
+        : devices[0]?.deviceId;
+      const selectedSideDeviceId =
+        hasDeviceId(devices, previousSideId) &&
+        previousSideId !== selectedFrontDeviceId
+          ? previousSideId
+          : firstDeviceIdExcept(devices, selectedFrontDeviceId);
+      const selectionChanged =
+        selectedFrontDeviceId !== previousFrontId ||
+        selectedSideDeviceId !== previousSideId;
+
+      commit({
+        ...state,
+        screen: "deviceSelection",
+        devices,
+        selectedFrontDeviceId,
+        selectedSideDeviceId,
+        selectionError: selectionChanged
+          ? "切断されたカメラを選び直してください。"
+          : undefined
+      });
+    } catch (error: unknown) {
+      commit({
+        ...initialState(),
+        screen: "error",
+        errorTitle: "カメラ一覧を取得できません",
+        errorCause: error instanceof Error ? error.message : String(error),
+        errorNextAction: "カメラ接続を確認してからリトライしてください。"
+      });
+    }
+  };
+
   const handleClick = (event: Event): void => {
     const target = event.target as Element | null;
     const action = target?.getAttribute("data-game-action");
@@ -232,11 +295,18 @@ export const createBalloonGamePage = ({
       return;
     }
 
+    if (action === "reselectCameras") {
+      void reselectCameras();
+      return;
+    }
+
     if (action === "startSelectedCameras" && root !== undefined) {
-      const frontId =
-        root.querySelector<HTMLSelectElement>("#front-camera-select")?.value;
-      const sideId =
-        root.querySelector<HTMLSelectElement>("#side-camera-select")?.value;
+      const frontId = root.querySelector<HTMLSelectElement>(
+        "#front-camera-select"
+      )?.value;
+      const sideId = root.querySelector<HTMLSelectElement>(
+        "#side-camera-select"
+      )?.value;
 
       if (frontId !== undefined && sideId !== undefined) {
         page.selectCameras(frontId, sideId);

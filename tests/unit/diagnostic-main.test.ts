@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listeners, liveInspectionMock, workbenchMock } = vi.hoisted(() => {
+const {
+  deviceChangeObserverStop,
+  listeners,
+  liveInspectionMock,
+  observeDeviceChangeMock,
+  workbenchMock
+} = vi.hoisted(() => {
   const listeners = new Map<string, EventListener>();
+  const deviceChangeObserverStop = vi.fn();
+  const observeDeviceChangeMock = vi.fn();
   const liveInspectionMock = {
     getState: vi.fn(() => ({
       frontDetection: undefined,
@@ -58,13 +66,20 @@ const { listeners, liveInspectionMock, workbenchMock } = vi.hoisted(() => {
     })),
     requestPermission: vi.fn(() => Promise.resolve()),
     assignDevices: vi.fn(() => Promise.resolve()),
+    refreshDevicesFromDeviceChange: vi.fn(() => Promise.resolve()),
     swapRoles: vi.fn(() => Promise.resolve()),
     reselect: vi.fn(),
     subscribe: vi.fn(),
     destroy: vi.fn()
   };
 
-  return { listeners, liveInspectionMock, workbenchMock };
+  return {
+    deviceChangeObserverStop,
+    listeners,
+    liveInspectionMock,
+    observeDeviceChangeMock,
+    workbenchMock
+  };
 });
 
 vi.mock("../../src/features/diagnostic-workbench/DiagnosticWorkbench", () => ({
@@ -73,6 +88,10 @@ vi.mock("../../src/features/diagnostic-workbench/DiagnosticWorkbench", () => ({
 
 vi.mock("../../src/features/diagnostic-workbench/renderWorkbench", () => ({
   renderWorkbenchHTML: vi.fn(() => "")
+}));
+
+vi.mock("../../src/features/camera/observeDeviceChange", () => ({
+  observeDeviceChange: observeDeviceChangeMock
 }));
 
 vi.mock(
@@ -96,6 +115,10 @@ describe("diagnostic main input handling", () => {
   beforeEach(async () => {
     vi.resetModules();
     vi.clearAllMocks();
+    observeDeviceChangeMock.mockImplementation((callback: () => void) => {
+      listeners.set("devicechange", callback as EventListener);
+      return { stop: deviceChangeObserverStop };
+    });
     listeners.clear();
     const root = {
       innerHTML: "",
@@ -143,5 +166,21 @@ describe("diagnostic main input handling", () => {
     expect(liveInspectionMock.setFrontAimCalibration).not.toHaveBeenCalled();
     expect(liveInspectionMock.setSideTriggerCalibration).not.toHaveBeenCalled();
     expect(liveInspectionMock.setFusionTuning).not.toHaveBeenCalled();
+  });
+
+  it("refreshes workbench devices when media devices change", async () => {
+    const deviceChangeListener = listeners.get("devicechange");
+
+    if (deviceChangeListener === undefined) {
+      throw new Error("devicechange listener was not registered");
+    }
+
+    deviceChangeListener(new Event("devicechange"));
+
+    await vi.waitFor(() => {
+      expect(
+        workbenchMock.refreshDevicesFromDeviceChange
+      ).toHaveBeenCalledOnce();
+    });
   });
 });

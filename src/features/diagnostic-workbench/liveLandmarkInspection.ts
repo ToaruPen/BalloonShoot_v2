@@ -1,4 +1,5 @@
 import { createFrameTimestamp } from "../camera/frameTimestamp";
+import { observeTrackEnded } from "../camera/observeTrackEnded";
 import {
   createMediaPipeHandTracker,
   type MediaPipeHandTracker
@@ -57,7 +58,10 @@ import { renderFusionPanel } from "./renderFusionPanel";
 import { renderSideTriggerCalibrationControls } from "./renderSideTriggerCalibrationControls";
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
-import type { WorkbenchInspectionState } from "./renderWorkbench";
+import {
+  formatLaneHealthLabel,
+  type WorkbenchInspectionState
+} from "./renderWorkbench";
 import { formatFrameTimestamp } from "./timestampFormat";
 
 interface FrameTimingLike {
@@ -69,6 +73,7 @@ interface FrameTimingLike {
 interface LaneTrackingOptions {
   readonly role: "frontAim" | "sideTrigger";
   readonly video: HTMLVideoElement;
+  readonly stream: MediaStream;
   readonly deviceId: string;
   readonly streamId: string;
 }
@@ -266,7 +271,9 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   let frontAimMapper = createFrontAimMapper();
   let sideTriggerMapper: SideTriggerMapper = createSideTriggerMapper();
   let inputFusionMapper: InputFusionMapper = createInputFusionMapper();
-  let syncedScreen: WorkbenchState["screen"] | undefined;
+  let lastPreviewDeviceIds:
+    | { readonly frontDeviceId: string; readonly sideDeviceId: string }
+    | undefined;
 
   const setInspection = (patch: Partial<WorkbenchInspectionState>): void => {
     inspectionState = { ...inspectionState, ...patch };
@@ -274,8 +281,14 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   };
 
   const updateDom = (): void => {
-    updateText("wb-front-health", `health: ${inspectionState.frontLaneHealth}`);
-    updateText("wb-side-health", `health: ${inspectionState.sideLaneHealth}`);
+    updateText(
+      "wb-front-health",
+      `health: ${formatLaneHealthLabel(inspectionState.frontLaneHealth)}`
+    );
+    updateText(
+      "wb-side-health",
+      `health: ${formatLaneHealthLabel(inspectionState.sideLaneHealth)}`
+    );
     updateText(
       "wb-front-timestamp",
       formatFrameTimestamp(
@@ -382,6 +395,12 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     tuning: context.fusionTuning
   });
 
+  const timestampNow = (): FrameTimestamp => {
+    const now = performance.now();
+
+    return createFrameTimestamp({ expectedDisplayTime: now }, now);
+  };
+
   const setLaneDetection = (
     role: LaneTrackingOptions["role"],
     detection: FrontHandDetection | SideHandDetection | undefined,
@@ -478,6 +497,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     let callbackId: number | undefined;
     let timeoutId: number | undefined;
     let trackerPromise: Promise<MediaPipeHandTracker> | undefined;
+    const trackEndedObserver: { current?: { stop(): void } } = {};
 
     setLaneHealth(options.role, "capturing");
 
@@ -492,6 +512,21 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     };
 
     const isStopped = (): boolean => stopped;
+
+    const cancelScheduledFrame = (): void => {
+      if (
+        callbackId !== undefined &&
+        typeof options.video.cancelVideoFrameCallback === "function"
+      ) {
+        options.video.cancelVideoFrameCallback(callbackId);
+        callbackId = undefined;
+      }
+
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+        timeoutId = undefined;
+      }
+    };
 
     const processFrame = async (metadata: FrameTimingLike): Promise<void> => {
       if (isStopped()) {
@@ -591,24 +626,64 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
         });
     };
 
+    const updateLaneUnavailableForCaptureLoss = (): void => {
+      const context = frameCalibrationContext();
+      const timestamp = timestampNow();
+      const fusionResult =
+        options.role === "frontAim"
+          ? inputFusionMapper.updateAimUnavailable(timestamp, {
+              ...currentFusionContext(context),
+              frontLaneHealth: "captureLost"
+            })
+          : inputFusionMapper.updateTriggerUnavailable(timestamp, {
+              ...currentFusionContext(context),
+              sideLaneHealth: "captureLost"
+            });
+
+      setInspection(
+        options.role === "frontAim"
+          ? {
+              frontLaneHealth: "captureLost",
+              frontDetection: undefined,
+              frontAimFrame: undefined,
+              frontAimTelemetry: undefined,
+              frontFrameTimestamp: timestamp,
+              fusionFrame: fusionResult.fusedFrame,
+              fusionTelemetry: fusionResult.telemetry
+            }
+          : {
+              sideLaneHealth: "captureLost",
+              sideDetection: undefined,
+              sideTriggerFrame: undefined,
+              sideTriggerTelemetry: undefined,
+              sideFrameTimestamp: timestamp,
+              fusionFrame: fusionResult.fusedFrame,
+              fusionTelemetry: fusionResult.telemetry
+            }
+      );
+    };
+
+    const stopLane = (): void => {
+      stopped = true;
+      cancelScheduledFrame();
+      trackEndedObserver.current?.stop();
+      cleanupTracker();
+    };
+
+    trackEndedObserver.current = observeTrackEnded(options.stream, () => {
+      if (stopped) {
+        return;
+      }
+
+      stopLane();
+      updateLaneUnavailableForCaptureLoss();
+    });
+
     schedule();
 
     return {
       stop() {
-        stopped = true;
-
-        if (
-          callbackId !== undefined &&
-          typeof options.video.cancelVideoFrameCallback === "function"
-        ) {
-          options.video.cancelVideoFrameCallback(callbackId);
-        }
-
-        if (timeoutId !== undefined) {
-          window.clearTimeout(timeoutId);
-        }
-
-        cleanupTracker();
+        stopLane();
       }
     };
   };
@@ -644,20 +719,39 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     activeTracking = undefined;
   };
 
-  const sync = (state: WorkbenchState): void => {
-    const previousScreen = syncedScreen;
-    syncedScreen = state.screen;
+  const deviceIdsFor = (
+    state: WorkbenchState
+  ):
+    | { readonly frontDeviceId: string; readonly sideDeviceId: string }
+    | undefined => {
+    if (state.frontStream === undefined || state.sideStream === undefined) {
+      return undefined;
+    }
 
+    return {
+      frontDeviceId: state.frontStream.deviceId,
+      sideDeviceId: state.sideStream.deviceId
+    };
+  };
+
+  const deviceIdsChanged = (
+    previous:
+      | { readonly frontDeviceId: string; readonly sideDeviceId: string }
+      | undefined,
+    next: { readonly frontDeviceId: string; readonly sideDeviceId: string }
+  ): boolean =>
+    previous !== undefined &&
+    (previous.frontDeviceId !== next.frontDeviceId ||
+      previous.sideDeviceId !== next.sideDeviceId);
+
+  const sync = (state: WorkbenchState): void => {
     if (
       state.screen !== "previewing" ||
       state.frontStream === undefined ||
       state.sideStream === undefined
     ) {
       stopActiveTracking();
-      resetTrackingState({
-        resetCalibration:
-          previousScreen === "previewing" && state.screen === "deviceSelection"
-      });
+      resetTrackingState();
       return;
     }
 
@@ -681,17 +775,26 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     }
 
     stopActiveTracking();
-    resetTrackingState();
+    const nextDeviceIds = deviceIdsFor(state);
+    resetTrackingState({
+      resetCalibration:
+        nextDeviceIds === undefined
+          ? false
+          : deviceIdsChanged(lastPreviewDeviceIds, nextDeviceIds)
+    });
+    lastPreviewDeviceIds = nextDeviceIds;
 
     const frontLane = startLaneTracking({
       role: "frontAim",
       video: frontVideo,
+      stream: state.frontStream.stream,
       deviceId: state.frontStream.deviceId,
       streamId: state.frontStream.stream.id
     });
     const sideLane = startLaneTracking({
       role: "sideTrigger",
       video: sideVideo,
+      stream: state.sideStream.stream,
       deviceId: state.sideStream.deviceId,
       streamId: state.sideStream.stream.id
     });
@@ -802,7 +905,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     destroy() {
       stopActiveTracking();
       resetTrackingState({ resetCalibration: true });
-      syncedScreen = undefined;
+      lastPreviewDeviceIds = undefined;
     }
   };
 };

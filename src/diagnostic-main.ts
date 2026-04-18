@@ -1,4 +1,5 @@
 import "./styles/diagnostic.css";
+import { observeDeviceChange } from "./features/camera/observeDeviceChange";
 import {
   createDiagnosticWorkbench,
   type DiagnosticWorkbench
@@ -14,6 +15,16 @@ if (!root) {
 
 const workbench: DiagnosticWorkbench = createDiagnosticWorkbench();
 const liveInspection = createLiveLandmarkInspection();
+
+const runAction = (actionPromise: Promise<void>): void => {
+  void actionPromise.catch((error: unknown) => {
+    console.error("Diagnostic workbench action failed", error);
+  });
+};
+
+const deviceChangeObserver = observeDeviceChange(() => {
+  runAction(workbench.refreshDevicesFromDeviceChange());
+});
 
 const render = (): void => {
   const state = workbench.getState();
@@ -71,11 +82,6 @@ const handleClick = (e: MouseEvent): void => {
   }
 
   const action = actionEl.dataset["wbAction"];
-  const runAction = (actionPromise: Promise<void>): void => {
-    void actionPromise.catch((error: unknown) => {
-      console.error("Diagnostic workbench action failed", error);
-    });
-  };
 
   switch (action) {
     case "requestPermission":
@@ -188,6 +194,7 @@ root.addEventListener("input", (e: Event) => {
 });
 workbench.subscribe(render);
 window.addEventListener("beforeunload", () => {
+  deviceChangeObserver.stop();
   liveInspection.destroy();
   workbench.destroy();
 });
