@@ -1,5 +1,23 @@
 import type { WorkbenchError, WorkbenchState } from "./DiagnosticWorkbench";
 import { escapeHTML } from "../../shared/browser/escapeHTML";
+import type {
+  FrameTimestamp,
+  LaneHealthStatus
+} from "../../shared/types/camera";
+import type {
+  FrontHandDetection,
+  SideHandDetection
+} from "../../shared/types/hand";
+import { formatFrameTimestamp } from "./timestampFormat";
+
+export interface WorkbenchInspectionState {
+  readonly frontDetection: FrontHandDetection | undefined;
+  readonly sideDetection: SideHandDetection | undefined;
+  readonly frontFrameTimestamp?: FrameTimestamp;
+  readonly sideFrameTimestamp?: FrameTimestamp;
+  readonly frontLaneHealth: LaneHealthStatus;
+  readonly sideLaneHealth: LaneHealthStatus;
+}
 
 const renderPermissionScreen = (): string => `
   <div class="wb-screen">
@@ -82,9 +100,7 @@ const renderDeviceSelection = (state: WorkbenchState): string => `
       <label>
         サイド（トリガー）:
         <select id="wb-side-select">
-          ${state.devices
-            .map((d, i) => renderDeviceOption(d, i))
-            .join("")}
+          ${state.devices.map((d, i) => renderDeviceOption(d, i)).join("")}
         </select>
       </label>
     </div>
@@ -92,21 +108,75 @@ const renderDeviceSelection = (state: WorkbenchState): string => `
   </div>
 `;
 
-const renderPreviewing = (state: WorkbenchState): string => `
+const defaultInspectionState: WorkbenchInspectionState = {
+  frontDetection: undefined,
+  sideDetection: undefined,
+  frontLaneHealth: "notStarted",
+  sideLaneHealth: "notStarted"
+};
+
+const renderInspectionPane = (
+  lanePrefix: "front" | "side",
+  kind: "raw" | "filtered"
+): string => {
+  const label = kind === "raw" ? "生ランドマーク" : "フィルタ後ランドマーク";
+  const videoId =
+    kind === "raw"
+      ? `wb-${lanePrefix}-video`
+      : `wb-${lanePrefix}-${kind}-video`;
+
+  return `
+    <div class="wb-inspection-pane">
+      <h4>${label}</h4>
+      <div class="wb-video-stack">
+        <video id="${videoId}" autoplay playsinline muted></video>
+        <canvas id="wb-${lanePrefix}-${kind}-overlay" class="wb-landmark-overlay"></canvas>
+      </div>
+    </div>
+  `;
+};
+
+const renderInspectionLane = (
+  lanePrefix: "front" | "side",
+  title: string,
+  deviceLabel: string,
+  health: LaneHealthStatus,
+  timestamp: FrameTimestamp | undefined
+): string => `
+  <section class="wb-preview-lane wb-inspection-lane">
+    <h3>${title}</h3>
+    <p class="wb-device-label">${escapeHTML(deviceLabel)}</p>
+    <p id="wb-${lanePrefix}-health" class="wb-lane-health">health: ${escapeHTML(health)}</p>
+    <p id="wb-${lanePrefix}-timestamp" class="wb-timestamp-readout">${escapeHTML(formatFrameTimestamp(timestamp))}</p>
+    <div class="wb-inspection-panes">
+      ${renderInspectionPane(lanePrefix, "raw")}
+      ${renderInspectionPane(lanePrefix, "filtered")}
+    </div>
+  </section>
+`;
+
+const renderPreviewing = (
+  state: WorkbenchState,
+  inspection: WorkbenchInspectionState
+): string => `
   <div class="wb-previewing">
     <h2>ライブプレビュー</h2>
     ${renderInlineError(state.error)}
     <div class="wb-preview-grid">
-      <div class="wb-preview-lane">
-        <h3>フロント（照準）</h3>
-        <p class="wb-device-label">${escapeHTML(state.frontAssignment?.label ?? "未選択")}</p>
-        <video id="wb-front-video" autoplay playsinline muted></video>
-      </div>
-      <div class="wb-preview-lane">
-        <h3>サイド（トリガー）</h3>
-        <p class="wb-device-label">${escapeHTML(state.sideAssignment?.label ?? "未選択")}</p>
-        <video id="wb-side-video" autoplay playsinline muted></video>
-      </div>
+      ${renderInspectionLane(
+        "front",
+        "フロント（照準）",
+        state.frontAssignment?.label ?? "未選択",
+        inspection.frontLaneHealth,
+        inspection.frontDetection?.timestamp ?? inspection.frontFrameTimestamp
+      )}
+      ${renderInspectionLane(
+        "side",
+        "サイド（トリガー）",
+        state.sideAssignment?.label ?? "未選択",
+        inspection.sideLaneHealth,
+        inspection.sideDetection?.timestamp ?? inspection.sideFrameTimestamp
+      )}
     </div>
     <div class="wb-controls">
       <button class="wb-btn" data-wb-action="swap">左右入れ替え</button>
@@ -115,7 +185,10 @@ const renderPreviewing = (state: WorkbenchState): string => `
   </div>
 `;
 
-export const renderWorkbenchHTML = (state: WorkbenchState): string => {
+export const renderWorkbenchHTML = (
+  state: WorkbenchState,
+  inspection: WorkbenchInspectionState = defaultInspectionState
+): string => {
   switch (state.screen) {
     case "permission":
       return renderPermissionScreen();
@@ -132,6 +205,6 @@ export const renderWorkbenchHTML = (state: WorkbenchState): string => {
     case "deviceSelection":
       return renderDeviceSelection(state);
     case "previewing":
-      return renderPreviewing(state);
+      return renderPreviewing(state, inspection);
   }
 };

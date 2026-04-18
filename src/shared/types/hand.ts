@@ -1,3 +1,5 @@
+import type { CameraLaneRole, FrameTimestamp } from "./camera";
+
 export interface Point3D {
   x: number;
   y: number;
@@ -49,4 +51,22 @@ export interface HandFrame {
 export interface HandDetection {
   rawFrame: HandFrame;
   filteredFrame: HandFrame;
+}
+
+interface LaneHandDetectionBase extends HandDetection {
+  readonly laneRole: CameraLaneRole;
+  readonly deviceId: string;
+  readonly streamId: string;
+  readonly timestamp: FrameTimestamp;
+  readonly handPresenceConfidence: number;
+}
+
+export interface FrontHandDetection extends LaneHandDetectionBase {
+  readonly laneRole: "frontAim";
+  readonly trackingQuality: "good" | "uncertain" | "lost";
+}
+
+export interface SideHandDetection extends LaneHandDetectionBase {
+  readonly laneRole: "sideTrigger";
+  readonly sideViewQuality: "good" | "frontLike" | "tooOccluded" | "lost";
 }

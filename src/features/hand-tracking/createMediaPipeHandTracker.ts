@@ -28,11 +28,12 @@ interface HandLandmarkerResultLike {
   handednesses?: HandednessLike[][];
 }
 
-interface MediaPipeHandTracker {
+export interface MediaPipeHandTracker {
   detect(
     bitmap: ImageBitmap,
     frameAtMs: number
   ): Promise<HandDetection | undefined>;
+  cleanup(): Promise<void> | void;
 }
 
 interface MediaPipeHandTrackerOptions {
@@ -118,7 +119,6 @@ const filterPoint = (
   z: filters.z.filter(point.z, frameAtMs)
 });
 
-
 // Keep this helper thin: filter timestamp must be supplied at call-site.
 const filterHandFrame = (
   raw: HandFrame,
@@ -128,18 +128,50 @@ const filterHandFrame = (
   ...raw,
   landmarks: {
     wrist: filterPoint(raw.landmarks.wrist, filters.image.wrist, frameAtMs),
-    thumbIp: filterPoint(raw.landmarks.thumbIp, filters.image.thumbIp, frameAtMs),
-    thumbTip: filterPoint(raw.landmarks.thumbTip, filters.image.thumbTip, frameAtMs),
-    indexMcp: filterPoint(raw.landmarks.indexMcp, filters.image.indexMcp, frameAtMs),
-    indexTip: filterPoint(raw.landmarks.indexTip, filters.image.indexTip, frameAtMs),
-    middleTip: filterPoint(raw.landmarks.middleTip, filters.image.middleTip, frameAtMs),
-    ringTip: filterPoint(raw.landmarks.ringTip, filters.image.ringTip, frameAtMs),
-    pinkyTip: filterPoint(raw.landmarks.pinkyTip, filters.image.pinkyTip, frameAtMs)
+    thumbIp: filterPoint(
+      raw.landmarks.thumbIp,
+      filters.image.thumbIp,
+      frameAtMs
+    ),
+    thumbTip: filterPoint(
+      raw.landmarks.thumbTip,
+      filters.image.thumbTip,
+      frameAtMs
+    ),
+    indexMcp: filterPoint(
+      raw.landmarks.indexMcp,
+      filters.image.indexMcp,
+      frameAtMs
+    ),
+    indexTip: filterPoint(
+      raw.landmarks.indexTip,
+      filters.image.indexTip,
+      frameAtMs
+    ),
+    middleTip: filterPoint(
+      raw.landmarks.middleTip,
+      filters.image.middleTip,
+      frameAtMs
+    ),
+    ringTip: filterPoint(
+      raw.landmarks.ringTip,
+      filters.image.ringTip,
+      frameAtMs
+    ),
+    pinkyTip: filterPoint(
+      raw.landmarks.pinkyTip,
+      filters.image.pinkyTip,
+      frameAtMs
+    )
   },
   ...(raw.worldLandmarks
     ? {
         worldLandmarks: {
-          wrist: filterPoint(raw.worldLandmarks.wrist, filters.world.wrist, frameAtMs),
+          wrist: filterPoint(
+            raw.worldLandmarks.wrist,
+            filters.world.wrist,
+            frameAtMs
+          ),
           thumbIp: filterPoint(
             raw.worldLandmarks.thumbIp,
             filters.world.thumbIp,
@@ -270,13 +302,14 @@ export const createMediaPipeHandTracker = async (
   options: MediaPipeHandTrackerOptions
 ): Promise<MediaPipeHandTracker> => {
   const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
-  const handLandmarker = await HandLandmarker.createFromOptions(vision, {
-    baseOptions: {
-      modelAssetPath: "/models/hand_landmarker.task"
-    },
-    numHands: 1,
-    runningMode: "VIDEO"
-  });
+  let handLandmarker: HandLandmarker | undefined =
+    await HandLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "/models/hand_landmarker.task"
+      },
+      numHands: 1,
+      runningMode: "VIDEO"
+    });
   const filters = createSpaceFilters(options.getFilterConfig);
 
   return {
@@ -284,6 +317,10 @@ export const createMediaPipeHandTracker = async (
       bitmap: ImageBitmap,
       frameAtMs: number
     ): Promise<HandDetection | undefined> {
+      if (handLandmarker === undefined) {
+        throw new Error("MediaPipe hand tracker has already been cleaned up.");
+      }
+
       const raw = toHandFrame(
         handLandmarker.detectForVideo(bitmap, frameAtMs),
         {
@@ -300,6 +337,11 @@ export const createMediaPipeHandTracker = async (
       const filtered = filterHandFrame(raw, filters, frameAtMs);
 
       return Promise.resolve({ rawFrame: raw, filteredFrame: filtered });
+    },
+
+    cleanup() {
+      handLandmarker?.close();
+      handLandmarker = undefined;
     }
   };
 };
