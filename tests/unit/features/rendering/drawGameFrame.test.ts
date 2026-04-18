@@ -33,4 +33,63 @@ describe("drawGameFrame", () => {
     expect(operations).toContain("arc:200,180,24");
     expect(operations).toContain("stroke");
   });
+
+  it("omits dead balloons and unavailable crosshair", () => {
+    const operations: string[] = [];
+    const ctx = createMockContext(operations);
+
+    drawGameFrame(ctx, {
+      balloons: [
+        {
+          id: "dead",
+          x: 120,
+          y: 160,
+          radius: 52,
+          vy: 36,
+          size: "normal",
+          alive: false
+        }
+      ],
+      crosshair: undefined
+    });
+
+    expect(operations).toEqual(["clear"]);
+  });
+
+  it("draws shot and hit effects without mutating balloons", () => {
+    const operations: string[] = [];
+    const ctx = createMockContext(operations);
+    const balloons = [
+      {
+        id: "b1",
+        x: 120,
+        y: 160,
+        radius: 52,
+        vy: 36,
+        size: "normal" as const,
+        alive: true
+      }
+    ];
+
+    drawGameFrame(ctx, {
+      balloons,
+      crosshair: undefined,
+      shotEffect: { x: 240, y: 180 },
+      hitEffect: { x: 120, y: 160 }
+    });
+
+    expect(operations).toContain("arc:240,180,14");
+    expect(operations).toContain("arc:120,160,34");
+    expect(balloons).toEqual([
+      {
+        id: "b1",
+        x: 120,
+        y: 160,
+        radius: 52,
+        vy: 36,
+        size: "normal",
+        alive: true
+      }
+    ]);
+  });
 });

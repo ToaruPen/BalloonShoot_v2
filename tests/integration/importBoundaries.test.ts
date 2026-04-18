@@ -37,12 +37,12 @@ const listSourceFiles = (dir: string): string[] =>
 const importsFrom = (absolutePath: string): string[] => {
   const source = readFileSync(absolutePath, "utf8");
   const importRegex =
-    /from\s+["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)/g;
+    /from\s+["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g;
   const imports: string[] = [];
   let match = importRegex.exec(source);
 
   while (match !== null) {
-    imports.push(match[1] ?? match[2] ?? "");
+    imports.push(match[1] ?? match[2] ?? match[3] ?? "");
     match = importRegex.exec(source);
   }
 
@@ -101,6 +101,34 @@ const importsForbiddenPath = (
   return resolved !== undefined && isSameOrInsidePath(resolved, forbiddenRoot);
 };
 
+const gameplayForbiddenSpecifiers = [
+  "front-aim",
+  "side-trigger",
+  "input-fusion",
+  "features/camera",
+  "hand-tracking",
+  "diagnostic-workbench"
+];
+
+const gameplayBoundaryOffenders = (
+  gameplayFiles: readonly string[],
+  projectRoot = rootDir
+): string[] =>
+  gameplayFiles.filter((file) =>
+    importsFrom(file).some(
+      (specifier) =>
+        gameplayForbiddenSpecifiers.some((forbiddenPart) =>
+          specifier.includes(forbiddenPart)
+        ) ||
+        importsForbiddenPath(
+          file,
+          specifier,
+          join(projectRoot, "src/app"),
+          projectRoot
+        )
+    )
+  );
+
 describe("M5 import boundaries", () => {
   it("scans TypeScript, JavaScript, and JSX-family source files", () => {
     const dir = join(tmpdir(), `balloon-source-files-${String(process.pid)}`);
@@ -134,12 +162,11 @@ describe("M5 import boundaries", () => {
     const imports = importsFrom(join(rootDir, "src/main.ts"));
 
     expect(imports.join("\n")).not.toContain("diagnostic-workbench");
-    expect(imports.join("\n")).not.toContain("input-fusion");
   });
 
-  it("keeps app files out of diagnostic workbench and input-fusion modules", () => {
+  it("keeps app files out of diagnostic workbench modules", () => {
     const appFiles = listSourceFiles(join(rootDir, "src/app"));
-    const forbidden = ["diagnostic-workbench", "input-fusion"];
+    const forbidden = ["diagnostic-workbench"];
     const offenders = appFiles.filter((file) =>
       importsFrom(file).some((specifier) =>
         forbidden.some((forbiddenPart) => specifier.includes(forbiddenPart))
@@ -149,19 +176,69 @@ describe("M5 import boundaries", () => {
     expect(offenders.map(relativeSourcePath)).toEqual([]);
   });
 
-  it("keeps gameplay from importing side-trigger and app shell directly", () => {
+  it("keeps gameplay from importing raw lanes, browser adapters, and app shell directly", () => {
     const gameplayFiles = listSourceFiles(
       join(rootDir, "src/features/gameplay")
     );
-    const offenders = gameplayFiles.filter((file) =>
-      importsFrom(file).some(
-        (specifier) =>
-          specifier.includes("side-trigger") ||
-          importsForbiddenPath(file, specifier, join(rootDir, "src/app"))
-      )
-    );
+    const offenders = gameplayBoundaryOffenders(gameplayFiles);
 
     expect(offenders.map(relativeSourcePath)).toEqual([]);
+  });
+
+  it("catches gameplay imports from input-fusion modules", () => {
+    const dir = join(
+      tmpdir(),
+      `balloon-gameplay-boundary-${String(process.pid)}`
+    );
+    const gameplayDir = join(dir, "src/features/gameplay");
+    const fusionDir = join(dir, "src/features/input-fusion");
+    rmSync(dir, { force: true, recursive: true });
+    mkdirSync(gameplayDir, { recursive: true });
+    mkdirSync(fusionDir, { recursive: true });
+    writeFileSync(join(fusionDir, "mapper.ts"), "export const mapper = {};\n");
+    writeFileSync(
+      join(gameplayDir, "violates.ts"),
+      'import { mapper } from "../input-fusion/mapper";\nexport const leaked = mapper;\n'
+    );
+
+    try {
+      const gameplayFiles = listSourceFiles(gameplayDir);
+      const offenders = gameplayBoundaryOffenders(gameplayFiles, dir);
+
+      expect(offenders.map((file) => relative(dir, file))).toEqual([
+        "src/features/gameplay/violates.ts"
+      ]);
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
+  });
+
+  it("catches gameplay side-effect imports from input-fusion modules", () => {
+    const dir = join(
+      tmpdir(),
+      `balloon-gameplay-side-effect-boundary-${String(process.pid)}`
+    );
+    const gameplayDir = join(dir, "src/features/gameplay");
+    const fusionDir = join(dir, "src/features/input-fusion");
+    rmSync(dir, { force: true, recursive: true });
+    mkdirSync(gameplayDir, { recursive: true });
+    mkdirSync(fusionDir, { recursive: true });
+    writeFileSync(join(fusionDir, "dummy.ts"), "export const dummy = {};\n");
+    writeFileSync(
+      join(gameplayDir, "violates.ts"),
+      'import "../input-fusion/dummy";\nexport const gameplay = {};\n'
+    );
+
+    try {
+      const gameplayFiles = listSourceFiles(gameplayDir);
+      const offenders = gameplayBoundaryOffenders(gameplayFiles, dir);
+
+      expect(offenders.map((file) => relative(dir, file))).toEqual([
+        "src/features/gameplay/violates.ts"
+      ]);
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
   });
 
   it("keeps side-trigger independent of workbench, aim, fusion, gameplay, and rendering", () => {

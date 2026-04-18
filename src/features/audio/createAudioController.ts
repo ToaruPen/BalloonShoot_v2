@@ -1,4 +1,4 @@
-interface AudioController {
+export interface AudioController {
   startBgm(): Promise<void>;
   stopBgm(): void;
   playShot(): Promise<void>;

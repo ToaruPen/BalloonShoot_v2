@@ -19,3 +19,4 @@ export { createShotEdgeConsumption } from "./shotEdgeConsumption";
 export { createFusionTelemetry } from "./fusionTelemetry";
 export { createInputFusionMapper } from "./createInputFusionMapper";
 export type { InputFusionMapper } from "./createInputFusionMapper";
+export type { FusedGameInputFrame } from "../../shared/types/fusion";

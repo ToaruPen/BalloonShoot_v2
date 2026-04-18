@@ -1,6 +1,10 @@
 import { gameConfig } from "../../shared/config/gameConfig";
+import { handPresenceConfidenceFor } from "../../shared/helpers/handConfidence";
 import type { FrameTimestamp } from "../../shared/types/camera";
-import type { FrontHandDetection, HandDetection } from "../../shared/types/hand";
+import type {
+  FrontHandDetection,
+  HandDetection
+} from "../../shared/types/hand";
 
 interface ToFrontDetectionOptions {
   readonly deviceId: string;
@@ -18,12 +22,6 @@ export const getFrontAimFilterConfig = () => ({
   beta: gameConfig.input.handFilterBeta,
   dCutoff: gameConfig.input.handFilterDCutoff
 });
-
-export const handPresenceConfidenceFor = (detection: HandDetection): number => {
-  const scores = detection.rawFrame.handedness?.map((hand) => hand.score) ?? [];
-
-  return scores.length === 0 ? 1 : Math.max(...scores);
-};
 
 export const toFrontDetection = (
   detection: HandDetection,
