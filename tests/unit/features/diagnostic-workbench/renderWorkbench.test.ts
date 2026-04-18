@@ -8,6 +8,10 @@ import { createLiveLandmarkInspection } from "../../../../src/features/diagnosti
 import { renderWorkbenchHTML } from "../../../../src/features/diagnostic-workbench/renderWorkbench";
 import { defaultSideTriggerTuning } from "../../../../src/features/side-trigger";
 import type {
+  AimInputFrame,
+  FrontAimTelemetry
+} from "../../../../src/shared/types/aim";
+import type {
   FrontHandDetection,
   HandFrame,
   SideHandDetection
@@ -87,6 +91,29 @@ const createSideDetection = (): SideHandDetection => ({
   filteredFrame: createHandFrame(0.03),
   handPresenceConfidence: 0.88,
   sideViewQuality: "good"
+});
+
+const createAimFrame = (): AimInputFrame => ({
+  laneRole: "frontAim",
+  timestamp: createFrontDetection().timestamp,
+  aimAvailability: "available",
+  aimPointViewport: { x: 320, y: 240 },
+  aimPointNormalized: { x: 0.5, y: 0.5 },
+  aimSmoothingState: "tracking",
+  frontHandDetected: true,
+  frontTrackingConfidence: 0.97,
+  sourceFrameSize: { width: 640, height: 480 }
+});
+
+const createAimTelemetry = (): FrontAimTelemetry => ({
+  aimAvailability: "available",
+  aimSmoothingState: "tracking",
+  frontHandDetected: true,
+  frontTrackingConfidence: 0.97,
+  aimPointViewport: { x: 320, y: 240 },
+  aimPointNormalized: { x: 0.5, y: 0.5 },
+  sourceFrameSize: { width: 640, height: 480 },
+  lastLostReason: undefined
 });
 
 describe("renderWorkbenchHTML", () => {
@@ -232,6 +259,8 @@ describe("renderWorkbenchHTML", () => {
         sideDetection: createSideDetection(),
         frontLaneHealth: "tracking",
         sideLaneHealth: "tracking",
+        frontAimFrame: createAimFrame(),
+        frontAimTelemetry: createAimTelemetry(),
         sideTriggerFrame: undefined,
         sideTriggerTelemetry: undefined,
         sideTriggerTuning: defaultSideTriggerTuning
@@ -248,8 +277,31 @@ describe("renderWorkbenchHTML", () => {
     expect(html).toContain("captureTime");
     expect(html).toContain("1240.0 ms");
     expect(html).toContain("expectedDisplayTime");
+    expect(html).toContain("フロント aim mapping");
+    expect(html).toContain("viewport x");
     expect(html).toContain("サイド world landmarks");
     expect(html).toContain("サイド trigger evidence");
     expect(html).toContain("SIDE_TRIGGER_PULL_ENTER_THRESHOLD");
+  });
+
+  it("renders front aim unavailable state from default inspection", () => {
+    const html = renderWorkbenchHTML(
+      createState({
+        screen: "previewing",
+        frontAssignment: {
+          role: "frontAim",
+          deviceId: "front-id",
+          label: "Front Camera"
+        },
+        sideAssignment: {
+          role: "sideTrigger",
+          deviceId: "side-id",
+          label: "Side Camera"
+        }
+      })
+    );
+
+    expect(html).toContain("フロント aim mapping");
+    expect(html).toContain("aim mapping unavailable");
   });
 });

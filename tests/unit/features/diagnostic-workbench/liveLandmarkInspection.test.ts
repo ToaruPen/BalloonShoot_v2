@@ -5,9 +5,13 @@ import type { DevicePinnedStream } from "../../../../src/features/camera/createD
 import { enumerateVideoDevices } from "../../../../src/features/camera/enumerateVideoDevices";
 import { createDiagnosticWorkbench } from "../../../../src/features/diagnostic-workbench/DiagnosticWorkbench";
 import type { DiagnosticWorkbench } from "../../../../src/features/diagnostic-workbench/DiagnosticWorkbench";
-import { createLiveLandmarkInspection } from "../../../../src/features/diagnostic-workbench/liveLandmarkInspection";
+import {
+  createLiveLandmarkInspection,
+  videoViewportSize
+} from "../../../../src/features/diagnostic-workbench/liveLandmarkInspection";
 import { renderWorkbenchHTML } from "../../../../src/features/diagnostic-workbench/renderWorkbench";
 import type {
+  FrontHandDetection,
   HandDetection,
   HandLandmarkSet
 } from "../../../../src/shared/types/hand";
@@ -213,7 +217,8 @@ const installBaseDom = (): void => {
     "#wb-front-health",
     "#wb-side-health",
     "#wb-front-timestamp",
-    "#wb-side-timestamp"
+    "#wb-side-timestamp",
+    "#wb-front-aim-panel"
   ]) {
     elements.set(id, createFakeTextElement());
   }
@@ -465,6 +470,105 @@ describe("createLiveLandmarkInspection", () => {
       expect(bitmapClose).toHaveBeenCalledOnce();
     });
     expect(liveInspection.getState().frontDetection).toBeUndefined();
+    expect(liveInspection.getState().frontAimFrame).toBeUndefined();
+  });
+
+  it("falls back to a 1x1 viewport when video and fallback dimensions are zero", () => {
+    const video = {
+      clientWidth: 0,
+      videoWidth: 0,
+      clientHeight: 0,
+      videoHeight: 0
+    } as HTMLVideoElement;
+    const zeroFrame = {
+      ...createHandFrame(),
+      width: 0,
+      height: 0
+    };
+    const detection: FrontHandDetection = {
+      laneRole: "frontAim",
+      deviceId: "front-id",
+      streamId: "front-stream",
+      timestamp: {
+        frameTimestampMs: 1000,
+        timestampSource: "performanceNowAtCallback",
+        presentedFrames: 1,
+        receivedAtPerformanceMs: 1000
+      },
+      rawFrame: zeroFrame,
+      filteredFrame: zeroFrame,
+      handPresenceConfidence: 0.9,
+      trackingQuality: "good"
+    };
+
+    expect(videoViewportSize(video, detection)).toEqual({
+      width: 1,
+      height: 1
+    });
+  });
+
+  it("maps live front detections into aim frames and telemetry", async () => {
+    const frontTracker = createFakeTracker();
+    frontTracker.detect.mockResolvedValueOnce(createHandDetection());
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(frontTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.frontVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontAimFrame?.laneRole).toBe(
+        "frontAim"
+      );
+      expect(liveInspection.getState().frontAimTelemetry?.aimAvailability).toBe(
+        "available"
+      );
+    });
+  });
+
+  it("clears front aim snapshots when leaving preview", async () => {
+    const frontTracker = createFakeTracker();
+    frontTracker.detect.mockResolvedValueOnce(createHandDetection());
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(frontTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.frontVideo.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontAimFrame).toBeDefined();
+    });
+
+    liveInspection.sync({
+      screen: "deviceSelection",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: undefined,
+      sideStream: undefined,
+      error: undefined
+    });
+
+    expect(liveInspection.getState().frontAimFrame).toBeUndefined();
+    expect(liveInspection.getState().frontAimTelemetry).toBeUndefined();
   });
 
   it("maps live side detections into trigger frames and telemetry", async () => {

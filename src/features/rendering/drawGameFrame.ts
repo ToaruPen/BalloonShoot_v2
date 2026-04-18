@@ -5,7 +5,7 @@ interface DrawState {
   crosshair?: {
     x: number;
     y: number;
-  };
+  } | undefined;
 }
 
 export const drawGameFrame = (ctx: CanvasRenderingContext2D, state: DrawState): void => {
