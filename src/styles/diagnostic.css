@@ -181,6 +181,7 @@ h4 {
 .wb-world-landmarks,
 .wb-aim-panel,
 .wb-trigger-panel,
+.wb-fusion-panel,
 .wb-tuning-panel {
   margin-top: 0.75rem;
   border: 1px solid #31425f;
@@ -211,6 +212,7 @@ h4 {
 
 .wb-aim-grid,
 .wb-trigger-grid,
+.wb-fusion-grid,
 .wb-tuning-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -219,6 +221,7 @@ h4 {
 
 .wb-aim-value,
 .wb-trigger-value,
+.wb-diagnostic-value,
 .wb-tuning-control {
   display: grid;
   gap: 0.2rem;
@@ -229,6 +232,7 @@ h4 {
 
 .wb-aim-value span,
 .wb-trigger-value span,
+.wb-diagnostic-value span,
 .wb-tuning-control span {
   color: #a8d8ea;
   overflow-wrap: anywhere;
@@ -236,8 +240,10 @@ h4 {
 
 .wb-aim-value strong,
 .wb-trigger-value strong,
+.wb-diagnostic-value strong,
 .wb-tuning-control output {
   color: #fff;
+  overflow-wrap: anywhere;
 }
 
 .wb-tuning-control input {
@@ -272,6 +278,7 @@ h4 {
   .wb-inspection-panes,
   .wb-aim-grid,
   .wb-trigger-grid,
+  .wb-fusion-grid,
   .wb-tuning-grid {
     grid-template-columns: 1fr;
   }

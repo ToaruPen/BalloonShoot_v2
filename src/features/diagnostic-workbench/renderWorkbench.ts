@@ -5,6 +5,10 @@ import type {
   LaneHealthStatus
 } from "../../shared/types/camera";
 import type {
+  FusedGameInputFrame,
+  FusionTelemetry
+} from "../../shared/types/fusion";
+import type {
   AimInputFrame,
   FrontAimTelemetry
 } from "../../shared/types/aim";
@@ -17,11 +21,17 @@ import type {
   TriggerInputFrame
 } from "../../shared/types/trigger";
 import {
+  defaultFusionTuning,
+  type FusionTuning
+} from "../input-fusion";
+import {
   defaultSideTriggerTuning,
   type SideTriggerTuning
 } from "../side-trigger";
 import { formatFrameTimestamp } from "./timestampFormat";
 import { renderFrontAimPanel } from "./renderFrontAimPanel";
+import { renderFusionPanel } from "./renderFusionPanel";
+import { renderFusionTuningControls } from "./renderFusionTuningControls";
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
 import { renderTuningControls } from "./renderTuningControls";
@@ -38,6 +48,9 @@ export interface WorkbenchInspectionState {
   readonly sideTriggerFrame: TriggerInputFrame | undefined;
   readonly sideTriggerTelemetry: SideTriggerTelemetry | undefined;
   readonly sideTriggerTuning: SideTriggerTuning;
+  readonly fusionFrame: FusedGameInputFrame | undefined;
+  readonly fusionTelemetry: FusionTelemetry | undefined;
+  readonly fusionTuning: FusionTuning;
 }
 
 const renderPermissionScreen = (): string => `
@@ -138,7 +151,10 @@ const defaultInspectionState: WorkbenchInspectionState = {
   frontAimTelemetry: undefined,
   sideTriggerFrame: undefined,
   sideTriggerTelemetry: undefined,
-  sideTriggerTuning: defaultSideTriggerTuning
+  sideTriggerTuning: defaultSideTriggerTuning,
+  fusionFrame: undefined,
+  fusionTelemetry: undefined,
+  fusionTuning: defaultFusionTuning
 };
 
 const renderInspectionPane = (
@@ -215,7 +231,9 @@ const renderPreviewing = (
         )}`
       )}
     </div>
+    ${renderFusionPanel(inspection.fusionFrame, inspection.fusionTelemetry)}
     ${renderTuningControls(inspection.sideTriggerTuning)}
+    ${renderFusionTuningControls(inspection.fusionTuning)}
     <div class="wb-controls">
       <button class="wb-btn" data-wb-action="swap">左右入れ替え</button>
       <button class="wb-btn wb-btn-secondary" data-wb-action="reselect">再選択</button>

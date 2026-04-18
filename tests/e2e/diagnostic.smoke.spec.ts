@@ -74,12 +74,17 @@ test("diagnostic workbench runs permission, device selection, previews, swap, an
   );
   await expect(page.locator("#wb-side-world-landmarks")).toBeVisible();
   await expect(page.locator("#wb-side-trigger-panel")).toBeVisible();
+  await expect(page.locator("#wb-fusion-panel")).toBeVisible();
+  await expect(page.locator("#wb-fusion-panel")).toContainText(
+    "fusion pairing"
+  );
   await expect(
     page.getByText("SIDE_TRIGGER_PULL_ENTER_THRESHOLD")
   ).toBeVisible();
   await expect(
     page.getByText("SIDE_TRIGGER_SHOT_COOLDOWN_FRAMES")
   ).toBeVisible();
+  await expect(page.locator("#wb-fusion-panel")).toBeVisible();
   await expect(page.getByText("生ランドマーク").first()).toBeVisible();
   await expect(page.getByText("フィルタ後ランドマーク").first()).toBeVisible();
   await expect(page.locator("#wb-front-timestamp")).toContainText("timestamp");

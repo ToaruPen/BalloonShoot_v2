@@ -6,6 +6,7 @@ import type {
 } from "../../../../src/features/diagnostic-workbench/DiagnosticWorkbench";
 import { createLiveLandmarkInspection } from "../../../../src/features/diagnostic-workbench/liveLandmarkInspection";
 import { renderWorkbenchHTML } from "../../../../src/features/diagnostic-workbench/renderWorkbench";
+import { defaultFusionTuning } from "../../../../src/features/input-fusion";
 import { defaultSideTriggerTuning } from "../../../../src/features/side-trigger";
 import type {
   AimInputFrame,
@@ -263,7 +264,10 @@ describe("renderWorkbenchHTML", () => {
         frontAimTelemetry: createAimTelemetry(),
         sideTriggerFrame: undefined,
         sideTriggerTelemetry: undefined,
-        sideTriggerTuning: defaultSideTriggerTuning
+        sideTriggerTuning: defaultSideTriggerTuning,
+        fusionFrame: undefined,
+        fusionTelemetry: undefined,
+        fusionTuning: defaultFusionTuning
       }
     );
 
@@ -281,7 +285,9 @@ describe("renderWorkbenchHTML", () => {
     expect(html).toContain("viewport x");
     expect(html).toContain("サイド world landmarks");
     expect(html).toContain("サイド trigger evidence");
+    expect(html).toContain("fusion pairing");
     expect(html).toContain("SIDE_TRIGGER_PULL_ENTER_THRESHOLD");
+    expect(html).toContain("FUSION_MAX_PAIR_DELTA_MS");
   });
 
   it("renders front aim unavailable state from default inspection", () => {
@@ -303,5 +309,32 @@ describe("renderWorkbenchHTML", () => {
 
     expect(html).toContain("フロント aim mapping");
     expect(html).toContain("aim mapping unavailable");
+    expect(html).toContain('id="wb-fusion-panel"');
+    expect(html).toContain("fusion unavailable");
+  });
+
+  it("keeps static default inspection equal to live initial inspection", () => {
+    const initialInspection = createLiveLandmarkInspection().getState();
+    const html = renderWorkbenchHTML(
+      createState({
+        screen: "previewing",
+        frontAssignment: {
+          role: "frontAim",
+          deviceId: "front-id",
+          label: "Front Camera"
+        },
+        sideAssignment: {
+          role: "sideTrigger",
+          deviceId: "side-id",
+          label: "Side Camera"
+        }
+      })
+    );
+
+    expect(initialInspection.fusionFrame).toBeUndefined();
+    expect(initialInspection.fusionTelemetry).toBeUndefined();
+    expect(initialInspection.fusionTuning).toEqual(defaultFusionTuning);
+    expect(html).toContain("fusion unavailable");
+    expect(html).toContain("FUSION_MAX_FRAME_AGE_MS");
   });
 });

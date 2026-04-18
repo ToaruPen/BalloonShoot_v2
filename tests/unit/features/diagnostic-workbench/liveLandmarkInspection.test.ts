@@ -172,6 +172,25 @@ const createHandDetection = () => {
   };
 };
 
+const createLowConfidenceHandDetection = () => {
+  const frame = {
+    ...createHandFrame(),
+    handedness: [
+      {
+        score: 0.1,
+        index: 0,
+        categoryName: "Right",
+        displayName: "Right"
+      }
+    ]
+  };
+
+  return {
+    rawFrame: frame,
+    filteredFrame: frame
+  };
+};
+
 const createHandDetectionWithWorld = (
   worldLandmarks: HandLandmarkSet
 ): HandDetection => {
@@ -193,7 +212,9 @@ const setupSideTrackerSequence = (): FakeTracker => {
   sideTracker.detect
     .mockResolvedValueOnce(createHandDetectionWithWorld(openWorldLandmarks()))
     .mockResolvedValueOnce(createHandDetectionWithWorld(pulledWorldLandmarks()))
-    .mockResolvedValueOnce(createHandDetectionWithWorld(pulledWorldLandmarks()));
+    .mockResolvedValueOnce(
+      createHandDetectionWithWorld(pulledWorldLandmarks())
+    );
   createMediaPipeHandTrackerMock.mockResolvedValueOnce(sideTracker);
 
   return sideTracker;
@@ -300,6 +321,7 @@ describe("createLiveLandmarkInspection", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -471,6 +493,75 @@ describe("createLiveLandmarkInspection", () => {
     });
     expect(liveInspection.getState().frontDetection).toBeUndefined();
     expect(liveInspection.getState().frontAimFrame).toBeUndefined();
+    expect(liveInspection.getState().fusionFrame).toBeUndefined();
+  });
+
+  it("does not reschedule after permanent tracker startup failure", async () => {
+    const startupError = new Error("tracker startup failed");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    createMediaPipeHandTrackerMock.mockRejectedValueOnce(startupError);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    expect(videos.frontVideo.requestVideoFrameCallback).toHaveBeenCalledOnce();
+
+    videos.frontVideo.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontLaneHealth).toBe("failed");
+    });
+    expect(videos.frontVideo.requestVideoFrameCallback).toHaveBeenCalledOnce();
+    expect(consoleError).toHaveBeenCalledWith(
+      "Diagnostic lane tracker startup failed",
+      startupError
+    );
+  });
+
+  it("reschedules after transient detect failure on a live tracker", async () => {
+    const detectError = new Error("detect failed");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const frontTracker = createFakeTracker();
+    frontTracker.detect.mockRejectedValueOnce(detectError);
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(frontTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    expect(videos.frontVideo.requestVideoFrameCallback).toHaveBeenCalledOnce();
+
+    videos.frontVideo.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontLaneHealth).toBe("failed");
+      expect(videos.frontVideo.requestVideoFrameCallback).toHaveBeenCalledTimes(
+        2
+      );
+    });
+    expect(consoleError).toHaveBeenCalledWith(
+      "Diagnostic lane tracking failed",
+      detectError
+    );
   });
 
   it("falls back to a 1x1 viewport when video and fallback dimensions are zero", () => {
@@ -611,6 +702,206 @@ describe("createLiveLandmarkInspection", () => {
     });
   });
 
+  it("pairs live front aim and side trigger frames into fusion snapshots", async () => {
+    const frontTracker = createFakeTracker();
+    const sideTracker = createFakeTracker();
+    frontTracker.detect.mockResolvedValueOnce(createHandDetection());
+    sideTracker.detect.mockResolvedValueOnce(
+      createHandDetectionWithWorld(openWorldLandmarks())
+    );
+    createMediaPipeHandTrackerMock
+      .mockResolvedValueOnce(frontTracker)
+      .mockResolvedValueOnce(sideTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.frontVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontAimFrame).toBeDefined();
+    });
+    videos.sideVideo.fireFrame({ captureTime: 112, presentedFrames: 1 });
+
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().fusionFrame?.fusionMode).toBe(
+        "pairedFrontAndSide"
+      );
+      expect(
+        liveInspection.getState().fusionFrame?.frontSource.laneHealth
+      ).toBe("tracking");
+      expect(liveInspection.getState().fusionFrame?.sideSource.laneHealth).toBe(
+        "tracking"
+      );
+      expect(
+        liveInspection.getState().fusionTelemetry?.timeDeltaBetweenLanesMs
+      ).toBe(12);
+    });
+  });
+
+  it("shows timestamp gap reject reasons in fusion snapshots", async () => {
+    const frontTracker = createFakeTracker();
+    const sideTracker = createFakeTracker();
+    frontTracker.detect.mockResolvedValueOnce(createHandDetection());
+    sideTracker.detect.mockResolvedValueOnce(
+      createHandDetectionWithWorld(openWorldLandmarks())
+    );
+    createMediaPipeHandTrackerMock
+      .mockResolvedValueOnce(frontTracker)
+      .mockResolvedValueOnce(sideTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.setFusionTuning("maxPairDeltaMs", 10);
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.frontVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontAimFrame).toBeDefined();
+    });
+    videos.sideVideo.fireFrame({ captureTime: 130, presentedFrames: 1 });
+
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().fusionFrame?.fusionRejectReason).toBe(
+        "timestampGapTooLarge"
+      );
+    });
+  });
+
+  it("commits one fused shot for one side shot edge", async () => {
+    const frontTracker = createFakeTracker();
+    const sideTracker = createFakeTracker();
+    frontTracker.detect.mockResolvedValue(createHandDetection());
+    sideTracker.detect
+      .mockResolvedValueOnce(createHandDetectionWithWorld(openWorldLandmarks()))
+      .mockResolvedValueOnce(
+        createHandDetectionWithWorld(pulledWorldLandmarks())
+      )
+      .mockResolvedValueOnce(
+        createHandDetectionWithWorld(pulledWorldLandmarks())
+      );
+    createMediaPipeHandTrackerMock
+      .mockResolvedValueOnce(frontTracker)
+      .mockResolvedValueOnce(sideTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.frontVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontAimFrame).toBeDefined();
+    });
+    videos.sideVideo.fireFrame({ captureTime: 102, presentedFrames: 1 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().sideTriggerFrame?.triggerEdge).toBe(
+        "none"
+      );
+    });
+    videos.sideVideo.fireFrame({ captureTime: 104, presentedFrames: 2 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().sideTriggerFrame?.triggerEdge).toBe(
+        "pullStarted"
+      );
+    });
+    videos.sideVideo.fireFrame({ captureTime: 106, presentedFrames: 3 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().fusionFrame?.shotFired).toBe(true);
+    });
+
+    videos.frontVideo.fireFrame({ captureTime: 108, presentedFrames: 2 });
+    await vi.waitFor(() => {
+      expect(frontTracker.detect).toHaveBeenCalledTimes(2);
+      expect(liveInspection.getState().fusionFrame?.shotFired).toBe(false);
+    });
+  });
+
+  it("refreshes fusion snapshots when front tracking loses usable input after a shot", async () => {
+    const frontTracker = createFakeTracker();
+    const sideTracker = createFakeTracker();
+    frontTracker.detect
+      .mockResolvedValueOnce(createHandDetection())
+      .mockResolvedValueOnce(createLowConfidenceHandDetection());
+    sideTracker.detect
+      .mockResolvedValueOnce(createHandDetectionWithWorld(openWorldLandmarks()))
+      .mockResolvedValueOnce(
+        createHandDetectionWithWorld(pulledWorldLandmarks())
+      )
+      .mockResolvedValueOnce(
+        createHandDetectionWithWorld(pulledWorldLandmarks())
+      );
+    createMediaPipeHandTrackerMock
+      .mockResolvedValueOnce(frontTracker)
+      .mockResolvedValueOnce(sideTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.frontVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontAimFrame).toBeDefined();
+    });
+    videos.sideVideo.fireFrame({ captureTime: 102, presentedFrames: 1 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().sideTriggerFrame?.triggerEdge).toBe(
+        "none"
+      );
+    });
+    videos.sideVideo.fireFrame({ captureTime: 104, presentedFrames: 2 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().sideTriggerFrame?.triggerEdge).toBe(
+        "pullStarted"
+      );
+    });
+    videos.sideVideo.fireFrame({ captureTime: 106, presentedFrames: 3 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().fusionFrame?.fusionMode).toBe(
+        "pairedFrontAndSide"
+      );
+      expect(liveInspection.getState().fusionFrame?.shotFired).toBe(true);
+    });
+
+    videos.frontVideo.fireFrame({ captureTime: 108, presentedFrames: 2 });
+
+    await vi.waitFor(() => {
+      expect(frontTracker.detect).toHaveBeenCalledTimes(2);
+      expect(liveInspection.getState().frontAimFrame).toBeUndefined();
+      expect(liveInspection.getState().fusionFrame?.fusionMode).not.toBe(
+        "pairedFrontAndSide"
+      );
+      expect(liveInspection.getState().fusionFrame?.shotFired).toBe(false);
+    });
+  });
+
   it("passes live tuning changes to subsequent side trigger mapper updates", async () => {
     const sideTracker = setupSideTrackerSequence();
     const liveInspection = createLiveLandmarkInspection();
@@ -689,5 +980,27 @@ describe("createLiveLandmarkInspection", () => {
 
     expect(liveInspection.getState().sideTriggerFrame).toBeUndefined();
     expect(liveInspection.getState().sideTriggerTelemetry).toBeUndefined();
+    expect(liveInspection.getState().fusionFrame).toBeUndefined();
+  });
+
+  it("resets fusion tuning to defaults and preserves it when leaving preview", () => {
+    const liveInspection = createLiveLandmarkInspection();
+
+    liveInspection.setFusionTuning("maxPairDeltaMs", 12);
+    expect(liveInspection.getState().fusionTuning.maxPairDeltaMs).toBe(12);
+
+    liveInspection.sync({
+      screen: "deviceSelection",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: undefined,
+      sideStream: undefined,
+      error: undefined
+    });
+    expect(liveInspection.getState().fusionTuning.maxPairDeltaMs).toBe(12);
+
+    liveInspection.resetFusionTuning();
+    expect(liveInspection.getState().fusionTuning.maxPairDeltaMs).not.toBe(12);
   });
 });
