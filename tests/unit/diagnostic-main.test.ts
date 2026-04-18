@@ -1,17 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { WorkbenchState } from "../../src/features/diagnostic-workbench/DiagnosticWorkbench";
 
 const {
   deviceChangeObserverStop,
   listeners,
   liveInspectionMock,
   observeDeviceChangeMock,
+  recorderMock,
   workbenchMock
 } = vi.hoisted(() => {
   const listeners = new Map<string, EventListener>();
   const deviceChangeObserverStop = vi.fn();
   const observeDeviceChangeMock = vi.fn();
   const liveInspectionMock = {
-    getState: vi.fn(() => ({
+    getState: vi.fn<() => unknown>(() => ({
       frontDetection: undefined,
       sideDetection: undefined,
       frontLaneHealth: "notStarted",
@@ -51,11 +53,20 @@ const {
     resetSideTriggerTuning: vi.fn(),
     setFusionTuning: vi.fn(),
     resetFusionTuning: vi.fn(),
+    subscribeFrame: vi.fn(),
     updateDom: vi.fn(),
     destroy: vi.fn()
   };
+  const recorderMock = {
+    getState: vi.fn(() => ({ status: "idle" })),
+    subscribe: vi.fn(),
+    start: vi.fn<(options: unknown) => Promise<void>>(() => Promise.resolve()),
+    stop: vi.fn(() => Promise.resolve()),
+    isRecording: vi.fn(() => false),
+    destroy: vi.fn()
+  };
   const workbenchMock = {
-    getState: vi.fn(() => ({
+    getState: vi.fn<() => WorkbenchState>(() => ({
       screen: "permission",
       devices: [],
       frontAssignment: undefined,
@@ -78,6 +89,7 @@ const {
     listeners,
     liveInspectionMock,
     observeDeviceChangeMock,
+    recorderMock,
     workbenchMock
   };
 });
@@ -101,6 +113,13 @@ vi.mock(
   })
 );
 
+vi.mock(
+  "../../src/features/diagnostic-workbench/recording/sessionRecorder",
+  () => ({
+    createSessionRecorder: vi.fn(() => recorderMock)
+  })
+);
+
 class FakeHTMLInputElement {
   readonly dataset: Record<string, string>;
   readonly valueAsNumber: number;
@@ -108,6 +127,20 @@ class FakeHTMLInputElement {
   constructor(dataset: Record<string, string>, valueAsNumber: number) {
     this.dataset = dataset;
     this.valueAsNumber = valueAsNumber;
+  }
+}
+
+class FakeHTMLElement {
+  readonly dataset: Record<string, string>;
+  private readonly actionEl: unknown;
+
+  constructor(dataset: Record<string, string>, actionEl?: unknown) {
+    this.dataset = dataset;
+    this.actionEl = actionEl ?? this;
+  }
+
+  closest(): unknown {
+    return this.actionEl;
   }
 }
 
@@ -128,6 +161,7 @@ describe("diagnostic main input handling", () => {
     };
 
     vi.stubGlobal("HTMLInputElement", FakeHTMLInputElement);
+    vi.stubGlobal("HTMLElement", FakeHTMLElement);
     vi.stubGlobal("document", {
       querySelector: vi.fn((selector: string) =>
         selector === "#diagnostic-app" ? root : null
@@ -181,6 +215,75 @@ describe("diagnostic main input handling", () => {
       expect(
         workbenchMock.refreshDevicesFromDeviceChange
       ).toHaveBeenCalledOnce();
+    });
+  });
+
+  it("starts diagnostic recording from the recording controls", async () => {
+    const clickListener = listeners.get("click");
+
+    if (clickListener === undefined) {
+      throw new Error("diagnostic click listener was not registered");
+    }
+
+    const frontStream = { id: "front-stream" } as MediaStream;
+    const sideStream = { id: "side-stream" } as MediaStream;
+    workbenchMock.getState.mockReturnValue({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: { stream: frontStream, deviceId: "front", stop: vi.fn() },
+      sideStream: { stream: sideStream, deviceId: "side", stop: vi.fn() },
+      error: undefined
+    });
+
+    const actionEl = new FakeHTMLElement({
+      wbAction: "startRecording"
+    });
+    const target = new FakeHTMLElement({}, actionEl);
+
+    clickListener({
+      target
+    } as unknown as MouseEvent);
+
+    await vi.waitFor(() => {
+      expect(recorderMock.start).toHaveBeenCalledOnce();
+    });
+    const startOptions = recorderMock.start.mock.calls[0]?.[0];
+
+    if (startOptions === undefined) {
+      throw new Error("recorder.start was not called with options");
+    }
+
+    const options = startOptions as {
+      readonly frontStream: MediaStream;
+      readonly sideStream: MediaStream;
+      readonly subscribeFrame: unknown;
+    };
+
+    expect(options.frontStream).toBe(frontStream);
+    expect(options.sideStream).toBe(sideStream);
+    expect(typeof options.subscribeFrame).toBe("function");
+  });
+
+  it("stops diagnostic recording from the recording controls", async () => {
+    const clickListener = listeners.get("click");
+
+    if (clickListener === undefined) {
+      throw new Error("diagnostic click listener was not registered");
+    }
+
+    const actionEl = new FakeHTMLElement({
+      wbAction: "stopRecording"
+    });
+    const target = new FakeHTMLElement({}, actionEl);
+
+    clickListener({
+      target
+    } as unknown as MouseEvent);
+
+    await vi.waitFor(() => {
+      expect(recorderMock.stop).toHaveBeenCalledOnce();
     });
   });
 });

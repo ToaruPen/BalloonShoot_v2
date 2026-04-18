@@ -62,6 +62,10 @@ import {
   formatLaneHealthLabel,
   type WorkbenchInspectionState
 } from "./renderWorkbench";
+import {
+  assembleTelemetryFrame,
+  type TelemetryFrame
+} from "./recording/telemetryFrame";
 import { formatFrameTimestamp } from "./timestampFormat";
 
 interface FrameTimingLike {
@@ -80,6 +84,7 @@ interface LaneTrackingOptions {
 
 interface LiveLandmarkInspection {
   getState(): WorkbenchInspectionState;
+  subscribeFrame(callback: (frame: TelemetryFrame) => void): () => void;
   sync(state: WorkbenchState): void;
   setFrontAimCalibration(key: FrontAimCalibrationKey, value: number): void;
   resetFrontAimCalibration(): void;
@@ -273,6 +278,7 @@ const sideCalibrationValueFor = (
 
 export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   let inspectionState = createInitialInspectionState();
+  const frameSubscribers = new Set<(frame: TelemetryFrame) => void>();
   let activeTracking: ActiveTracking | undefined;
   let frontAimMapper = createFrontAimMapper();
   let sideTriggerMapper: SideTriggerMapper = createSideTriggerMapper();
@@ -284,6 +290,18 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   const setInspection = (patch: Partial<WorkbenchInspectionState>): void => {
     inspectionState = { ...inspectionState, ...patch };
     updateDom();
+  };
+
+  const emitTelemetryFrame = (timestamp: FrameTimestamp): void => {
+    const frame = assembleTelemetryFrame(inspectionState, timestamp);
+
+    if (frame === undefined) {
+      return;
+    }
+
+    for (const subscriber of frameSubscribers) {
+      subscriber(frame);
+    }
   };
 
   const updateDom = (): void => {
@@ -438,6 +456,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
         fusionFrame: fusionResult.fusedFrame,
         fusionTelemetry: fusionResult.telemetry
       });
+      emitTelemetryFrame(timestamp);
       return;
     }
 
@@ -466,6 +485,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       fusionFrame: fusionResult.fusedFrame,
       fusionTelemetry: fusionResult.telemetry
     });
+    emitTelemetryFrame(timestamp);
   };
 
   const runLaneDetection = async (
@@ -614,11 +634,9 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       }
 
       if (typeof video.requestVideoFrameCallback === "function") {
-        callbackId = video.requestVideoFrameCallback(
-          (_now, metadata) => {
-            void processFrame(metadata);
-          }
-        );
+        callbackId = video.requestVideoFrameCallback((_now, metadata) => {
+          void processFrame(metadata);
+        });
         return;
       }
 
@@ -845,6 +863,12 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     getState() {
       return inspectionState;
     },
+    subscribeFrame(callback) {
+      frameSubscribers.add(callback);
+      return () => {
+        frameSubscribers.delete(callback);
+      };
+    },
     sync,
     setFrontAimCalibration(key, value) {
       const metadata = FRONT_AIM_CALIBRATION_SLIDER_METADATA.find(
@@ -935,6 +959,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     updateDom,
     destroy() {
       stopActiveTracking();
+      frameSubscribers.clear();
       resetTrackingState({ resetCalibration: true });
       lastPreviewDeviceIds = undefined;
     }

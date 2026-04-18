@@ -182,6 +182,7 @@ h4 {
 .wb-aim-panel,
 .wb-trigger-panel,
 .wb-fusion-panel,
+.wb-recording-panel,
 .wb-tuning-panel {
   margin-top: 0.75rem;
   border: 1px solid #31425f;
@@ -213,6 +214,7 @@ h4 {
 .wb-aim-grid,
 .wb-trigger-grid,
 .wb-fusion-grid,
+.wb-recording-grid,
 .wb-tuning-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -260,6 +262,12 @@ h4 {
   text-align: center;
 }
 
+.wb-recording-error {
+  margin-top: 0.5rem;
+  color: #ffb4a8;
+  overflow-wrap: anywhere;
+}
+
 .wb-controls {
   margin-top: 1rem;
 }
@@ -279,6 +287,7 @@ h4 {
   .wb-aim-grid,
   .wb-trigger-grid,
   .wb-fusion-grid,
+  .wb-recording-grid,
   .wb-tuning-grid {
     grid-template-columns: 1fr;
   }

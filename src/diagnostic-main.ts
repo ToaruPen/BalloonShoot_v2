@@ -6,6 +6,7 @@ import {
 } from "./features/diagnostic-workbench/DiagnosticWorkbench";
 import { renderWorkbenchHTML } from "./features/diagnostic-workbench/renderWorkbench";
 import { createLiveLandmarkInspection } from "./features/diagnostic-workbench/liveLandmarkInspection";
+import { createSessionRecorder } from "./features/diagnostic-workbench/recording/sessionRecorder";
 
 const root = document.querySelector<HTMLDivElement>("#diagnostic-app");
 
@@ -13,8 +14,12 @@ if (!root) {
   throw new Error("Missing #diagnostic-app root");
 }
 
-const workbench: DiagnosticWorkbench = createDiagnosticWorkbench();
 const liveInspection = createLiveLandmarkInspection();
+const recorder = createSessionRecorder();
+const workbench: DiagnosticWorkbench = createDiagnosticWorkbench({
+  stopActiveRecording: () => recorder.stop()
+});
+let recordingTimerId: number | undefined;
 
 const runAction = (actionPromise: Promise<void>): void => {
   void actionPromise.catch((error: unknown) => {
@@ -28,10 +33,37 @@ const deviceChangeObserver = observeDeviceChange(() => {
 
 const render = (): void => {
   const state = workbench.getState();
-  root.innerHTML = renderWorkbenchHTML(state, liveInspection.getState());
+  root.innerHTML = renderWorkbenchHTML(
+    state,
+    liveInspection.getState(),
+    recorder.getState()
+  );
   attachVideoStreams(state);
   liveInspection.sync(state);
   liveInspection.updateDom();
+  syncRecordingTimer();
+};
+
+const syncRecordingTimer = (): void => {
+  const isRecording = recorder.getState().status === "recording";
+
+  if (
+    isRecording &&
+    recordingTimerId === undefined &&
+    typeof window.setInterval === "function"
+  ) {
+    recordingTimerId = window.setInterval(render, 1000);
+    return;
+  }
+
+  if (
+    !isRecording &&
+    recordingTimerId !== undefined &&
+    typeof window.clearInterval === "function"
+  ) {
+    window.clearInterval(recordingTimerId);
+    recordingTimerId = undefined;
+  }
 };
 
 const attachVideoStreams = (
@@ -130,6 +162,29 @@ const handleClick = (e: MouseEvent): void => {
       liveInspection.resetFusionTuning();
       render();
       break;
+    case "startRecording": {
+      const state = workbench.getState();
+
+      if (
+        state.screen !== "previewing" ||
+        state.frontStream === undefined ||
+        state.sideStream === undefined
+      ) {
+        return;
+      }
+
+      runAction(
+        recorder.start({
+          frontStream: state.frontStream.stream,
+          sideStream: state.sideStream.stream,
+          subscribeFrame: (callback) => liveInspection.subscribeFrame(callback)
+        })
+      );
+      break;
+    }
+    case "stopRecording":
+      runAction(recorder.stop());
+      break;
   }
 };
 
@@ -193,8 +248,17 @@ root.addEventListener("input", (e: Event) => {
   }
 });
 workbench.subscribe(render);
+recorder.subscribe(render);
 window.addEventListener("beforeunload", () => {
   deviceChangeObserver.stop();
+  if (
+    recordingTimerId !== undefined &&
+    typeof window.clearInterval === "function"
+  ) {
+    window.clearInterval(recordingTimerId);
+    recordingTimerId = undefined;
+  }
+  void recorder.destroy();
   liveInspection.destroy();
   workbench.destroy();
 });

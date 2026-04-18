@@ -37,6 +37,8 @@ import { renderSideTriggerCalibrationControls } from "./renderSideTriggerCalibra
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
 import { renderTuningControls } from "./renderTuningControls";
+import { renderRecordingControls } from "./renderRecordingControls";
+import type { RecordingState } from "./recording/sessionRecorder";
 
 export interface WorkbenchInspectionState {
   readonly frontDetection: FrontHandDetection | undefined;
@@ -163,6 +165,8 @@ const defaultInspectionState: WorkbenchInspectionState = {
   fusionTuning: defaultFusionTuning
 };
 
+const defaultRecordingState: RecordingState = { status: "idle" };
+
 const renderInspectionPane = (
   lanePrefix: "front" | "side",
   kind: "raw" | "filtered"
@@ -224,11 +228,13 @@ const renderInspectionLane = (
 
 const renderPreviewing = (
   state: WorkbenchState,
-  inspection: WorkbenchInspectionState
+  inspection: WorkbenchInspectionState,
+  recording: RecordingState
 ): string => `
   <div class="wb-previewing">
     <h2>ライブプレビュー</h2>
     ${renderInlineError(state.error)}
+    ${renderRecordingControls(recording)}
     <div class="wb-preview-grid">
       ${renderInspectionLane(
         "front",
@@ -268,7 +274,8 @@ const renderPreviewing = (
 
 export const renderWorkbenchHTML = (
   state: WorkbenchState,
-  inspection: WorkbenchInspectionState = defaultInspectionState
+  inspection: WorkbenchInspectionState = defaultInspectionState,
+  recording: RecordingState = defaultRecordingState
 ): string => {
   switch (state.screen) {
     case "permission":
@@ -286,6 +293,6 @@ export const renderWorkbenchHTML = (
     case "deviceSelection":
       return renderDeviceSelection(state);
     case "previewing":
-      return renderPreviewing(state, inspection);
+      return renderPreviewing(state, inspection, recording);
   }
 };
