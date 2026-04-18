@@ -75,13 +75,15 @@ describe("M5 import boundaries", () => {
     const imports = importsFrom(join(rootDir, "src/main.ts"));
 
     expect(imports.join("\n")).not.toContain("diagnostic-workbench");
+    expect(imports.join("\n")).not.toContain("input-fusion");
   });
 
-  it("keeps app files out of diagnostic workbench modules", () => {
+  it("keeps app files out of diagnostic workbench and input-fusion modules", () => {
     const appFiles = listSourceFiles(join(rootDir, "src/app"));
+    const forbidden = ["diagnostic-workbench", "input-fusion"];
     const offenders = appFiles.filter((file) =>
       importsFrom(file).some((specifier) =>
-        specifier.includes("diagnostic-workbench")
+        forbidden.some((forbiddenPart) => specifier.includes(forbiddenPart))
       )
     );
 
@@ -135,11 +137,38 @@ describe("M5 import boundaries", () => {
     expect(offenders.map(relativeSourcePath)).toEqual([]);
   });
 
+  it("keeps input-fusion independent of browser, workbench, rendering, gameplay, and app layers", () => {
+    const forbidden = [
+      "diagnostic-workbench",
+      "hand-tracking",
+      "features/camera",
+      "../camera",
+      "rendering",
+      "gameplay",
+      "src/app"
+    ];
+    const fusionFiles = listSourceFiles(
+      join(rootDir, "src/features/input-fusion")
+    );
+    const offenders = fusionFiles.filter((file) =>
+      importsFrom(file).some((specifier) =>
+        forbidden.some((forbiddenPart) => specifier.includes(forbiddenPart))
+      )
+    );
+
+    expect(offenders.map(relativeSourcePath)).toEqual([]);
+  });
+
   it("keeps threshold slider labels out of index.html", () => {
     const indexHtml = readFileSync(join(rootDir, "index.html"), "utf8");
 
     expect(indexHtml).not.toContain("SIDE_TRIGGER_PULL_ENTER_THRESHOLD");
     expect(indexHtml).not.toContain("data-side-trigger-tuning");
+    expect(indexHtml).not.toContain("FUSION_MAX_PAIR_DELTA_MS");
+    expect(indexHtml).not.toContain("data-fusion-tuning");
+    expect(indexHtml).not.toContain("wb-fusion-panel");
+    expect(indexHtml).not.toContain("pairedFrontAndSide");
+    expect(indexHtml).not.toContain("timestampGapTooLarge");
     expect(indexHtml).not.toContain("diagnostic.html");
   });
 });

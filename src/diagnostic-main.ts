@@ -112,6 +112,10 @@ const handleClick = (e: MouseEvent): void => {
       liveInspection.resetSideTriggerTuning();
       render();
       break;
+    case "resetFusionTuning":
+      liveInspection.resetFusionTuning();
+      render();
+      break;
   }
 };
 
@@ -123,16 +127,24 @@ root.addEventListener("input", (e: Event) => {
     return;
   }
 
-  const key = target.dataset["sideTriggerTuning"];
+  const sideTriggerKey = target.dataset["sideTriggerTuning"];
 
-  if (key === undefined) {
+  if (sideTriggerKey !== undefined) {
+    liveInspection.setSideTriggerTuning(
+      sideTriggerKey as Parameters<typeof liveInspection.setSideTriggerTuning>[0],
+      target.valueAsNumber
+    );
     return;
   }
 
-  liveInspection.setSideTriggerTuning(
-    key as Parameters<typeof liveInspection.setSideTriggerTuning>[0],
-    target.valueAsNumber
-  );
+  const fusionKey = target.dataset["fusionTuning"];
+
+  if (fusionKey !== undefined) {
+    liveInspection.setFusionTuning(
+      fusionKey as Parameters<typeof liveInspection.setFusionTuning>[0],
+      target.valueAsNumber
+    );
+  }
 });
 workbench.subscribe(render);
 window.addEventListener("beforeunload", () => {

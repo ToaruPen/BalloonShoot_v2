@@ -11,6 +11,15 @@ import {
 } from "../front-aim";
 import { handPresenceConfidenceFor } from "../front-aim/frontAimDetectionConversion";
 import {
+  coerceFusionTuningValue,
+  createInputFusionMapper,
+  defaultFusionTuning,
+  fusionSliderMetadata,
+  type FusionTuning,
+  type FusionTuningKey,
+  type InputFusionMapper
+} from "../input-fusion";
+import {
   coerceSideTriggerTuningValue,
   createSideTriggerMapper,
   defaultSideTriggerTuning,
@@ -32,6 +41,7 @@ import type {
 import type { WorkbenchState } from "./DiagnosticWorkbench";
 import { createLandmarkOverlayModel } from "./landmarkOverlay";
 import { renderFrontAimPanel } from "./renderFrontAimPanel";
+import { renderFusionPanel } from "./renderFusionPanel";
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
 import type { WorkbenchInspectionState } from "./renderWorkbench";
@@ -55,6 +65,8 @@ interface LiveLandmarkInspection {
   sync(state: WorkbenchState): void;
   setSideTriggerTuning(key: SideTriggerTuningKey, value: number): void;
   resetSideTriggerTuning(): void;
+  setFusionTuning(key: FusionTuningKey, value: number): void;
+  resetFusionTuning(): void;
   updateDom(): void;
   destroy(): void;
 }
@@ -75,7 +87,10 @@ const createInitialInspectionState = (): WorkbenchInspectionState => ({
   frontAimTelemetry: undefined,
   sideTriggerFrame: undefined,
   sideTriggerTelemetry: undefined,
-  sideTriggerTuning: defaultSideTriggerTuning
+  sideTriggerTuning: defaultSideTriggerTuning,
+  fusionFrame: undefined,
+  fusionTelemetry: undefined,
+  fusionTuning: defaultFusionTuning
 });
 
 const updateText = (id: string, value: string): void => {
@@ -190,6 +205,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   let activeTracking: ActiveTracking | undefined;
   let frontAimMapper = createFrontAimMapper();
   let sideTriggerMapper: SideTriggerMapper = createSideTriggerMapper();
+  let inputFusionMapper: InputFusionMapper = createInputFusionMapper();
 
   const setInspection = (patch: Partial<WorkbenchInspectionState>): void => {
     inspectionState = { ...inspectionState, ...patch };
@@ -251,6 +267,13 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
         inspectionState.sideTriggerTelemetry
       )
     );
+    updateOuterHTML(
+      "wb-fusion-panel",
+      renderFusionPanel(
+        inspectionState.fusionFrame,
+        inspectionState.fusionTelemetry
+      )
+    );
   };
 
   const setLaneHealth = (
@@ -287,10 +310,24 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
         timestamp,
         tuning: inspectionState.sideTriggerTuning
       });
+      const fusionResult =
+        sideResult.triggerFrame === undefined
+          ? undefined
+          : inputFusionMapper.updateTriggerFrame(sideResult.triggerFrame, {
+              frontLaneHealth: inspectionState.frontLaneHealth,
+              sideLaneHealth: inspectionState.sideLaneHealth,
+              tuning: inspectionState.fusionTuning
+            });
       setInspection({
         sideDetection: detection as SideHandDetection | undefined,
         sideTriggerFrame: sideResult.triggerFrame,
-        sideTriggerTelemetry: sideResult.telemetry
+        sideTriggerTelemetry: sideResult.telemetry,
+        ...(fusionResult === undefined
+          ? {}
+          : {
+              fusionFrame: fusionResult.fusedFrame,
+              fusionTelemetry: fusionResult.telemetry
+            })
       });
       return;
     }
@@ -301,11 +338,25 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       viewportSize: videoViewportSize(video, frontDetection),
       projectionOptions: { objectFit: "cover" }
     });
+    const fusionResult =
+      frontResult.aimFrame === undefined
+        ? undefined
+        : inputFusionMapper.updateAimFrame(frontResult.aimFrame, {
+            frontLaneHealth: inspectionState.frontLaneHealth,
+            sideLaneHealth: inspectionState.sideLaneHealth,
+            tuning: inspectionState.fusionTuning
+          });
 
     setInspection({
       frontDetection,
       frontAimFrame: frontResult.aimFrame,
-      frontAimTelemetry: frontResult.telemetry
+      frontAimTelemetry: frontResult.telemetry,
+      ...(fusionResult === undefined
+        ? {}
+        : {
+            fusionFrame: fusionResult.fusedFrame,
+            fusionTelemetry: fusionResult.telemetry
+          })
     });
   };
 
@@ -395,6 +446,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
 
         console.error("Diagnostic lane tracking failed", error);
         setLaneHealth(options.role, "failed");
+        schedule();
         return;
       }
 
@@ -456,13 +508,15 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   };
 
   const resetTrackingState = (): void => {
-    const { sideTriggerTuning } = inspectionState;
+    const { fusionTuning, sideTriggerTuning } = inspectionState;
     inspectionState = {
       ...createInitialInspectionState(),
-      sideTriggerTuning
+      sideTriggerTuning,
+      fusionTuning
     };
     frontAimMapper = createFrontAimMapper();
     sideTriggerMapper = createSideTriggerMapper();
+    inputFusionMapper = createInputFusionMapper();
     updateDom();
   };
 
@@ -552,6 +606,24 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     },
     resetSideTriggerTuning() {
       setInspection({ sideTriggerTuning: defaultSideTriggerTuning });
+    },
+    setFusionTuning(key, value) {
+      const metadata = fusionSliderMetadata.find((item) => item.key === key);
+
+      if (metadata === undefined) {
+        return;
+      }
+
+      const fusionTuning: FusionTuning = {
+        ...inspectionState.fusionTuning,
+        [key]: coerceFusionTuningValue(metadata, value)
+      };
+
+      setInspection({ fusionTuning });
+      updateText(`wb-fusion-tuning-value-${key}`, String(fusionTuning[key]));
+    },
+    resetFusionTuning() {
+      setInspection({ fusionTuning: defaultFusionTuning });
     },
     updateDom,
     destroy() {

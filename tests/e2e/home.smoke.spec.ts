@@ -37,6 +37,11 @@ test("home page renders the clean front aim game shell", async ({ page }) => {
     page.getByText("SIDE_TRIGGER_PULL_ENTER_THRESHOLD")
   ).not.toBeVisible();
   await expect(page.locator("[data-side-trigger-tuning]")).toHaveCount(0);
+  await expect(page.getByText("FUSION_MAX_PAIR_DELTA_MS")).not.toBeVisible();
+  await expect(page.locator("[data-fusion-tuning]")).toHaveCount(0);
+  await expect(page.locator("#wb-fusion-panel")).toHaveCount(0);
+  await expect(page.getByText("pairedFrontAndSide")).not.toBeVisible();
+  await expect(page.getByText("timestampGapTooLarge")).not.toBeVisible();
 
   await page.getByRole("button", { name: "フロントカメラを開始" }).click();
   await expect(
