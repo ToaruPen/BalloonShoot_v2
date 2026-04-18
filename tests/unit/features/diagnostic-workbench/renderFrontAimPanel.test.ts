@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderFrontAimPanel } from "../../../../src/features/diagnostic-workbench/renderFrontAimPanel";
+import { defaultFrontAimCalibration } from "../../../../src/features/front-aim";
 import type {
   AimInputFrame,
   FrontAimTelemetry
@@ -26,6 +27,8 @@ const createTelemetry = (): FrontAimTelemetry => ({
   aimPointViewport: { x: 123.4567, y: 78.9 },
   aimPointNormalized: { x: 0.192901, y: 0.164375 },
   sourceFrameSize: { width: 640, height: 480 },
+  calibrationStatus: "default",
+  calibration: defaultFrontAimCalibration,
   lastLostReason: undefined
 });
 
@@ -45,6 +48,12 @@ describe("renderFrontAimPanel", () => {
     );
     expect(html).toMatch(
       /<span>tracking confidence<\/span>\s*<strong>0\.877<\/strong>/
+    );
+    expect(html).toMatch(
+      /<span>calibration status<\/span>\s*<strong>default<\/strong>/
+    );
+    expect(html).toMatch(
+      /<span>calibration center x<\/span>\s*<strong>0\.500<\/strong>/
     );
   });
 
@@ -69,12 +78,28 @@ describe("renderFrontAimPanel", () => {
       aimPointViewport: undefined,
       aimPointNormalized: undefined,
       sourceFrameSize: undefined,
+      calibrationStatus: "liveTuning",
+      calibration: {
+        ...defaultFrontAimCalibration,
+        center: { x: 0.4, y: 0.6 }
+      },
       lastLostReason: rawLostReason as FrontAimTelemetry["lastLostReason"],
       aimSmoothingState: "recoveringAfterLoss"
     });
 
     expect(html).toContain("&lt;lost &amp; &quot;quoted&quot; &#39;reason&#39;&gt;");
     expect(html).not.toContain(rawLostReason);
+  });
+
+  it("renders unavailable calibration fields when telemetry is missing", () => {
+    const html = renderFrontAimPanel(undefined, undefined);
+
+    expect(html).toMatch(
+      /<span>calibration status<\/span>\s*<strong>unavailable<\/strong>/
+    );
+    expect(html).toMatch(
+      /<span>corner right x<\/span>\s*<strong>unavailable<\/strong>/
+    );
   });
 
   it("renders raw aim telemetry fields that the panel actually emits", () => {

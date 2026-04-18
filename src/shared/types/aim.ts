@@ -10,6 +10,18 @@ export interface AimFrameSize {
   readonly height: number;
 }
 
+export interface FrontAimCalibrationSnapshot {
+  readonly center: AimPoint2D;
+  readonly cornerBounds: {
+    readonly leftX: number;
+    readonly rightX: number;
+    readonly topY: number;
+    readonly bottomY: number;
+  };
+}
+
+export type FrontAimCalibrationStatus = "default" | "liveTuning";
+
 export type AimAvailability =
   | "available"
   | "estimatedFromRecentFrame"
@@ -45,6 +57,8 @@ export interface FrontAimTelemetryAvailable {
   readonly aimPointViewport: AimPoint2D;
   readonly aimPointNormalized: AimPoint2D;
   readonly sourceFrameSize: AimFrameSize;
+  readonly calibrationStatus: FrontAimCalibrationStatus;
+  readonly calibration: FrontAimCalibrationSnapshot;
   readonly lastLostReason: undefined;
 }
 
@@ -56,6 +70,8 @@ export interface FrontAimTelemetryUnavailable {
   readonly aimPointViewport: undefined;
   readonly aimPointNormalized: undefined;
   readonly sourceFrameSize: undefined;
+  readonly calibrationStatus: FrontAimCalibrationStatus;
+  readonly calibration: FrontAimCalibrationSnapshot;
   readonly lastLostReason: FrontAimLastLostReason | undefined;
 }
 

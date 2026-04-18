@@ -7,7 +7,11 @@ import type {
 import { createLiveLandmarkInspection } from "../../../../src/features/diagnostic-workbench/liveLandmarkInspection";
 import { renderWorkbenchHTML } from "../../../../src/features/diagnostic-workbench/renderWorkbench";
 import { defaultFusionTuning } from "../../../../src/features/input-fusion";
-import { defaultSideTriggerTuning } from "../../../../src/features/side-trigger";
+import {
+  defaultSideTriggerCalibration,
+  defaultSideTriggerTuning
+} from "../../../../src/features/side-trigger";
+import { defaultFrontAimCalibration } from "../../../../src/features/front-aim";
 import type {
   AimInputFrame,
   FrontAimTelemetry
@@ -114,6 +118,8 @@ const createAimTelemetry = (): FrontAimTelemetry => ({
   aimPointViewport: { x: 320, y: 240 },
   aimPointNormalized: { x: 0.5, y: 0.5 },
   sourceFrameSize: { width: 640, height: 480 },
+  calibrationStatus: "default",
+  calibration: defaultFrontAimCalibration,
   lastLostReason: undefined
 });
 
@@ -264,6 +270,8 @@ describe("renderWorkbenchHTML", () => {
         frontAimTelemetry: createAimTelemetry(),
         sideTriggerFrame: undefined,
         sideTriggerTelemetry: undefined,
+        frontAimCalibration: defaultFrontAimCalibration,
+        sideTriggerCalibration: defaultSideTriggerCalibration,
         sideTriggerTuning: defaultSideTriggerTuning,
         fusionFrame: undefined,
         fusionTelemetry: undefined,
@@ -287,6 +295,8 @@ describe("renderWorkbenchHTML", () => {
     expect(html).toContain("サイド trigger evidence");
     expect(html).toContain("fusion pairing");
     expect(html).toContain("SIDE_TRIGGER_PULL_ENTER_THRESHOLD");
+    expect(html).toContain("DEFAULT_FRONT_AIM_CENTER_X");
+    expect(html).toContain("DEFAULT_SIDE_TRIGGER_OPEN_POSE_DISTANCE");
     expect(html).toContain("FUSION_MAX_PAIR_DELTA_MS");
   });
 
@@ -333,6 +343,12 @@ describe("renderWorkbenchHTML", () => {
 
     expect(initialInspection.fusionFrame).toBeUndefined();
     expect(initialInspection.fusionTelemetry).toBeUndefined();
+    expect(initialInspection.frontAimCalibration).toEqual(
+      defaultFrontAimCalibration
+    );
+    expect(initialInspection.sideTriggerCalibration).toEqual(
+      defaultSideTriggerCalibration
+    );
     expect(initialInspection.fusionTuning).toEqual(defaultFusionTuning);
     expect(html).toContain("fusion unavailable");
     expect(html).toContain("FUSION_MAX_FRAME_AGE_MS");

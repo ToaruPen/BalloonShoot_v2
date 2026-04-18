@@ -40,6 +40,7 @@ export const renderFrontAimPanel = (
     aimFrame?.frontHandDetected ?? telemetry?.frontHandDetected;
   const lastLostReason =
     telemetry === undefined ? "unavailable" : telemetry.lastLostReason ?? "none";
+  const calibration = telemetry?.calibration;
 
   return `
     <section class="wb-aim-panel" id="wb-front-aim-panel">
@@ -55,6 +56,13 @@ export const renderFrontAimPanel = (
         ${renderValue("front hand", frontHandDetected === undefined ? "unavailable" : String(frontHandDetected))}
         ${renderValue("tracking confidence", formatScalar(aimFrame?.frontTrackingConfidence ?? telemetry?.frontTrackingConfidence))}
         ${renderValue("source frame", sourceFrameSizeText)}
+        ${renderValue("calibration status", telemetry?.calibrationStatus ?? "unavailable")}
+        ${renderValue("calibration center x", formatScalar(calibration?.center.x))}
+        ${renderValue("calibration center y", formatScalar(calibration?.center.y))}
+        ${renderValue("corner left x", formatScalar(calibration?.cornerBounds.leftX))}
+        ${renderValue("corner right x", formatScalar(calibration?.cornerBounds.rightX))}
+        ${renderValue("corner top y", formatScalar(calibration?.cornerBounds.topY))}
+        ${renderValue("corner bottom y", formatScalar(calibration?.cornerBounds.bottomY))}
         ${renderValue("last lost", lastLostReason)}
       </div>
     </section>

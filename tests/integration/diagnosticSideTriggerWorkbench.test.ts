@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { renderSideTriggerPanel } from "../../src/features/diagnostic-workbench/renderSideTriggerPanel";
+import { renderSideTriggerCalibrationControls } from "../../src/features/diagnostic-workbench/renderSideTriggerCalibrationControls";
 import { renderTuningControls } from "../../src/features/diagnostic-workbench/renderTuningControls";
-import { createSideTriggerMapper } from "../../src/features/side-trigger/createSideTriggerMapper";
+import {
+  createSideTriggerMapper,
+  defaultSideTriggerCalibration
+} from "../../src/features/side-trigger";
 import { defaultSideTriggerTuning } from "../../src/features/side-trigger/sideTriggerConfig";
 import {
   createSideDetection,
@@ -37,7 +41,11 @@ describe("diagnostic side trigger workbench seam", () => {
     ];
 
     const results = frames.map((detection) =>
-      mapper.update({ detection, tuning: defaultSideTriggerTuning })
+      mapper.update({
+        detection,
+        calibration: defaultSideTriggerCalibration,
+        tuning: defaultSideTriggerTuning
+      })
     );
     const committed = results.find(
       (item) => item.triggerFrame?.triggerEdge === "shotCommitted"
@@ -66,18 +74,21 @@ describe("diagnostic side trigger workbench seam", () => {
 
     mapper.update({
       detection: createSideDetection({ worldLandmarks: openWorldLandmarks() }),
+      calibration: defaultSideTriggerCalibration,
       tuning: tuned
     });
     mapper.update({
       detection: createSideDetection({
         worldLandmarks: pulledWorldLandmarks()
       }),
+      calibration: defaultSideTriggerCalibration,
       tuning: tuned
     });
     const result = mapper.update({
       detection: createSideDetection({
         worldLandmarks: pulledWorldLandmarks()
       }),
+      calibration: defaultSideTriggerCalibration,
       tuning: tuned
     });
 
@@ -98,18 +109,21 @@ describe("diagnostic side trigger workbench seam", () => {
 
     mapper.update({
       detection: createSideDetection({ worldLandmarks: openWorldLandmarks() }),
+      calibration: defaultSideTriggerCalibration,
       tuning: defaultSideTriggerTuning
     });
     mapper.update({
       detection: createSideDetection({
         worldLandmarks: pulledWorldLandmarks()
       }),
+      calibration: defaultSideTriggerCalibration,
       tuning: defaultSideTriggerTuning
     });
     mapper.update({
       detection: createSideDetection({
         worldLandmarks: pulledWorldLandmarks()
       }),
+      calibration: defaultSideTriggerCalibration,
       tuning: defaultSideTriggerTuning
     });
     mapper.reset();
@@ -118,6 +132,7 @@ describe("diagnostic side trigger workbench seam", () => {
       detection: createSideDetection({
         worldLandmarks: pulledWorldLandmarks()
       }),
+      calibration: defaultSideTriggerCalibration,
       tuning: defaultSideTriggerTuning
     });
 
@@ -125,5 +140,26 @@ describe("diagnostic side trigger workbench seam", () => {
       "SideTriggerPoseSearching"
     );
     expect(result.triggerFrame?.triggerEdge).toBe("none");
+  });
+
+  it("calibration slider values alter mapper telemetry before rendering", () => {
+    const mapper = createSideTriggerMapper();
+    const calibration = {
+      openPose: { normalizedThumbDistance: 1.4 },
+      pulledPose: { normalizedThumbDistance: 0.25 }
+    };
+    const result = mapper.update({
+      detection: createSideDetection({ worldLandmarks: pulledWorldLandmarks() }),
+      calibration,
+      tuning: defaultSideTriggerTuning
+    });
+
+    expect(result.telemetry.pullEvidenceScalar).toBeGreaterThan(0.95);
+    expect(renderSideTriggerCalibrationControls(calibration)).toContain(
+      'data-side-trigger-calibration="pulledPoseDistance"'
+    );
+    expect(
+      renderSideTriggerPanel(result.triggerFrame, result.telemetry)
+    ).toMatch(/<span>pulled pose distance<\/span>\s*<strong>0\.250<\/strong>/);
   });
 });

@@ -67,11 +67,15 @@ test("home page runs production balloon game flow without diagnostic surfaces", 
   await expect(page.locator("#wb-fusion-panel")).toHaveCount(0);
   await expect(page.locator("[data-side-trigger-tuning]")).toHaveCount(0);
   await expect(page.locator("[data-fusion-tuning]")).toHaveCount(0);
+  await expect(page.locator("[data-front-aim-calibration]")).toHaveCount(0);
+  await expect(page.locator("[data-side-trigger-calibration]")).toHaveCount(0);
   await expect(page.getByText("threshold")).not.toBeVisible();
   await expect(page.getByText("landmark")).not.toBeVisible();
   await expect(page.getByText("wireframe")).not.toBeVisible();
   await expect(page.getByText("SIDE_TRIGGER_")).not.toBeVisible();
   await expect(page.getByText("FUSION_")).not.toBeVisible();
+  await expect(page.getByText("DEFAULT_FRONT_AIM_")).not.toBeVisible();
+  await expect(page.getByText("DEFAULT_SIDE_TRIGGER_")).not.toBeVisible();
 
   await page.getByRole("button", { name: "カメラを開始" }).click();
   await expect(page.getByRole("heading", { name: "カメラ選択" })).toBeVisible();

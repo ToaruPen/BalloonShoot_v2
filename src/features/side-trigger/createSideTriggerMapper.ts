@@ -5,6 +5,10 @@ import type {
   TriggerAvailability,
   TriggerInputFrame
 } from "../../shared/types/trigger";
+import {
+  sideTriggerCalibrationStatusFor,
+  type SideTriggerCalibration
+} from "./sideTriggerCalibration";
 import type { SideTriggerTuning } from "./sideTriggerConfig";
 import {
   extractSideTriggerEvidence,
@@ -18,6 +22,7 @@ import {
 
 interface SideTriggerMapperUpdate {
   readonly detection: SideHandDetection | undefined;
+  readonly calibration: SideTriggerCalibration;
   readonly tuning: SideTriggerTuning;
   readonly timestamp?: FrameTimestamp;
 }
@@ -58,12 +63,14 @@ const telemetryFor = (
   state: SideTriggerMachineState,
   edge: TriggerInputFrame["triggerEdge"],
   evidence: SideTriggerEvidence,
+  calibration: SideTriggerCalibration,
   triggerAvailability: TriggerAvailability
 ): SideTriggerTelemetry => ({
   phase: state.phase,
   edge,
   triggerAvailability,
-  calibrationStatus: "liveTuning",
+  calibrationStatus: sideTriggerCalibrationStatusFor(calibration),
+  calibration,
   pullEvidenceScalar: evidence.pullEvidenceScalar,
   releaseEvidenceScalar: evidence.releaseEvidenceScalar,
   triggerPostureConfidence: evidence.triggerPostureConfidence,
@@ -118,7 +125,7 @@ export const createSideTriggerMapper = (): SideTriggerMapper => {
       const evidence =
         detection === undefined
           ? noHandEvidence()
-          : extractSideTriggerEvidence(detection);
+          : extractSideTriggerEvidence(detection, update.calibration);
       const timestamp = detection?.timestamp ?? update.timestamp;
       const result = updateSideTriggerState(
         machineState,
@@ -132,6 +139,7 @@ export const createSideTriggerMapper = (): SideTriggerMapper => {
         machineState,
         result.edge,
         evidence,
+        update.calibration,
         triggerAvailability
       );
 

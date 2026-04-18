@@ -4,6 +4,7 @@ import type {
   AimAvailability,
   AimInputFrame,
   AimSmoothingState,
+  FrontAimCalibrationSnapshot,
   FrontAimTelemetry
 } from "../../../../src/shared/types/aim";
 import { testTimestamp } from "./testFactory";
@@ -50,10 +51,16 @@ describe("front aim shared type contract", () => {
       aimPointViewport: frame.aimPointViewport,
       aimPointNormalized: frame.aimPointNormalized,
       sourceFrameSize: frame.sourceFrameSize,
+      calibrationStatus: "default",
+      calibration: {
+        center: { x: 0.5, y: 0.5 },
+        cornerBounds: { leftX: 0, rightX: 1, topY: 0, bottomY: 1 }
+      },
       lastLostReason: undefined
     };
 
     expect(telemetry.aimPointViewport.x).toBe(512);
+    expectTypeOf(telemetry.calibration).toEqualTypeOf<FrontAimCalibrationSnapshot>();
     expect(telemetry.lastLostReason).toBeUndefined();
   });
 
@@ -67,6 +74,11 @@ describe("front aim shared type contract", () => {
       aimPointViewport: undefined,
       aimPointNormalized: undefined,
       sourceFrameSize: undefined,
+      calibrationStatus: "default",
+      calibration: {
+        center: { x: 0.5, y: 0.5 },
+        cornerBounds: { leftX: 0, rightX: 1, topY: 0, bottomY: 1 }
+      },
       lastLostReason: undefined
     };
 

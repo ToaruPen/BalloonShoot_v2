@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createFrontAimMapper,
+  defaultFrontAimCalibration,
   FRONT_AIM_LOST_FRAME_GRACE_FRAMES
 } from "../../../../src/features/front-aim";
 import { createFrontDetection, testTimestamp } from "./testFactory";
@@ -19,10 +20,12 @@ describe("createFrontAimMapper", () => {
 
     const first = mapper.update({
       detection: firstDetection,
+      calibration: defaultFrontAimCalibration,
       viewportSize
     });
     const second = mapper.update({
       detection: secondDetection,
+      calibration: defaultFrontAimCalibration,
       viewportSize
     });
 
@@ -36,9 +39,17 @@ describe("createFrontAimMapper", () => {
 
   it("holds a recent aim estimate during brief hand loss", () => {
     const mapper = createFrontAimMapper();
-    mapper.update({ detection: createFrontDetection(), viewportSize });
+    mapper.update({
+      detection: createFrontDetection(),
+      calibration: defaultFrontAimCalibration,
+      viewportSize
+    });
 
-    const lost = mapper.update({ detection: undefined, viewportSize });
+    const lost = mapper.update({
+      detection: undefined,
+      calibration: defaultFrontAimCalibration,
+      viewportSize
+    });
 
     expect(lost.aimFrame?.aimAvailability).toBe("estimatedFromRecentFrame");
     expect(lost.aimFrame?.aimSmoothingState).toBe("recoveringAfterLoss");
@@ -50,10 +61,15 @@ describe("createFrontAimMapper", () => {
     const mapper = createFrontAimMapper();
     const tracked = mapper.update({
       detection: createFrontDetection(),
+      calibration: defaultFrontAimCalibration,
       viewportSize
     });
 
-    const transientLoss = mapper.update({ detection: undefined, viewportSize });
+    const transientLoss = mapper.update({
+      detection: undefined,
+      calibration: defaultFrontAimCalibration,
+      viewportSize
+    });
 
     expect(tracked.aimFrame?.aimAvailability).toBe("available");
     expect(transientLoss.aimFrame?.aimAvailability).toBe(
@@ -63,12 +79,24 @@ describe("createFrontAimMapper", () => {
 
   it("expires the aim estimate after the grace window", () => {
     const mapper = createFrontAimMapper();
-    mapper.update({ detection: createFrontDetection(), viewportSize });
+    mapper.update({
+      detection: createFrontDetection(),
+      calibration: defaultFrontAimCalibration,
+      viewportSize
+    });
 
     for (let i = 0; i < FRONT_AIM_LOST_FRAME_GRACE_FRAMES; i += 1) {
-      mapper.update({ detection: undefined, viewportSize });
+      mapper.update({
+        detection: undefined,
+        calibration: defaultFrontAimCalibration,
+        viewportSize
+      });
     }
-    const expired = mapper.update({ detection: undefined, viewportSize });
+    const expired = mapper.update({
+      detection: undefined,
+      calibration: defaultFrontAimCalibration,
+      viewportSize
+    });
 
     expect(expired.aimFrame).toBeUndefined();
     expect(expired.telemetry.aimAvailability).toBe("unavailable");
@@ -77,14 +105,23 @@ describe("createFrontAimMapper", () => {
 
   it("resets smoothing when the stream changes", () => {
     const mapper = createFrontAimMapper();
-    mapper.update({ detection: createFrontDetection(), viewportSize });
-    mapper.update({ detection: createFrontDetection(), viewportSize });
+    mapper.update({
+      detection: createFrontDetection(),
+      calibration: defaultFrontAimCalibration,
+      viewportSize
+    });
+    mapper.update({
+      detection: createFrontDetection(),
+      calibration: defaultFrontAimCalibration,
+      viewportSize
+    });
     const replacementDetection = createFrontDetection({
       streamId: "replacement-stream"
     });
 
     const afterStreamChange = mapper.update({
       detection: replacementDetection,
+      calibration: defaultFrontAimCalibration,
       viewportSize
     });
 
@@ -97,10 +134,15 @@ describe("createFrontAimMapper", () => {
 
   it("rejects low-confidence posture without using the recent estimate", () => {
     const mapper = createFrontAimMapper();
-    mapper.update({ detection: createFrontDetection(), viewportSize });
+    mapper.update({
+      detection: createFrontDetection(),
+      calibration: defaultFrontAimCalibration,
+      viewportSize
+    });
 
     const lowConfidence = mapper.update({
       detection: createFrontDetection({ handPresenceConfidence: 0.1 }),
+      calibration: defaultFrontAimCalibration,
       viewportSize
     });
 
@@ -113,15 +155,18 @@ describe("createFrontAimMapper", () => {
     const mapper = createFrontAimMapper();
     const tracked = mapper.update({
       detection: createFrontDetection(),
+      calibration: defaultFrontAimCalibration,
       viewportSize
     });
     const trackingLost = mapper.update({
       detection: createFrontDetection({ trackingQuality: "lost" }),
+      calibration: defaultFrontAimCalibration,
       viewportSize
     });
 
     const noDetectionAfterRejection = mapper.update({
       detection: undefined,
+      calibration: defaultFrontAimCalibration,
       viewportSize
     });
 
@@ -133,5 +178,29 @@ describe("createFrontAimMapper", () => {
     expect(noDetectionAfterRejection.telemetry.aimAvailability).toBe(
       "unavailable"
     );
+  });
+
+  it("uses calibration from each update without storing it as creation state", () => {
+    const mapper = createFrontAimMapper();
+    const detection = createFrontDetection({
+      filteredIndexTip: { x: 0.5, y: 0.5, z: 0 }
+    });
+
+    const calibrated = mapper.update({
+      detection,
+      calibration: {
+        ...defaultFrontAimCalibration,
+        center: { x: 0.6, y: 0.5 }
+      },
+      viewportSize
+    });
+    const defaulted = mapper.update({
+      detection,
+      calibration: defaultFrontAimCalibration,
+      viewportSize
+    });
+
+    expect(calibrated.aimFrame?.aimPointNormalized.x).toBe(0.4);
+    expect(defaulted.aimFrame?.aimPointNormalized.x).toBe(0.5);
   });
 });

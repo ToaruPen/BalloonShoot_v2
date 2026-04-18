@@ -3,6 +3,7 @@ import type {
   AimSmoothingState
 } from "../../shared/types/aim";
 import type { FrontHandDetection } from "../../shared/types/hand";
+import type { FrontAimCalibration } from "./frontAimCalibration";
 import {
   projectAimPointToViewport,
   type FrontAimProjectionOptions
@@ -11,6 +12,7 @@ import {
 interface MapFrontHandToAimInputOptions {
   readonly detection: FrontHandDetection;
   readonly viewportSize: { readonly width: number; readonly height: number };
+  readonly calibration: FrontAimCalibration;
   readonly projectionOptions?: FrontAimProjectionOptions;
   readonly aimSmoothingState?: AimSmoothingState;
 }
@@ -18,6 +20,7 @@ interface MapFrontHandToAimInputOptions {
 export const mapFrontHandToAimInput = ({
   detection,
   viewportSize,
+  calibration,
   projectionOptions = { objectFit: "cover" },
   aimSmoothingState = "tracking"
 }: MapFrontHandToAimInputOptions): AimInputFrame => {
@@ -27,6 +30,7 @@ export const mapFrontHandToAimInput = ({
   };
   const projection = projectAimPointToViewport({
     pointNormalized: detection.filteredFrame.landmarks.indexTip,
+    calibration,
     sourceFrameSize,
     viewportSize,
     ...projectionOptions

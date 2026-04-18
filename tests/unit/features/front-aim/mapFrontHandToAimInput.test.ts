@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { mapFrontHandToAimInput } from "../../../../src/features/front-aim";
+import {
+  defaultFrontAimCalibration,
+  mapFrontHandToAimInput
+} from "../../../../src/features/front-aim";
 import { createFrontDetection, testTimestamp } from "./testFactory";
 
 describe("mapFrontHandToAimInput", () => {
@@ -10,6 +13,7 @@ describe("mapFrontHandToAimInput", () => {
     const frame = mapFrontHandToAimInput({
       detection,
       viewportSize: { width: 640, height: 480 },
+      calibration: defaultFrontAimCalibration,
       projectionOptions: { objectFit: "cover" },
       aimSmoothingState: "tracking"
     });
@@ -31,10 +35,29 @@ describe("mapFrontHandToAimInput", () => {
     const frame = mapFrontHandToAimInput({
       detection,
       viewportSize: { width: 640, height: 480 },
+      calibration: defaultFrontAimCalibration,
       projectionOptions: { objectFit: "cover" }
     });
 
     expect(frame.aimPointViewport).toEqual({ x: 480, y: 120 });
     expect(frame.aimPointNormalized).toEqual({ x: 0.75, y: 0.25 });
+  });
+
+  it("applies front aim calibration before producing the frame", () => {
+    const detection = createFrontDetection({
+      filteredIndexTip: { x: 0.5, y: 0.5, z: 0 }
+    });
+
+    const frame = mapFrontHandToAimInput({
+      detection,
+      viewportSize: { width: 640, height: 480 },
+      calibration: {
+        ...defaultFrontAimCalibration,
+        center: { x: 0.6, y: 0.4 }
+      },
+      projectionOptions: { objectFit: "cover" }
+    });
+
+    expect(frame.aimPointNormalized).toEqual({ x: 0.4, y: 0.6 });
   });
 });

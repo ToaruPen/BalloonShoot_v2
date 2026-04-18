@@ -10,8 +10,14 @@ import {
   videoViewportSize
 } from "../../../../src/features/diagnostic-workbench/liveLandmarkInspection";
 import { renderWorkbenchHTML } from "../../../../src/features/diagnostic-workbench/renderWorkbench";
-import { getFrontAimFilterConfig } from "../../../../src/features/front-aim";
-import { getSideTriggerFilterConfig } from "../../../../src/features/side-trigger";
+import {
+  defaultFrontAimCalibration,
+  getFrontAimFilterConfig
+} from "../../../../src/features/front-aim";
+import {
+  defaultSideTriggerCalibration,
+  getSideTriggerFilterConfig
+} from "../../../../src/features/side-trigger";
 import type {
   FrontHandDetection,
   HandDetection,
@@ -660,6 +666,77 @@ describe("createLiveLandmarkInspection", () => {
     });
   });
 
+  it("passes front calibration changes to subsequent aim mapper updates", async () => {
+    const frontTracker = createFakeTracker();
+    frontTracker.detect.mockResolvedValueOnce(createHandDetection());
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(frontTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    liveInspection.setFrontAimCalibration("centerX", 0.6);
+    videos.frontVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontAimFrame?.aimPointNormalized.x).toBe(
+        0.4
+      );
+      expect(
+        liveInspection.getState().frontAimTelemetry?.calibrationStatus
+      ).toBe("liveTuning");
+    });
+  });
+
+  it("applies front calibration slider changes on the next frame, not the in-flight frame", async () => {
+    const frontTracker = createFakeTracker();
+    const firstDetection = createDeferred<ReturnType<typeof createHandDetection>>();
+    frontTracker.detect
+      .mockReturnValueOnce(firstDetection.promise)
+      .mockResolvedValueOnce(createHandDetection());
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(frontTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.frontVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+    await vi.waitFor(() => {
+      expect(frontTracker.detect).toHaveBeenCalledOnce();
+    });
+
+    liveInspection.setFrontAimCalibration("centerX", 0.6);
+    firstDetection.resolve(createHandDetection());
+
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontAimFrame?.aimPointNormalized.x).toBe(
+        0.5
+      );
+    });
+
+    videos.frontVideo.fireFrame({ captureTime: 116, presentedFrames: 2 });
+    await vi.waitFor(() => {
+      expect(frontTracker.detect).toHaveBeenCalledTimes(2);
+      expect(liveInspection.getState().frontAimFrame?.aimPointNormalized.x).toBe(
+        0.4
+      );
+    });
+  });
+
   it("clears front aim snapshots when leaving preview", async () => {
     const frontTracker = createFakeTracker();
     frontTracker.detect.mockResolvedValueOnce(createHandDetection());
@@ -975,6 +1052,62 @@ describe("createLiveLandmarkInspection", () => {
     });
     expect(liveInspection.getState().sideTriggerFrame?.triggerEdge).toBe(
       "none"
+    );
+  });
+
+  it("passes side calibration changes to subsequent trigger evidence updates", async () => {
+    const sideTracker = createFakeTracker();
+    sideTracker.detect.mockResolvedValueOnce(
+      createHandDetectionWithWorld(pulledWorldLandmarks())
+    );
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(sideTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    liveInspection.setSideTriggerCalibration("pulledPoseDistance", 0.25);
+    liveInspection.setSideTriggerCalibration("openPoseDistance", 1.4);
+    videos.sideVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+
+    await vi.waitFor(() => {
+      expect(
+        liveInspection.getState().sideTriggerTelemetry?.pullEvidenceScalar
+      ).toBeGreaterThan(0.95);
+      expect(
+        liveInspection.getState().sideTriggerTelemetry?.calibrationStatus
+      ).toBe("liveTuning");
+    });
+  });
+
+  it("resets calibration to defaults when leaving preview", () => {
+    const liveInspection = createLiveLandmarkInspection();
+
+    liveInspection.setFrontAimCalibration("centerX", 0.6);
+    liveInspection.setSideTriggerCalibration("openPoseDistance", 1);
+
+    liveInspection.sync({
+      screen: "deviceSelection",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: undefined,
+      sideStream: undefined,
+      error: undefined
+    });
+
+    expect(liveInspection.getState().frontAimCalibration).toEqual(
+      defaultFrontAimCalibration
+    );
+    expect(liveInspection.getState().sideTriggerCalibration).toEqual(
+      defaultSideTriggerCalibration
     );
   });
 

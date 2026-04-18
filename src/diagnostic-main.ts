@@ -112,6 +112,14 @@ const handleClick = (e: MouseEvent): void => {
       liveInspection.resetSideTriggerTuning();
       render();
       break;
+    case "resetFrontAimCalibration":
+      liveInspection.resetFrontAimCalibration();
+      render();
+      break;
+    case "resetSideTriggerCalibration":
+      liveInspection.resetSideTriggerCalibration();
+      render();
+      break;
     case "resetFusionTuning":
       liveInspection.resetFusionTuning();
       render();
@@ -132,6 +140,30 @@ root.addEventListener("input", (e: Event) => {
   if (sideTriggerKey !== undefined) {
     liveInspection.setSideTriggerTuning(
       sideTriggerKey as Parameters<typeof liveInspection.setSideTriggerTuning>[0],
+      target.valueAsNumber
+    );
+    return;
+  }
+
+  const frontAimCalibrationKey = target.dataset["frontAimCalibration"];
+
+  if (frontAimCalibrationKey !== undefined) {
+    liveInspection.setFrontAimCalibration(
+      frontAimCalibrationKey as Parameters<
+        typeof liveInspection.setFrontAimCalibration
+      >[0],
+      target.valueAsNumber
+    );
+    return;
+  }
+
+  const sideTriggerCalibrationKey = target.dataset["sideTriggerCalibration"];
+
+  if (sideTriggerCalibrationKey !== undefined) {
+    liveInspection.setSideTriggerCalibration(
+      sideTriggerCalibrationKey as Parameters<
+        typeof liveInspection.setSideTriggerCalibration
+      >[0],
       target.valueAsNumber
     );
     return;
