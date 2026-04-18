@@ -8,6 +8,7 @@ import {
   FRONT_AIM_LOST_FRAME_GRACE_FRAMES,
   FRONT_AIM_MIN_TRACKING_CONFIDENCE
 } from "./frontAimConstants";
+import type { FrontAimCalibration } from "./frontAimCalibration";
 import type { FrontAimProjectionOptions } from "./frontAimProjection";
 import { mapFrontHandToAimInput } from "./mapFrontHandToAimInput";
 import { telemetryFromAimFrame } from "./frontAimTelemetry";
@@ -15,6 +16,7 @@ import { telemetryFromAimFrame } from "./frontAimTelemetry";
 interface FrontAimMapperUpdate {
   readonly detection: FrontHandDetection | undefined;
   readonly viewportSize: { readonly width: number; readonly height: number };
+  readonly calibration: FrontAimCalibration;
   readonly projectionOptions?: FrontAimProjectionOptions;
 }
 
@@ -104,15 +106,19 @@ export const createFrontAimMapper = (): FrontAimMapper => {
 
           return {
             aimFrame: estimatedFrame,
-            telemetry: telemetryFromAimFrame(estimatedFrame, {
-              lastLostReason: "handNotDetected"
-            })
+            telemetry: telemetryFromAimFrame(
+              estimatedFrame,
+              update.calibration,
+              {
+                lastLostReason: "handNotDetected"
+              }
+            )
           };
         }
 
         return {
           aimFrame: undefined,
-          telemetry: telemetryFromAimFrame(undefined, {
+          telemetry: telemetryFromAimFrame(undefined, update.calibration, {
             lastLostReason: "handNotDetected"
           })
         };
@@ -123,7 +129,7 @@ export const createFrontAimMapper = (): FrontAimMapper => {
         lostFrameCount = 0;
         return {
           aimFrame: undefined,
-          telemetry: telemetryFromAimFrame(undefined, {
+          telemetry: telemetryFromAimFrame(undefined, update.calibration, {
             lastLostReason: lostReason,
             frontTrackingConfidence: detection.handPresenceConfidence
           })
@@ -134,6 +140,7 @@ export const createFrontAimMapper = (): FrontAimMapper => {
       const aimFrame = mapFrontHandToAimInput({
         detection,
         viewportSize: update.viewportSize,
+        calibration: update.calibration,
         aimSmoothingState: hasTrackedCurrentSource ? "tracking" : "coldStart",
         ...(update.projectionOptions === undefined
           ? {}
@@ -144,7 +151,7 @@ export const createFrontAimMapper = (): FrontAimMapper => {
 
       return {
         aimFrame,
-        telemetry: telemetryFromAimFrame(aimFrame)
+        telemetry: telemetryFromAimFrame(aimFrame, update.calibration)
       };
     },
     reset

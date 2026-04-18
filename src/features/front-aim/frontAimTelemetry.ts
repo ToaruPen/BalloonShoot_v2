@@ -5,6 +5,10 @@ import type {
   FrontAimLastLostReason,
   FrontAimTelemetry
 } from "../../shared/types/aim";
+import {
+  type FrontAimCalibration,
+  frontAimCalibrationStatusFor
+} from "./frontAimCalibration";
 
 interface UnavailableTelemetryPatch {
   readonly aimAvailability?: Exclude<AimAvailability, "available">;
@@ -16,8 +20,11 @@ interface UnavailableTelemetryPatch {
 
 export const telemetryFromAimFrame = (
   aimFrame: AimInputFrame | undefined,
+  calibration: FrontAimCalibration,
   patch: UnavailableTelemetryPatch = {}
 ): FrontAimTelemetry => {
+  const calibrationStatus = frontAimCalibrationStatusFor(calibration);
+
   if (aimFrame?.aimAvailability === "available") {
     return {
       aimAvailability: aimFrame.aimAvailability,
@@ -27,6 +34,8 @@ export const telemetryFromAimFrame = (
       aimPointViewport: aimFrame.aimPointViewport,
       aimPointNormalized: aimFrame.aimPointNormalized,
       sourceFrameSize: aimFrame.sourceFrameSize,
+      calibrationStatus,
+      calibration,
       lastLostReason: undefined
     };
   }
@@ -45,6 +54,8 @@ export const telemetryFromAimFrame = (
     aimPointViewport: undefined,
     aimPointNormalized: undefined,
     sourceFrameSize: undefined,
+    calibrationStatus,
+    calibration,
     lastLostReason: patch.lastLostReason
   };
 };

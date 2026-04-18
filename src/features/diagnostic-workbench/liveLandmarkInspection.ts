@@ -4,10 +4,15 @@ import {
   type MediaPipeHandTracker
 } from "../hand-tracking/createMediaPipeHandTracker";
 import {
+  FRONT_AIM_CALIBRATION_SLIDER_METADATA,
   createFrontAimMapper,
+  defaultFrontAimCalibration,
+  type FrontAimCalibration,
+  type FrontAimCalibrationKey,
   getFrontAimFilterConfig,
   resolveFrontAimViewportSize,
-  toFrontDetection
+  toFrontDetection,
+  updateFrontAimCalibrationValue
 } from "../front-aim";
 import {
   coerceFusionTuningValue,
@@ -19,14 +24,19 @@ import {
   type InputFusionMapper
 } from "../input-fusion";
 import {
+  SIDE_TRIGGER_CALIBRATION_SLIDER_METADATA,
   coerceSideTriggerTuningValue,
   createSideTriggerMapper,
+  defaultSideTriggerCalibration,
   defaultSideTriggerTuning,
   getSideTriggerFilterConfig,
   sideTriggerSliderMetadata,
+  type SideTriggerCalibration,
+  type SideTriggerCalibrationKey,
   type SideTriggerMapper,
   type SideTriggerTuning,
-  type SideTriggerTuningKey
+  type SideTriggerTuningKey,
+  updateSideTriggerCalibrationValue
 } from "../side-trigger";
 import type {
   FrameTimestamp,
@@ -41,8 +51,10 @@ import type {
 import { handPresenceConfidenceFor } from "../../shared/helpers/handConfidence";
 import type { WorkbenchState } from "./DiagnosticWorkbench";
 import { createLandmarkOverlayModel } from "./landmarkOverlay";
+import { renderFrontAimCalibrationControls } from "./renderFrontAimCalibrationControls";
 import { renderFrontAimPanel } from "./renderFrontAimPanel";
 import { renderFusionPanel } from "./renderFusionPanel";
+import { renderSideTriggerCalibrationControls } from "./renderSideTriggerCalibrationControls";
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
 import type { WorkbenchInspectionState } from "./renderWorkbench";
@@ -64,6 +76,13 @@ interface LaneTrackingOptions {
 interface LiveLandmarkInspection {
   getState(): WorkbenchInspectionState;
   sync(state: WorkbenchState): void;
+  setFrontAimCalibration(key: FrontAimCalibrationKey, value: number): void;
+  resetFrontAimCalibration(): void;
+  setSideTriggerCalibration(
+    key: SideTriggerCalibrationKey,
+    value: number
+  ): void;
+  resetSideTriggerCalibration(): void;
   setSideTriggerTuning(key: SideTriggerTuningKey, value: number): void;
   resetSideTriggerTuning(): void;
   setFusionTuning(key: FusionTuningKey, value: number): void;
@@ -88,6 +107,8 @@ const createInitialInspectionState = (): WorkbenchInspectionState => ({
   frontAimTelemetry: undefined,
   sideTriggerFrame: undefined,
   sideTriggerTelemetry: undefined,
+  frontAimCalibration: defaultFrontAimCalibration,
+  sideTriggerCalibration: defaultSideTriggerCalibration,
   sideTriggerTuning: defaultSideTriggerTuning,
   fusionFrame: undefined,
   fusionTelemetry: undefined,
@@ -200,12 +221,52 @@ const videoReadyForBitmap = (video: HTMLVideoElement): boolean =>
 
 type LaneDetection = FrontHandDetection | SideHandDetection | undefined;
 
+interface FrameCalibrationContext {
+  readonly frontAimCalibration: FrontAimCalibration;
+  readonly sideTriggerCalibration: SideTriggerCalibration;
+  readonly sideTriggerTuning: SideTriggerTuning;
+  readonly fusionTuning: FusionTuning;
+}
+
+const frontCalibrationValueFor = (
+  calibration: FrontAimCalibration,
+  key: FrontAimCalibrationKey
+): number => {
+  switch (key) {
+    case "centerX":
+      return calibration.center.x;
+    case "centerY":
+      return calibration.center.y;
+    case "cornerLeftX":
+      return calibration.cornerBounds.leftX;
+    case "cornerRightX":
+      return calibration.cornerBounds.rightX;
+    case "cornerTopY":
+      return calibration.cornerBounds.topY;
+    case "cornerBottomY":
+      return calibration.cornerBounds.bottomY;
+  }
+};
+
+const sideCalibrationValueFor = (
+  calibration: SideTriggerCalibration,
+  key: SideTriggerCalibrationKey
+): number => {
+  switch (key) {
+    case "openPoseDistance":
+      return calibration.openPose.normalizedThumbDistance;
+    case "pulledPoseDistance":
+      return calibration.pulledPose.normalizedThumbDistance;
+  }
+};
+
 export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   let inspectionState = createInitialInspectionState();
   let activeTracking: ActiveTracking | undefined;
   let frontAimMapper = createFrontAimMapper();
   let sideTriggerMapper: SideTriggerMapper = createSideTriggerMapper();
   let inputFusionMapper: InputFusionMapper = createInputFusionMapper();
+  let syncedScreen: WorkbenchState["screen"] | undefined;
 
   const setInspection = (patch: Partial<WorkbenchInspectionState>): void => {
     inspectionState = { ...inspectionState, ...patch };
@@ -274,6 +335,16 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
         inspectionState.fusionTelemetry
       )
     );
+    updateOuterHTML(
+      "wb-front-aim-calibration-panel",
+      renderFrontAimCalibrationControls(inspectionState.frontAimCalibration)
+    );
+    updateOuterHTML(
+      "wb-side-trigger-calibration-panel",
+      renderSideTriggerCalibrationControls(
+        inspectionState.sideTriggerCalibration
+      )
+    );
   };
 
   const setLaneHealth = (
@@ -298,33 +369,42 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     );
   };
 
-  const currentFusionContext = () => ({
+  const frameCalibrationContext = (): FrameCalibrationContext => ({
+    frontAimCalibration: inspectionState.frontAimCalibration,
+    sideTriggerCalibration: inspectionState.sideTriggerCalibration,
+    sideTriggerTuning: inspectionState.sideTriggerTuning,
+    fusionTuning: inspectionState.fusionTuning
+  });
+
+  const currentFusionContext = (context: FrameCalibrationContext) => ({
     frontLaneHealth: inspectionState.frontLaneHealth,
     sideLaneHealth: inspectionState.sideLaneHealth,
-    tuning: inspectionState.fusionTuning
+    tuning: context.fusionTuning
   });
 
   const setLaneDetection = (
     role: LaneTrackingOptions["role"],
     detection: FrontHandDetection | SideHandDetection | undefined,
     timestamp: FrameTimestamp,
-    video: HTMLVideoElement
+    video: HTMLVideoElement,
+    context: FrameCalibrationContext
   ): void => {
     if (role === "sideTrigger") {
       const sideResult = sideTriggerMapper.update({
         detection: detection as SideHandDetection | undefined,
         timestamp,
-        tuning: inspectionState.sideTriggerTuning
+        calibration: context.sideTriggerCalibration,
+        tuning: context.sideTriggerTuning
       });
       const fusionResult =
         sideResult.triggerFrame === undefined
           ? inputFusionMapper.updateTriggerUnavailable(
               timestamp,
-              currentFusionContext()
+              currentFusionContext(context)
             )
           : inputFusionMapper.updateTriggerFrame(
               sideResult.triggerFrame,
-              currentFusionContext()
+              currentFusionContext(context)
             );
       setInspection({
         sideDetection: detection as SideHandDetection | undefined,
@@ -340,17 +420,18 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     const frontResult = frontAimMapper.update({
       detection: frontDetection,
       viewportSize: videoViewportSize(video, frontDetection),
+      calibration: context.frontAimCalibration,
       projectionOptions: { objectFit: "cover" }
     });
     const fusionResult =
       frontResult.aimFrame === undefined
         ? inputFusionMapper.updateAimUnavailable(
             timestamp,
-            currentFusionContext()
+            currentFusionContext(context)
           )
         : inputFusionMapper.updateAimFrame(
             frontResult.aimFrame,
-            currentFusionContext()
+            currentFusionContext(context)
           );
 
     setInspection({
@@ -418,6 +499,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       }
 
       const timestamp = createFrameTimestamp(metadata, performance.now());
+      const context = frameCalibrationContext();
       setLaneTimestamp(options.role, timestamp);
 
       if (!videoReadyForBitmap(options.video)) {
@@ -456,7 +538,13 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
         }
 
         setLaneHealth(options.role, "tracking");
-        setLaneDetection(options.role, laneDetection, timestamp, options.video);
+        setLaneDetection(
+          options.role,
+          laneDetection,
+          timestamp,
+          options.video,
+          context
+        );
       } catch (error: unknown) {
         if (isStopped()) {
           return;
@@ -525,10 +613,23 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     };
   };
 
-  const resetTrackingState = (): void => {
-    const { fusionTuning, sideTriggerTuning } = inspectionState;
+  const resetTrackingState = (
+    options: { readonly resetCalibration?: boolean } = {}
+  ): void => {
+    const {
+      frontAimCalibration,
+      fusionTuning,
+      sideTriggerCalibration,
+      sideTriggerTuning
+    } = inspectionState;
+    const calibrationPatch =
+      options.resetCalibration === true
+        ? {}
+        : { frontAimCalibration, sideTriggerCalibration };
+
     inspectionState = {
       ...createInitialInspectionState(),
+      ...calibrationPatch,
       sideTriggerTuning,
       fusionTuning
     };
@@ -544,13 +645,19 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   };
 
   const sync = (state: WorkbenchState): void => {
+    const previousScreen = syncedScreen;
+    syncedScreen = state.screen;
+
     if (
       state.screen !== "previewing" ||
       state.frontStream === undefined ||
       state.sideStream === undefined
     ) {
       stopActiveTracking();
-      resetTrackingState();
+      resetTrackingState({
+        resetCalibration:
+          previousScreen === "previewing" && state.screen === "deviceSelection"
+      });
       return;
     }
 
@@ -605,6 +712,54 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       return inspectionState;
     },
     sync,
+    setFrontAimCalibration(key, value) {
+      const metadata = FRONT_AIM_CALIBRATION_SLIDER_METADATA.find(
+        (item) => item.key === key
+      );
+
+      if (metadata === undefined) {
+        return;
+      }
+
+      const frontAimCalibration = updateFrontAimCalibrationValue(
+        inspectionState.frontAimCalibration,
+        metadata,
+        value
+      );
+
+      setInspection({ frontAimCalibration });
+      updateText(
+        `wb-front-aim-calibration-value-${key}`,
+        String(frontCalibrationValueFor(frontAimCalibration, key))
+      );
+    },
+    resetFrontAimCalibration() {
+      setInspection({ frontAimCalibration: defaultFrontAimCalibration });
+    },
+    setSideTriggerCalibration(key, value) {
+      const metadata = SIDE_TRIGGER_CALIBRATION_SLIDER_METADATA.find(
+        (item) => item.key === key
+      );
+
+      if (metadata === undefined) {
+        return;
+      }
+
+      const sideTriggerCalibration = updateSideTriggerCalibrationValue(
+        inspectionState.sideTriggerCalibration,
+        metadata,
+        value
+      );
+
+      setInspection({ sideTriggerCalibration });
+      updateText(
+        `wb-side-trigger-calibration-value-${key}`,
+        String(sideCalibrationValueFor(sideTriggerCalibration, key))
+      );
+    },
+    resetSideTriggerCalibration() {
+      setInspection({ sideTriggerCalibration: defaultSideTriggerCalibration });
+    },
     setSideTriggerTuning(key, value) {
       const metadata = sideTriggerSliderMetadata.find(
         (item) => item.key === key
@@ -646,7 +801,8 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     updateDom,
     destroy() {
       stopActiveTracking();
-      resetTrackingState();
+      resetTrackingState({ resetCalibration: true });
+      syncedScreen = undefined;
     }
   };
 };

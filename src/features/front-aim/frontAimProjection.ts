@@ -1,4 +1,5 @@
 import type { AimFrameSize, AimPoint2D } from "../../shared/types/aim";
+import type { FrontAimCalibration } from "./frontAimCalibration";
 
 export type FrontAimObjectFit = "cover";
 
@@ -9,6 +10,7 @@ export interface FrontAimProjectionOptions {
 
 interface FrontAimProjectionInput extends FrontAimProjectionOptions {
   readonly pointNormalized: AimPoint2D;
+  readonly calibration: FrontAimCalibration;
   readonly sourceFrameSize: AimFrameSize;
   readonly viewportSize: AimFrameSize;
 }
@@ -24,12 +26,32 @@ const clamp = (value: number, min: number, max: number): number =>
 const roundCoordinate = (value: number): number =>
   Number.parseFloat(value.toFixed(6));
 
+const calibratedPointFor = (
+  point: AimPoint2D,
+  calibration: FrontAimCalibration
+): AimPoint2D => {
+  const { leftX, rightX, topY, bottomY } = calibration.cornerBounds;
+  const spanX = Math.max(Number.EPSILON, rightX - leftX);
+  const spanY = Math.max(Number.EPSILON, bottomY - topY);
+  const boundedX = (point.x - leftX) / spanX;
+  const boundedY = (point.y - topY) / spanY;
+  const centerInBoundsX = (calibration.center.x - leftX) / spanX;
+  const centerInBoundsY = (calibration.center.y - topY) / spanY;
+
+  return {
+    x: clamp(boundedX + (0.5 - centerInBoundsX), 0, 1),
+    y: clamp(boundedY + (0.5 - centerInBoundsY), 0, 1)
+  };
+};
+
 export const projectAimPointToViewport = ({
   pointNormalized,
+  calibration,
   sourceFrameSize,
   viewportSize,
   mirrorX = false
 }: FrontAimProjectionInput): FrontAimProjectionResult => {
+  const calibratedPoint = calibratedPointFor(pointNormalized, calibration);
   const scale = Math.max(
     viewportSize.width / sourceFrameSize.width,
     viewportSize.height / sourceFrameSize.height
@@ -39,8 +61,8 @@ export const projectAimPointToViewport = ({
   const offsetX = (viewportSize.width - renderedWidth) / 2;
   const offsetY = (viewportSize.height - renderedHeight) / 2;
 
-  const sourceX = pointNormalized.x * sourceFrameSize.width;
-  const sourceY = pointNormalized.y * sourceFrameSize.height;
+  const sourceX = calibratedPoint.x * sourceFrameSize.width;
+  const sourceY = calibratedPoint.y * sourceFrameSize.height;
   const projectedX = sourceX * scale + offsetX;
   const projectedY = sourceY * scale + offsetY;
   const mirroredX = mirrorX ? viewportSize.width - projectedX : projectedX;

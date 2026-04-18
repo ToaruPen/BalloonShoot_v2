@@ -352,6 +352,10 @@ describe("M5 import boundaries", () => {
     expect(indexHtml).not.toContain("data-side-trigger-tuning");
     expect(indexHtml).not.toContain("FUSION_MAX_PAIR_DELTA_MS");
     expect(indexHtml).not.toContain("data-fusion-tuning");
+    expect(indexHtml).not.toContain("DEFAULT_FRONT_AIM_CENTER_X");
+    expect(indexHtml).not.toContain("DEFAULT_SIDE_TRIGGER_OPEN_POSE_DISTANCE");
+    expect(indexHtml).not.toContain("data-front-aim-calibration");
+    expect(indexHtml).not.toContain("data-side-trigger-calibration");
     expect(indexHtml).not.toContain("wb-fusion-panel");
     expect(indexHtml).not.toContain("pairedFrontAndSide");
     expect(indexHtml).not.toContain("timestampGapTooLarge");

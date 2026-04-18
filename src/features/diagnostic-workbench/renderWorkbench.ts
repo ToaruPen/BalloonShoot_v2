@@ -25,13 +25,21 @@ import {
   type FusionTuning
 } from "../input-fusion";
 import {
+  defaultFrontAimCalibration,
+  type FrontAimCalibration
+} from "../front-aim";
+import {
+  defaultSideTriggerCalibration,
   defaultSideTriggerTuning,
+  type SideTriggerCalibration,
   type SideTriggerTuning
 } from "../side-trigger";
 import { formatFrameTimestamp } from "./timestampFormat";
+import { renderFrontAimCalibrationControls } from "./renderFrontAimCalibrationControls";
 import { renderFrontAimPanel } from "./renderFrontAimPanel";
 import { renderFusionPanel } from "./renderFusionPanel";
 import { renderFusionTuningControls } from "./renderFusionTuningControls";
+import { renderSideTriggerCalibrationControls } from "./renderSideTriggerCalibrationControls";
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
 import { renderTuningControls } from "./renderTuningControls";
@@ -45,8 +53,10 @@ export interface WorkbenchInspectionState {
   readonly sideLaneHealth: LaneHealthStatus;
   readonly frontAimFrame: AimInputFrame | undefined;
   readonly frontAimTelemetry: FrontAimTelemetry | undefined;
+  readonly frontAimCalibration: FrontAimCalibration;
   readonly sideTriggerFrame: TriggerInputFrame | undefined;
   readonly sideTriggerTelemetry: SideTriggerTelemetry | undefined;
+  readonly sideTriggerCalibration: SideTriggerCalibration;
   readonly sideTriggerTuning: SideTriggerTuning;
   readonly fusionFrame: FusedGameInputFrame | undefined;
   readonly fusionTelemetry: FusionTelemetry | undefined;
@@ -149,8 +159,10 @@ const defaultInspectionState: WorkbenchInspectionState = {
   sideLaneHealth: "notStarted",
   frontAimFrame: undefined,
   frontAimTelemetry: undefined,
+  frontAimCalibration: defaultFrontAimCalibration,
   sideTriggerFrame: undefined,
   sideTriggerTelemetry: undefined,
+  sideTriggerCalibration: defaultSideTriggerCalibration,
   sideTriggerTuning: defaultSideTriggerTuning,
   fusionFrame: undefined,
   fusionTelemetry: undefined,
@@ -232,6 +244,8 @@ const renderPreviewing = (
       )}
     </div>
     ${renderFusionPanel(inspection.fusionFrame, inspection.fusionTelemetry)}
+    ${renderFrontAimCalibrationControls(inspection.frontAimCalibration)}
+    ${renderSideTriggerCalibrationControls(inspection.sideTriggerCalibration)}
     ${renderTuningControls(inspection.sideTriggerTuning)}
     ${renderFusionTuningControls(inspection.fusionTuning)}
     <div class="wb-controls">

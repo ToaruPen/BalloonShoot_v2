@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createSideTriggerMapper } from "../../../../src/features/side-trigger/createSideTriggerMapper";
-import { defaultSideTriggerTuning } from "../../../../src/features/side-trigger/sideTriggerConfig";
+import {
+  createSideTriggerMapper,
+  defaultSideTriggerCalibration,
+  defaultSideTriggerTuning
+} from "../../../../src/features/side-trigger";
 import {
   createSideDetection,
   openWorldLandmarks,
@@ -11,6 +14,7 @@ import {
 const feedOpenPose = (mapper: ReturnType<typeof createSideTriggerMapper>) =>
   mapper.update({
     detection: createSideDetection({ worldLandmarks: openWorldLandmarks() }),
+    calibration: defaultSideTriggerCalibration,
     tuning: defaultSideTriggerTuning
   });
 
@@ -23,6 +27,7 @@ const feedPulledPose = (
       worldLandmarks: pulledWorldLandmarks(),
       timestamp: testTimestamp(frameTimestampMs)
     }),
+    calibration: defaultSideTriggerCalibration,
     tuning: defaultSideTriggerTuning
   });
 
@@ -35,6 +40,7 @@ describe("createSideTriggerMapper", () => {
         worldLandmarks: openWorldLandmarks(),
         timestamp
       }),
+      calibration: defaultSideTriggerCalibration,
       tuning: defaultSideTriggerTuning
     });
 
@@ -65,6 +71,7 @@ describe("createSideTriggerMapper", () => {
         worldLandmarks: pulledWorldLandmarks(),
         sideViewQuality: "frontLike"
       }),
+      calibration: defaultSideTriggerCalibration,
       tuning: defaultSideTriggerTuning
     });
 
@@ -88,6 +95,7 @@ describe("createSideTriggerMapper", () => {
         worldLandmarks: pulledWorldLandmarks(),
         timestamp: testTimestamp(2000)
       }),
+      calibration: defaultSideTriggerCalibration,
       tuning: defaultSideTriggerTuning
     });
 
@@ -101,11 +109,32 @@ describe("createSideTriggerMapper", () => {
     const mapper = createSideTriggerMapper();
     const result = mapper.update({
       detection: undefined,
+      calibration: defaultSideTriggerCalibration,
       tuning: defaultSideTriggerTuning
     });
 
     expect(result.triggerFrame).toBeUndefined();
     expect(result.telemetry.triggerAvailability).toBe("unavailable");
     expect(result.telemetry.phase).toBe("SideTriggerNoHand");
+    expect(result.telemetry.calibrationStatus).toBe("default");
+    expect(result.telemetry.calibration).toEqual(defaultSideTriggerCalibration);
+  });
+
+  it("forwards calibration into evidence extraction on each update", () => {
+    const mapper = createSideTriggerMapper();
+
+    const result = mapper.update({
+      detection: createSideDetection({
+        worldLandmarks: pulledWorldLandmarks()
+      }),
+      calibration: {
+        openPose: { normalizedThumbDistance: 1.4 },
+        pulledPose: { normalizedThumbDistance: 0.25 }
+      },
+      tuning: defaultSideTriggerTuning
+    });
+
+    expect(result.telemetry.pullEvidenceScalar).toBeGreaterThan(0.95);
+    expect(result.telemetry.calibrationStatus).toBe("liveTuning");
   });
 });

@@ -39,7 +39,16 @@ export type SideTriggerRejectReason =
   | "sideViewQualityRejected"
   | "lowHandConfidence";
 
-export type SideTriggerCalibrationStatus = "uncalibrated" | "liveTuning";
+export type SideTriggerCalibrationStatus = "default" | "liveTuning";
+
+export interface SideTriggerCalibrationSnapshot {
+  readonly openPose: {
+    readonly normalizedThumbDistance: number;
+  };
+  readonly pulledPose: {
+    readonly normalizedThumbDistance: number;
+  };
+}
 
 export interface TriggerInputFrame {
   readonly laneRole: "sideTrigger";
@@ -59,6 +68,7 @@ export interface SideTriggerTelemetry {
   readonly edge: TriggerEdge;
   readonly triggerAvailability: TriggerAvailability;
   readonly calibrationStatus: SideTriggerCalibrationStatus;
+  readonly calibration: SideTriggerCalibrationSnapshot;
   readonly pullEvidenceScalar: number;
   readonly releaseEvidenceScalar: number;
   readonly triggerPostureConfidence: number;

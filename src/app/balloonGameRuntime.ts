@@ -9,6 +9,7 @@ import {
 import { createFrameTimestamp } from "../features/camera/frameTimestamp";
 import {
   createFrontAimMapper,
+  defaultFrontAimCalibration,
   getFrontAimFilterConfig,
   resolveFrontAimViewportSize,
   toFrontDetection
@@ -24,6 +25,7 @@ import {
 } from "../features/input-fusion";
 import {
   createSideTriggerMapper,
+  defaultSideTriggerCalibration,
   defaultSideTriggerTuning,
   getSideTriggerFilterConfig,
   toSideDetection,
@@ -374,6 +376,7 @@ export const createBalloonGameRuntime = ({
     });
     const frontResult = frontAimMapper.update({
       detection: frontDetection,
+      calibration: defaultFrontAimCalibration,
       viewportSize: viewport,
       projectionOptions: { objectFit: "cover", mirrorX: true }
     });
@@ -406,6 +409,7 @@ export const createBalloonGameRuntime = ({
     const sideResult = sideTriggerMapper.update({
       detection: sideDetection,
       timestamp,
+      calibration: defaultSideTriggerCalibration,
       tuning: defaultSideTriggerTuning
     });
     latestFusedFrame =

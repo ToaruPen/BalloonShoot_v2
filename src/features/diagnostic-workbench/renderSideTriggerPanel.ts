@@ -36,6 +36,7 @@ export const renderSideTriggerPanel = (
     triggerFrame === undefined ? "unavailable" : String(triggerFrame.triggerPulled);
   const lastReject =
     telemetry === undefined ? "unavailable" : telemetry.lastRejectReason ?? "none";
+  const calibration = telemetry?.calibration;
   const shotCommitted =
     edge.includes("shotCommitted")
       ? '<p class="wb-shot-committed">SHOT COMMITTED</p>'
@@ -49,6 +50,8 @@ export const renderSideTriggerPanel = (
         ${renderValue("phase", phase ?? "unavailable")}
         ${renderValue("triggerEdge", edge)}
         ${renderValue("calibration", telemetry?.calibrationStatus ?? "unavailable")}
+        ${renderValue("open pose distance", formatScalarOrUnavailable(calibration?.openPose.normalizedThumbDistance))}
+        ${renderValue("pulled pose distance", formatScalarOrUnavailable(calibration?.pulledPose.normalizedThumbDistance))}
         ${renderValue("triggerPulled", triggerPulled)}
         ${renderValue("pull evidence", formatScalarOrUnavailable(telemetry?.pullEvidenceScalar))}
         ${renderValue("release evidence", formatScalarOrUnavailable(telemetry?.releaseEvidenceScalar))}

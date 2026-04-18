@@ -1,4 +1,15 @@
 export {
+  SIDE_TRIGGER_CALIBRATION_SLIDER_METADATA,
+  coerceSideTriggerCalibrationValue,
+  defaultSideTriggerCalibration,
+  sideTriggerCalibrationStatusFor,
+  updateSideTriggerCalibrationValue
+} from "./sideTriggerCalibration";
+export type {
+  SideTriggerCalibration,
+  SideTriggerCalibrationKey
+} from "./sideTriggerCalibration";
+export {
   coerceSideTriggerTuningValue,
   defaultSideTriggerTuning,
   sideTriggerSliderMetadata

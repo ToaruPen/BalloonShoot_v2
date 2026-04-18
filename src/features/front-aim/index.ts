@@ -1,5 +1,16 @@
 export { createFrontAimMapper } from "./createFrontAimMapper";
 export {
+  FRONT_AIM_CALIBRATION_SLIDER_METADATA,
+  coerceFrontAimCalibrationValue,
+  defaultFrontAimCalibration,
+  frontAimCalibrationStatusFor,
+  updateFrontAimCalibrationValue
+} from "./frontAimCalibration";
+export type {
+  FrontAimCalibration,
+  FrontAimCalibrationKey
+} from "./frontAimCalibration";
+export {
   getFrontAimFilterConfig,
   resolveFrontAimViewportSize,
   toFrontDetection

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderSideTriggerPanel } from "../../../../src/features/diagnostic-workbench/renderSideTriggerPanel";
+import { defaultSideTriggerCalibration } from "../../../../src/features/side-trigger";
 import type {
   SideTriggerTelemetry,
   SideTriggerPhase,
@@ -36,6 +37,10 @@ const createTelemetry = (
   edge: "none",
   triggerAvailability: "available",
   calibrationStatus: "liveTuning",
+  calibration: {
+    ...defaultSideTriggerCalibration,
+    openPose: { normalizedThumbDistance: 1.1 }
+  },
   pullEvidenceScalar: 0.1234,
   releaseEvidenceScalar: 0.9876,
   triggerPostureConfidence: 0.8123,
@@ -64,6 +69,7 @@ describe("renderSideTriggerPanel", () => {
       edge: "none",
       triggerAvailability: "available",
       calibrationStatus: "liveTuning",
+      calibration: defaultSideTriggerCalibration,
       pullEvidenceScalar: 0.1234,
       releaseEvidenceScalar: 0.9876,
       triggerPostureConfidence: 0.8123,
@@ -79,6 +85,8 @@ describe("renderSideTriggerPanel", () => {
     expect(html).toContain("0.123");
     expect(html).toContain("release evidence");
     expect(html).toContain("0.988");
+    expect(html).toContain("open pose distance");
+    expect(html).toContain("1.200");
     expect(html).toContain("cooldown");
     expect(html).toContain("4");
   });
@@ -123,6 +131,9 @@ describe("renderSideTriggerPanel", () => {
     );
     expect(html).toMatch(
       /<span>last reject<\/span>\s*<strong>unavailable<\/strong>/
+    );
+    expect(html).toMatch(
+      /<span>open pose distance<\/span>\s*<strong>unavailable<\/strong>/
     );
   });
 

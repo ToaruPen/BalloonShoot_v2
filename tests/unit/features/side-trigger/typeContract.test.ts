@@ -3,6 +3,7 @@ import type { FrameTimestamp } from "../../../../src/shared/types/camera";
 import type { SideViewQuality } from "../../../../src/shared/types/hand";
 import type {
   SideTriggerDwellFrameCounts,
+  SideTriggerTelemetry,
   SideTriggerPhase,
   TriggerEdge,
   TriggerInputFrame
@@ -38,5 +39,35 @@ describe("side trigger shared type contract", () => {
     expect(frame.timestamp.frameTimestampMs).toBe(1000);
     expect(frame.laneRole).toBe("sideTrigger");
     expectTypeOf(frame.sideTriggerPhase).toEqualTypeOf<SideTriggerPhase>();
+  });
+
+  it("accepts side trigger telemetry with calibration snapshot", () => {
+    const telemetry: SideTriggerTelemetry = {
+      phase: "SideTriggerOpenReady",
+      edge: "none",
+      triggerAvailability: "available",
+      calibrationStatus: "default",
+      calibration: {
+        openPose: { normalizedThumbDistance: 1.2 },
+        pulledPose: { normalizedThumbDistance: 0 }
+      },
+      pullEvidenceScalar: 0.1,
+      releaseEvidenceScalar: 0.9,
+      triggerPostureConfidence: 0.8,
+      shotCandidateConfidence: 0.1,
+      dwellFrameCounts: {
+        pullDwellFrames: 0,
+        releaseDwellFrames: 0,
+        stablePoseFrames: 1,
+        lostHandFrames: 0,
+        cooldownRemainingFrames: 0
+      },
+      cooldownRemainingFrames: 0,
+      lastRejectReason: undefined,
+      usedWorldLandmarks: true
+    };
+
+    expect(telemetry.calibrationStatus).toBe("default");
+    expect(telemetry.calibration.openPose.normalizedThumbDistance).toBe(1.2);
   });
 });

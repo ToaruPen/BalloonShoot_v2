@@ -5,6 +5,12 @@ import type {
   SideHandDetection,
   SideViewQuality
 } from "../../shared/types/hand";
+import type { SideTriggerCalibration } from "./sideTriggerCalibration";
+import {
+  DEFAULT_SIDE_TRIGGER_OPEN_POSE_DISTANCE,
+  DEFAULT_SIDE_TRIGGER_PULLED_POSE_DISTANCE,
+  MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN
+} from "./sideTriggerConstants";
 
 export interface SideTriggerEvidence {
   readonly sideHandDetected: boolean;
@@ -37,7 +43,8 @@ const sideViewRejectReason = (
   quality === "good" ? undefined : "sideViewQualityRejected";
 
 const computeScalars = (
-  worldLandmarks: HandLandmarkSet
+  worldLandmarks: HandLandmarkSet,
+  calibration: SideTriggerCalibration
 ): {
   pullEvidenceScalar: number;
   releaseEvidenceScalar: number;
@@ -49,15 +56,28 @@ const computeScalars = (
   const normalizedThumbDistance =
     distance(worldLandmarks.thumbTip, worldLandmarks.indexMcp) /
     referenceLength;
+  const observedSpan = Math.max(
+    MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN,
+    calibration.openPose.normalizedThumbDistance -
+      calibration.pulledPose.normalizedThumbDistance
+  );
+  const canonicalThumbDistance =
+    DEFAULT_SIDE_TRIGGER_PULLED_POSE_DISTANCE +
+    ((normalizedThumbDistance -
+      calibration.pulledPose.normalizedThumbDistance) /
+      observedSpan) *
+      (DEFAULT_SIDE_TRIGGER_OPEN_POSE_DISTANCE -
+        DEFAULT_SIDE_TRIGGER_PULLED_POSE_DISTANCE);
 
   return {
-    pullEvidenceScalar: clamp01(1 - normalizedThumbDistance),
-    releaseEvidenceScalar: clamp01((normalizedThumbDistance - 0.45) / 0.75)
+    pullEvidenceScalar: clamp01(1 - canonicalThumbDistance),
+    releaseEvidenceScalar: clamp01((canonicalThumbDistance - 0.45) / 0.75)
   };
 };
 
 export const extractSideTriggerEvidence = (
-  detection: SideHandDetection
+  detection: SideHandDetection,
+  calibration: SideTriggerCalibration
 ): SideTriggerEvidence => {
   const worldLandmarks = detection.rawFrame.worldLandmarks;
 
@@ -80,7 +100,7 @@ export const extractSideTriggerEvidence = (
     handConfidence < MIN_HAND_CONFIDENCE ? "lowHandConfidence" : undefined;
   const rejectReason = qualityRejectReason ?? confidenceRejectReason;
   const { pullEvidenceScalar, releaseEvidenceScalar } =
-    computeScalars(worldLandmarks);
+    computeScalars(worldLandmarks, calibration);
   const qualityMultiplier = qualityRejectReason === undefined ? 1 : 0.2;
   const triggerPostureConfidence = clamp01(handConfidence * qualityMultiplier);
 
