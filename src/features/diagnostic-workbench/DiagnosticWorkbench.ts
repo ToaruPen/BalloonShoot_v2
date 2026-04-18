@@ -130,15 +130,22 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     stopStreams(state.frontStream, state.sideStream);
   };
 
-  const labelFor = (devices: MediaDeviceInfo[], deviceId: string): string => {
+  const labelFor = (
+    devices: MediaDeviceInfo[],
+    deviceId: string
+  ): string | undefined => {
     const foundIndex = devices.findIndex((d) => d.deviceId === deviceId);
     const found = foundIndex >= 0 ? devices[foundIndex] : undefined;
+
+    if (foundIndex < 0) {
+      return undefined;
+    }
 
     if (found !== undefined && found.label !== "") {
       return found.label;
     }
 
-    return foundIndex >= 0 ? `Camera ${String(foundIndex + 1)}` : "Camera";
+    return `Camera ${String(foundIndex + 1)}`;
   };
 
   const createError = (kind: WorkbenchErrorKind): WorkbenchError => {
@@ -327,8 +334,8 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
         return;
       }
 
-      const frontLabel = labelFor(state.devices, frontId);
-      const sideLabel = labelFor(state.devices, sideId);
+      const frontLabel = labelFor(state.devices, frontId) ?? "Camera";
+      const sideLabel = labelFor(state.devices, sideId) ?? "Camera";
 
       stopStreams(previousFrontStream, previousSideStream);
 
@@ -388,14 +395,18 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
           ? undefined
           : {
               ...state.frontAssignment,
-              label: labelFor(devices, state.frontAssignment.deviceId)
+              label:
+                labelFor(devices, state.frontAssignment.deviceId) ??
+                state.frontAssignment.label
             },
       sideAssignment:
         state.sideAssignment === undefined
           ? undefined
           : {
               ...state.sideAssignment,
-              label: labelFor(devices, state.sideAssignment.deviceId)
+              label:
+                labelFor(devices, state.sideAssignment.deviceId) ??
+                state.sideAssignment.label
             },
       error: undefined
     });
@@ -605,14 +616,18 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       invalidateDeviceRefresh();
       permissionEnumerationGeneration = undefined;
       pendingDeviceRefreshAfterPermission = false;
+      const nextScreen = screenForDevices(state.devices);
       stopCurrentStreams();
       update({
-        screen: "deviceSelection",
+        screen: nextScreen,
         frontAssignment: undefined,
         sideAssignment: undefined,
         frontStream: undefined,
         sideStream: undefined,
-        error: undefined
+        error:
+          nextScreen === "cameraNotFound"
+            ? createError("cameraNotFound")
+            : undefined
       });
     },
 

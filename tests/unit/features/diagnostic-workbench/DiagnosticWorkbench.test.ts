@@ -382,6 +382,31 @@ describe("createDiagnosticWorkbench", () => {
     expect(createDevicePinnedStream).toHaveBeenCalledTimes(2);
   });
 
+  it("preserves preview assignment labels when a selected camera disappears", async () => {
+    grantPermission();
+    vi.mocked(enumerateVideoDevices).mockResolvedValue([
+      createDevice("front-id", "Logitech HD"),
+      createDevice("side-id", "Side Camera")
+    ]);
+    const frontStream = createPinnedStream("front-id");
+    const sideStream = createPinnedStream("side-id");
+    vi.mocked(createDevicePinnedStream)
+      .mockResolvedValueOnce(frontStream)
+      .mockResolvedValueOnce(sideStream);
+    const workbench = createDiagnosticWorkbench();
+    await workbench.requestPermission();
+    await workbench.assignDevices("front-id", "side-id");
+    vi.mocked(enumerateVideoDevices).mockResolvedValueOnce([
+      createDevice("side-id", "Side Camera")
+    ]);
+
+    await workbench.refreshDevicesFromDeviceChange();
+
+    expect(workbench.getState().screen).toBe("previewing");
+    expect(workbench.getState().frontAssignment?.label).toBe("Logitech HD");
+    expect(workbench.getState().sideAssignment?.label).toBe("Side Camera");
+  });
+
   it("ignores stale devicechange enumeration results", async () => {
     grantPermission();
     enumerateTwoDevices();
@@ -532,6 +557,52 @@ describe("createDiagnosticWorkbench", () => {
     expect(sideStream.stopMock).toHaveBeenCalledOnce();
     expect(workbench.getState().screen).toBe("deviceSelection");
     expect(workbench.getState().frontStream).toBeUndefined();
+  });
+
+  it("routes reselect to cameraNotFound when no devices remain during preview", async () => {
+    grantPermission();
+    enumerateTwoDevices();
+    const frontStream = createPinnedStream("front-id");
+    const sideStream = createPinnedStream("side-id");
+    vi.mocked(createDevicePinnedStream)
+      .mockResolvedValueOnce(frontStream)
+      .mockResolvedValueOnce(sideStream);
+    const workbench = createDiagnosticWorkbench();
+    await workbench.requestPermission();
+    await workbench.assignDevices("front-id", "side-id");
+    vi.mocked(enumerateVideoDevices).mockResolvedValueOnce([]);
+
+    await workbench.refreshDevicesFromDeviceChange();
+    workbench.reselect();
+
+    expect(workbench.getState().screen).toBe("cameraNotFound");
+    expect(workbench.getState().error?.kind).toBe("cameraNotFound");
+    expect(workbench.getState().frontStream).toBeUndefined();
+    expect(workbench.getState().sideStream).toBeUndefined();
+  });
+
+  it("routes reselect to singleCamera when one device remains during preview", async () => {
+    grantPermission();
+    enumerateTwoDevices();
+    const frontStream = createPinnedStream("front-id");
+    const sideStream = createPinnedStream("side-id");
+    vi.mocked(createDevicePinnedStream)
+      .mockResolvedValueOnce(frontStream)
+      .mockResolvedValueOnce(sideStream);
+    const workbench = createDiagnosticWorkbench();
+    await workbench.requestPermission();
+    await workbench.assignDevices("front-id", "side-id");
+    vi.mocked(enumerateVideoDevices).mockResolvedValueOnce([
+      createDevice("front-id", "Front Camera")
+    ]);
+
+    await workbench.refreshDevicesFromDeviceChange();
+    workbench.reselect();
+
+    expect(workbench.getState().screen).toBe("singleCamera");
+    expect(workbench.getState().error).toBeUndefined();
+    expect(workbench.getState().frontStream).toBeUndefined();
+    expect(workbench.getState().sideStream).toBeUndefined();
   });
 
   it("keeps a reconnect cooldown action newer than an in-flight preview open", async () => {

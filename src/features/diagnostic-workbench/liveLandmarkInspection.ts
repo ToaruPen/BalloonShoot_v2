@@ -502,6 +502,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     let callbackId: number | undefined;
     let timeoutId: number | undefined;
     let trackerPromise: Promise<MediaPipeHandTracker> | undefined;
+    let videoGeneration = 0;
     const trackEndedObserver: { current?: { stop(): void } } = {};
 
     setLaneHealth(options.role, "capturing");
@@ -534,6 +535,14 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     };
 
     const processFrame = async (metadata: FrameTimingLike): Promise<void> => {
+      const frameVideoGeneration = videoGeneration;
+
+      const scheduleIfCurrentVideo = (): void => {
+        if (frameVideoGeneration === videoGeneration) {
+          schedule();
+        }
+      };
+
       if (isStopped()) {
         return;
       }
@@ -543,7 +552,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       setLaneTimestamp(options.role, timestamp);
 
       if (!videoReadyForBitmap(video)) {
-        schedule();
+        scheduleIfCurrentVideo();
         return;
       }
 
@@ -592,11 +601,11 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
 
         console.error("Diagnostic lane tracking failed", error);
         setLaneHealth(options.role, "failed");
-        schedule();
+        scheduleIfCurrentVideo();
         return;
       }
 
-      schedule();
+      scheduleIfCurrentVideo();
     };
 
     const schedule = (): void => {
@@ -694,6 +703,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
 
         cancelScheduledFrame();
         video = nextVideo;
+        videoGeneration += 1;
         schedule();
       },
       stop() {

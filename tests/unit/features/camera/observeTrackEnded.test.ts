@@ -13,6 +13,13 @@ const createStream = (tracks: readonly FakeTrack[]): MediaStream =>
     getTracks: vi.fn(() => [...tracks])
   }) as unknown as MediaStream;
 
+const createStreamWithoutGetVideoTracks = (
+  tracks: readonly FakeTrack[]
+): MediaStream =>
+  ({
+    getTracks: vi.fn(() => [...tracks])
+  }) as unknown as MediaStream;
+
 describe("observeTrackEnded", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -63,6 +70,23 @@ describe("observeTrackEnded", () => {
     expect(callback).toHaveBeenCalledTimes(2);
     expect(callback.mock.calls[0]?.[0].trackId).toBe("front-a");
     expect(callback.mock.calls[1]?.[0].trackId).toBe("front-b");
+  });
+
+  it("ignores non-video tracks via getTracks fallback", () => {
+    const videoTrack = new FakeTrack("video-track");
+    const audioTrack = new FakeTrack("audio-track", "audio-track", "audio");
+    const callback = vi.fn<(payload: TrackEndedPayload) => void>();
+
+    observeTrackEnded(
+      createStreamWithoutGetVideoTracks([videoTrack, audioTrack]),
+      callback
+    );
+    audioTrack.fireEnded();
+    videoTrack.fireEnded();
+
+    expect(audioTrack.listenerCount()).toBe(0);
+    expect(callback).toHaveBeenCalledOnce();
+    expect(callback.mock.calls[0]?.[0].trackId).toBe("video-track");
   });
 
   it("fails fast when the stream exposes no track accessors", () => {

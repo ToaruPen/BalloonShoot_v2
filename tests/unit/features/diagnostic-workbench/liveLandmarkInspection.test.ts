@@ -108,10 +108,11 @@ const createDevice = (deviceId: string, label: string): MediaDeviceInfo =>
 
 const createPinnedStream = (
   deviceId: string,
-  tracks: readonly FakeTrack[] = []
+  tracks: readonly FakeTrack[] = [],
+  streamId = `${deviceId}-stream`
 ): DevicePinnedStream => ({
   stream: {
-    id: `${deviceId}-stream`,
+    id: streamId,
     getVideoTracks: vi.fn(() => [...tracks]),
     getTracks: vi.fn(() => [...tracks])
   } as unknown as MediaStream,
@@ -496,6 +497,47 @@ describe("createLiveLandmarkInspection", () => {
     expect(createMediaPipeHandTrackerMock).toHaveBeenCalledTimes(2);
     expect(frontTracker.cleanup).not.toHaveBeenCalled();
     expect(sideTracker.cleanup).not.toHaveBeenCalled();
+  });
+
+  it("does not double-schedule a rebound video after an in-flight frame finishes", async () => {
+    const detection = createDeferred<HandDetection | undefined>();
+    const frontTracker = createFakeTracker();
+    frontTracker.detect.mockReturnValueOnce(detection.promise);
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(frontTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const previewState = {
+      screen: "previewing" as const,
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    };
+    const initialVideos = installPreviewVideos();
+
+    liveInspection.sync(previewState);
+    initialVideos.frontVideo.fireFrame();
+    await vi.waitFor(() => {
+      expect(frontTracker.detect).toHaveBeenCalledOnce();
+    });
+
+    const reboundVideos = installPreviewVideos();
+    liveInspection.sync(previewState);
+
+    expect(
+      reboundVideos.frontVideo.requestVideoFrameCallback
+    ).toHaveBeenCalledOnce();
+
+    detection.resolve(undefined);
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontLaneHealth).toBe("tracking");
+    });
+    await Promise.resolve();
+
+    expect(
+      reboundVideos.frontVideo.requestVideoFrameCallback
+    ).toHaveBeenCalledOnce();
   });
 
   it("preserves calibration when the same preview session re-renders fresh video elements", () => {
@@ -1342,7 +1384,11 @@ describe("createLiveLandmarkInspection", () => {
     };
     const sameDevicePreviewState = {
       ...previewState,
-      frontStream: createPinnedStream("front-id")
+      frontStream: createPinnedStream(
+        "front-id",
+        [],
+        "front-id-reconnected-stream"
+      )
     };
 
     installPreviewVideos();
