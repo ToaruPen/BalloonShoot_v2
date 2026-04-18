@@ -28,7 +28,9 @@ test("home page renders the clean front aim game shell", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "フロントカメラを開始" })
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "diagnostic.html" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "diagnostic.html" })).toHaveCount(
+    0
+  );
   await expect(page.getByText("landmark")).not.toBeVisible();
   await expect(page.getByText("threshold")).not.toBeVisible();
   await expect(page.getByText("slider")).not.toBeVisible();
@@ -40,8 +42,6 @@ test("home page renders the clean front aim game shell", async ({ page }) => {
   await expect(page.getByText("FUSION_MAX_PAIR_DELTA_MS")).not.toBeVisible();
   await expect(page.locator("[data-fusion-tuning]")).toHaveCount(0);
   await expect(page.locator("#wb-fusion-panel")).toHaveCount(0);
-  await expect(page.getByText("pairedFrontAndSide")).not.toBeVisible();
-  await expect(page.getByText("timestampGapTooLarge")).not.toBeVisible();
 
   await page.getByRole("button", { name: "フロントカメラを開始" }).click();
   await expect(

@@ -4,7 +4,10 @@ import {
   defaultFusionTuning
 } from "../../src/features/input-fusion";
 import { renderFusionPanel } from "../../src/features/diagnostic-workbench/renderFusionPanel";
-import { createAimFrame, createTriggerFrame } from "../unit/features/input-fusion/testFactory";
+import {
+  createAimFrame,
+  createTriggerFrame
+} from "../unit/features/input-fusion/testFactory";
 
 const context = {
   frontLaneHealth: "tracking" as const,
@@ -49,8 +52,9 @@ describe("diagnostic fusion workbench integration", () => {
     const result = mapper.updateAimFrame(createAimFrame(108), context);
     const html = renderFusionPanel(result.fusedFrame, result.telemetry);
 
-    expect(html).toContain("shot fired");
-    expect(html).toContain("true");
-    expect(html).toContain("shot edge consumed");
+    expect(html).toMatch(/<span>shot fired<\/span>\s*<strong>true<\/strong>/);
+    expect(html).toMatch(
+      /<span>shot edge consumed<\/span>\s*<strong>true<\/strong>/
+    );
   });
 });

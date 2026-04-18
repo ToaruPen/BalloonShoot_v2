@@ -7,7 +7,8 @@ interface ShotEdgeConsumption {
 }
 
 const isShotCommitEdge = (frame: TriggerInputFrame): boolean =>
-  frame.triggerEdge.includes("shotCommitted");
+  frame.triggerEdge === "shotCommitted" ||
+  frame.triggerEdge === "pullStarted+shotCommitted";
 
 const shotConsumptionKeyFor = (frame: TriggerInputFrame): string =>
   [
@@ -22,7 +23,10 @@ export const createShotEdgeConsumption = (): ShotEdgeConsumption => {
 
   return {
     peekIsUnconsumedShotCommit(frame) {
-      return isShotCommitEdge(frame) && !consumedKeys.has(shotConsumptionKeyFor(frame));
+      return (
+        isShotCommitEdge(frame) &&
+        !consumedKeys.has(shotConsumptionKeyFor(frame))
+      );
     },
     consumeIfShotCommit(frame) {
       if (!isShotCommitEdge(frame)) {

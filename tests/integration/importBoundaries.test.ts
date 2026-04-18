@@ -8,10 +8,17 @@ import {
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 
 const rootDir = process.cwd();
-const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
+const sourceExtensions = new Set([
+  ".ts",
+  ".tsx",
+  ".js",
+  ".jsx",
+  ".mjs",
+  ".cjs"
+]);
 
 const isSourceFile = (path: string): boolean =>
   Array.from(sourceExtensions).some((extension) => path.endsWith(extension));
@@ -45,6 +52,37 @@ const importsFrom = (absolutePath: string): string[] => {
 const relativeSourcePath = (absolutePath: string): string =>
   relative(rootDir, absolutePath);
 
+const resolveImportSpecifier = (
+  sourceFile: string,
+  specifier: string,
+  projectRoot = rootDir
+): string | undefined => {
+  if (specifier.startsWith(".")) {
+    return resolve(dirname(sourceFile), specifier);
+  }
+
+  if (specifier.startsWith("src/")) {
+    return resolve(projectRoot, specifier);
+  }
+
+  return undefined;
+};
+
+const importsForbiddenPath = (
+  sourceFile: string,
+  specifier: string,
+  forbiddenPath: string,
+  projectRoot = rootDir
+): boolean => {
+  const resolved = resolveImportSpecifier(sourceFile, specifier, projectRoot);
+  const forbiddenRoot = resolve(forbiddenPath);
+
+  return (
+    resolved !== undefined &&
+    (resolved === forbiddenRoot || resolved.startsWith(`${forbiddenRoot}/`))
+  );
+};
+
 describe("M5 import boundaries", () => {
   it("scans TypeScript, JavaScript, and JSX-family source files", () => {
     const dir = join(tmpdir(), `balloon-source-files-${String(process.pid)}`);
@@ -57,15 +95,18 @@ describe("M5 import boundaries", () => {
     writeFileSync(join(dir, "README.md"), "# ignored\n");
 
     try {
-      expect(listSourceFiles(dir).map((file) => file.slice(dir.length)).sort())
-        .toEqual([
-          "/source.cjs",
-          "/source.js",
-          "/source.jsx",
-          "/source.mjs",
-          "/source.ts",
-          "/source.tsx"
-        ]);
+      expect(
+        listSourceFiles(dir)
+          .map((file) => file.slice(dir.length))
+          .sort()
+      ).toEqual([
+        "/source.cjs",
+        "/source.js",
+        "/source.jsx",
+        "/source.mjs",
+        "/source.ts",
+        "/source.tsx"
+      ]);
     } finally {
       rmSync(dir, { force: true, recursive: true });
     }
@@ -90,10 +131,16 @@ describe("M5 import boundaries", () => {
     expect(offenders.map(relativeSourcePath)).toEqual([]);
   });
 
-  it("keeps gameplay from importing side-trigger directly", () => {
-    const gameplayFiles = listSourceFiles(join(rootDir, "src/features/gameplay"));
+  it("keeps gameplay from importing side-trigger and app shell directly", () => {
+    const gameplayFiles = listSourceFiles(
+      join(rootDir, "src/features/gameplay")
+    );
     const offenders = gameplayFiles.filter((file) =>
-      importsFrom(file).some((specifier) => specifier.includes("side-trigger"))
+      importsFrom(file).some(
+        (specifier) =>
+          specifier.includes("side-trigger") ||
+          importsForbiddenPath(file, specifier, join(rootDir, "src/app"))
+      )
     );
 
     expect(offenders.map(relativeSourcePath)).toEqual([]);
@@ -127,7 +174,9 @@ describe("M5 import boundaries", () => {
       "gameplay",
       "rendering"
     ];
-    const frontAimFiles = listSourceFiles(join(rootDir, "src/features/front-aim"));
+    const frontAimFiles = listSourceFiles(
+      join(rootDir, "src/features/front-aim")
+    );
     const offenders = frontAimFiles.filter((file) =>
       importsFrom(file).some((specifier) =>
         forbidden.some((forbiddenPart) => specifier.includes(forbiddenPart))
@@ -152,11 +201,47 @@ describe("M5 import boundaries", () => {
     );
     const offenders = fusionFiles.filter((file) =>
       importsFrom(file).some((specifier) =>
-        forbidden.some((forbiddenPart) => specifier.includes(forbiddenPart))
+        forbidden.some((forbiddenPart) =>
+          forbiddenPart === "src/app"
+            ? importsForbiddenPath(file, specifier, join(rootDir, "src/app"))
+            : specifier.includes(forbiddenPart)
+        )
       )
     );
 
     expect(offenders.map(relativeSourcePath)).toEqual([]);
+  });
+
+  it("catches input-fusion app imports written as relative paths", () => {
+    const dir = join(
+      tmpdir(),
+      `balloon-import-boundary-${String(process.pid)}`
+    );
+    const fusionDir = join(dir, "src/features/input-fusion");
+    const appDir = join(dir, "src/app");
+    rmSync(dir, { force: true, recursive: true });
+    mkdirSync(fusionDir, { recursive: true });
+    mkdirSync(appDir, { recursive: true });
+    writeFileSync(join(appDir, "state.ts"), "export const state = {};\n");
+    writeFileSync(
+      join(fusionDir, "violates.ts"),
+      'import { state } from "../../app/state";\nexport const leaked = state;\n'
+    );
+
+    try {
+      const fusionFiles = listSourceFiles(fusionDir);
+      const offenders = fusionFiles.filter((file) =>
+        importsFrom(file).some((specifier) =>
+          importsForbiddenPath(file, specifier, appDir, dir)
+        )
+      );
+
+      expect(offenders.map((file) => relative(dir, file))).toEqual([
+        "src/features/input-fusion/violates.ts"
+      ]);
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
   });
 
   it("keeps threshold slider labels out of index.html", () => {

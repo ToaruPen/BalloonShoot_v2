@@ -67,6 +67,11 @@ export const coerceFusionTuningValue = (
   value: number
 ): number => {
   const clamped = Math.min(metadata.max, Math.max(metadata.min, value));
+  const stepped =
+    metadata.step > 0
+      ? metadata.min +
+        Math.round((clamped - metadata.min) / metadata.step) * metadata.step
+      : clamped;
 
-  return Math.round(clamped);
+  return Math.min(metadata.max, Math.max(metadata.min, stepped));
 };

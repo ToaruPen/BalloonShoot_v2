@@ -420,9 +420,22 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
         return;
       }
 
-      try {
-        const tracker = await getTracker();
+      let tracker: MediaPipeHandTracker;
 
+      try {
+        tracker = await getTracker();
+      } catch (error: unknown) {
+        if (isStopped()) {
+          return;
+        }
+
+        console.error("Diagnostic lane tracker startup failed", error);
+        trackerPromise = undefined;
+        setLaneHealth(options.role, "failed");
+        return;
+      }
+
+      try {
         if (isStopped()) {
           return;
         }
@@ -437,8 +450,8 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
           return;
         }
 
-        setLaneDetection(options.role, laneDetection, timestamp, options.video);
         setLaneHealth(options.role, "tracking");
+        setLaneDetection(options.role, laneDetection, timestamp, options.video);
       } catch (error: unknown) {
         if (isStopped()) {
           return;

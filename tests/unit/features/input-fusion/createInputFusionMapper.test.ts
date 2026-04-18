@@ -120,14 +120,20 @@ describe("createInputFusionMapper", () => {
     });
 
     mapper.updateTriggerFrame(sideCommit, context);
-    expect(mapper.updateAimFrame(createAimFrame(105), context).fusedFrame.shotFired)
-      .toBe(true);
+    expect(
+      mapper.updateAimFrame(createAimFrame(105), context).fusedFrame.shotFired
+    ).toBe(true);
     mapper.resetFrontLane();
-    expect(mapper.updateTriggerFrame(createTriggerFrame(112), context).fusedFrame.fusionMode)
-      .toBe("sideOnlyTriggerDiagnostic");
+    expect(
+      mapper.updateTriggerFrame(createTriggerFrame(112), context).fusedFrame
+        .fusionMode
+    ).toBe("sideOnlyTriggerDiagnostic");
     mapper.resetSideLane();
+    // Reuse sideCommit intentionally to prove resetSideLane clears consumption
+    // keys before updateTriggerFrame and updateAimFrame pair it again.
     mapper.updateTriggerFrame(sideCommit, context);
-    expect(mapper.updateAimFrame(createAimFrame(105), context).fusedFrame.shotFired)
-      .toBe(true);
+    expect(
+      mapper.updateAimFrame(createAimFrame(105), context).fusedFrame.shotFired
+    ).toBe(true);
   });
 });

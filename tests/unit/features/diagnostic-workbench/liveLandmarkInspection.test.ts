@@ -193,7 +193,9 @@ const setupSideTrackerSequence = (): FakeTracker => {
   sideTracker.detect
     .mockResolvedValueOnce(createHandDetectionWithWorld(openWorldLandmarks()))
     .mockResolvedValueOnce(createHandDetectionWithWorld(pulledWorldLandmarks()))
-    .mockResolvedValueOnce(createHandDetectionWithWorld(pulledWorldLandmarks()));
+    .mockResolvedValueOnce(
+      createHandDetectionWithWorld(pulledWorldLandmarks())
+    );
   createMediaPipeHandTrackerMock.mockResolvedValueOnce(sideTracker);
 
   return sideTracker;
@@ -300,6 +302,7 @@ describe("createLiveLandmarkInspection", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -474,6 +477,74 @@ describe("createLiveLandmarkInspection", () => {
     expect(liveInspection.getState().fusionFrame).toBeUndefined();
   });
 
+  it("does not reschedule after permanent tracker startup failure", async () => {
+    const startupError = new Error("tracker startup failed");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    createMediaPipeHandTrackerMock.mockRejectedValueOnce(startupError);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    expect(videos.frontVideo.requestVideoFrameCallback).toHaveBeenCalledOnce();
+
+    videos.frontVideo.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontLaneHealth).toBe("failed");
+    });
+    expect(videos.frontVideo.requestVideoFrameCallback).toHaveBeenCalledOnce();
+    expect(consoleError).toHaveBeenCalledWith(
+      "Diagnostic lane tracker startup failed",
+      startupError
+    );
+  });
+
+  it("reschedules after transient detect failure on a live tracker", async () => {
+    const detectError = new Error("detect failed");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const frontTracker = createFakeTracker();
+    frontTracker.detect.mockRejectedValueOnce(detectError);
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(frontTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    expect(videos.frontVideo.requestVideoFrameCallback).toHaveBeenCalledOnce();
+
+    videos.frontVideo.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontLaneHealth).toBe("failed");
+      expect(videos.frontVideo.requestVideoFrameCallback).toHaveBeenCalledTimes(
+        2
+      );
+    });
+    expect(consoleError).toHaveBeenCalledWith(
+      "Diagnostic lane tracking failed",
+      detectError
+    );
+  });
+
   it("falls back to a 1x1 viewport when video and fallback dimensions are zero", () => {
     const video = {
       clientWidth: 0,
@@ -644,8 +715,15 @@ describe("createLiveLandmarkInspection", () => {
       expect(liveInspection.getState().fusionFrame?.fusionMode).toBe(
         "pairedFrontAndSide"
       );
-      expect(liveInspection.getState().fusionTelemetry?.timeDeltaBetweenLanesMs)
-        .toBe(12);
+      expect(
+        liveInspection.getState().fusionFrame?.frontSource.laneHealth
+      ).toBe("tracking");
+      expect(liveInspection.getState().fusionFrame?.sideSource.laneHealth).toBe(
+        "tracking"
+      );
+      expect(
+        liveInspection.getState().fusionTelemetry?.timeDeltaBetweenLanesMs
+      ).toBe(12);
     });
   });
 
@@ -691,8 +769,12 @@ describe("createLiveLandmarkInspection", () => {
     frontTracker.detect.mockResolvedValue(createHandDetection());
     sideTracker.detect
       .mockResolvedValueOnce(createHandDetectionWithWorld(openWorldLandmarks()))
-      .mockResolvedValueOnce(createHandDetectionWithWorld(pulledWorldLandmarks()))
-      .mockResolvedValueOnce(createHandDetectionWithWorld(pulledWorldLandmarks()));
+      .mockResolvedValueOnce(
+        createHandDetectionWithWorld(pulledWorldLandmarks())
+      )
+      .mockResolvedValueOnce(
+        createHandDetectionWithWorld(pulledWorldLandmarks())
+      );
     createMediaPipeHandTrackerMock
       .mockResolvedValueOnce(frontTracker)
       .mockResolvedValueOnce(sideTracker);

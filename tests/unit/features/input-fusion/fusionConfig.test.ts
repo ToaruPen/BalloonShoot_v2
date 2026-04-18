@@ -49,4 +49,21 @@ describe("fusion tuning configuration", () => {
       Math.round(metadata.min + 0.6)
     );
   });
+
+  it("snaps coerced slider values to the nearest configured step", () => {
+    const metadata = {
+      key: "maxPairDeltaMs",
+      constantName: "FUSION_MAX_PAIR_DELTA_MS",
+      displayName: "Maximum pair delta",
+      min: 10,
+      max: 30,
+      step: 5,
+      defaultValue: 20,
+      numericKind: "milliseconds"
+    } as const;
+
+    expect(coerceFusionTuningValue(metadata, 17)).toBe(15);
+    expect(coerceFusionTuningValue(metadata, 18)).toBe(20);
+    expect(coerceFusionTuningValue(metadata, 29)).toBe(30);
+  });
 });

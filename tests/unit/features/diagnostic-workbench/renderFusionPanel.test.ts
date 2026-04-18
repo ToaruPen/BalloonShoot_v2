@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import { renderFusionPanel } from "../../../../src/features/diagnostic-workbench/renderFusionPanel";
 import type { FusionTelemetry } from "../../../../src/shared/types/fusion";
 
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const pairRegex = (label: string, value: string): RegExp =>
-  new RegExp(`<span>${label}</span>\\s*<strong>${value}</strong>`);
+  new RegExp(
+    `<span>${escapeRegExp(label)}</span>\\s*<strong>${escapeRegExp(value)}</strong>`
+  );
 
 const createTelemetry = (
   patch: Partial<FusionTelemetry> = {}
@@ -36,11 +41,14 @@ describe("renderFusionPanel", () => {
   });
 
   it("renders paired mode, reject reason, shot state, and unavailable timestamps", () => {
-    const html = renderFusionPanel(undefined, createTelemetry({
-      rejectReason: "timestampGapTooLarge",
-      lastPairedFrontTimestampMs: undefined,
-      lastPairedSideTimestampMs: undefined
-    }));
+    const html = renderFusionPanel(
+      undefined,
+      createTelemetry({
+        rejectReason: "timestampGapTooLarge",
+        lastPairedFrontTimestampMs: undefined,
+        lastPairedSideTimestampMs: undefined
+      })
+    );
 
     expect(html).toMatch(pairRegex("fusion mode", "pairedFrontAndSide"));
     expect(html).toMatch(pairRegex("timestamp delta", "12.346"));
@@ -48,14 +56,21 @@ describe("renderFusionPanel", () => {
     expect(html).toMatch(pairRegex("shot fired", "true"));
     expect(html).toMatch(pairRegex("shot edge consumed", "true"));
     expect(html).toMatch(pairRegex("front lane health", "unavailable"));
-    expect(html).toMatch(pairRegex("last paired front timestamp", "unavailable"));
-    expect(html).toMatch(pairRegex("last paired side timestamp", "unavailable"));
+    expect(html).toMatch(
+      pairRegex("last paired front timestamp", "unavailable")
+    );
+    expect(html).toMatch(
+      pairRegex("last paired side timestamp", "unavailable")
+    );
   });
 
   it("escapes all telemetry text", () => {
-    const html = renderFusionPanel(undefined, createTelemetry({
-      timestampSourceSummary: `front=<>&"' side=<>&"'`
-    }));
+    const html = renderFusionPanel(
+      undefined,
+      createTelemetry({
+        timestampSourceSummary: `front=<>&"' side=<>&"'`
+      })
+    );
 
     expect(html).toContain("front=&lt;&gt;&amp;&quot;&#39;");
     expect(html).not.toContain(`front=<>&"'`);
