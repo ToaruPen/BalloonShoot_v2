@@ -68,6 +68,10 @@ test("diagnostic workbench runs permission, device selection, previews, swap, an
   await expect(page.locator("#wb-front-filtered-overlay")).toBeVisible();
   await expect(page.locator("#wb-side-raw-overlay")).toBeVisible();
   await expect(page.locator("#wb-side-filtered-overlay")).toBeVisible();
+  await expect(page.locator("#wb-front-aim-panel")).toBeVisible();
+  await expect(page.locator("#wb-front-aim-panel")).toContainText(
+    "フロント aim mapping"
+  );
   await expect(page.locator("#wb-side-world-landmarks")).toBeVisible();
   await expect(page.locator("#wb-side-trigger-panel")).toBeVisible();
   await expect(

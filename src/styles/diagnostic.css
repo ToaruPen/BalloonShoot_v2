@@ -179,6 +179,7 @@ h4 {
 }
 
 .wb-world-landmarks,
+.wb-aim-panel,
 .wb-trigger-panel,
 .wb-tuning-panel {
   margin-top: 0.75rem;
@@ -208,6 +209,7 @@ h4 {
   font-size: 0.78rem;
 }
 
+.wb-aim-grid,
 .wb-trigger-grid,
 .wb-tuning-grid {
   display: grid;
@@ -215,6 +217,7 @@ h4 {
   gap: 0.5rem;
 }
 
+.wb-aim-value,
 .wb-trigger-value,
 .wb-tuning-control {
   display: grid;
@@ -224,12 +227,14 @@ h4 {
   font-size: 0.76rem;
 }
 
+.wb-aim-value span,
 .wb-trigger-value span,
 .wb-tuning-control span {
   color: #a8d8ea;
   overflow-wrap: anywhere;
 }
 
+.wb-aim-value strong,
 .wb-trigger-value strong,
 .wb-tuning-control output {
   color: #fff;
@@ -265,6 +270,7 @@ h4 {
 @media (max-width: 780px) {
   .wb-preview-grid,
   .wb-inspection-panes,
+  .wb-aim-grid,
   .wb-trigger-grid,
   .wb-tuning-grid {
     grid-template-columns: 1fr;

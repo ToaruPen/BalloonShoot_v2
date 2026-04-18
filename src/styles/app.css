@@ -1,7 +1,7 @@
 :root {
   font-family: "Trebuchet MS", "Hiragino Kaku Gothic ProN", sans-serif;
-  color: #132238;
-  background: linear-gradient(180deg, #fff7cf 0%, #c8efff 100%);
+  color: #10241f;
+  background: #e8fbff;
 }
 
 body {
@@ -10,7 +10,8 @@ body {
   overflow: hidden;
 }
 
-button {
+button,
+select {
   font: inherit;
 }
 
@@ -21,25 +22,23 @@ button {
 .app-layout {
   position: relative;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top, rgb(255 255 255 / 45%), transparent 36%),
-    linear-gradient(180deg, #7ed7ff 0%, #b7f0ff 44%, #fff5bf 100%);
+  overflow: hidden;
+  background: linear-gradient(180deg, #87e7ff 0%, #e7ff87 100%);
 }
 
-.camera-underlay,
+.app-layout-start {
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.app-layout-running,
+.camera-feed,
 .game-canvas,
 .overlay-root {
   position: absolute;
   inset: 0;
-}
-
-.camera-underlay {
-  display: grid;
-  place-items: center;
-  color: rgb(19 34 56 / 68%);
-  font-size: 1rem;
-  letter-spacing: 0.04em;
-  overflow: hidden;
 }
 
 .camera-feed {
@@ -47,7 +46,7 @@ button {
   height: 100%;
   object-fit: cover;
   transform: scaleX(-1);
-  background: rgb(19 34 56 / 8%);
+  background: #0f2f2a;
 }
 
 .game-canvas {
@@ -61,51 +60,38 @@ button {
 }
 
 .overlay {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
   min-height: 100vh;
   padding: 1rem;
   box-sizing: border-box;
 }
 
-.hud,
-.screen {
-  pointer-events: auto;
-}
-
 .hud {
   display: inline-flex;
-  align-self: flex-end;
-  gap: 0.85rem;
-  padding: 0.7rem 1rem;
-  border-radius: 999px;
-  background: rgb(19 34 56 / 74%);
-  color: #fffdf1;
-  backdrop-filter: blur(8px);
+  align-items: center;
+  min-height: 2rem;
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  background: rgb(16 36 31 / 78%);
+  color: #ffffff;
   font-weight: 700;
 }
 
 .screen {
-  align-self: center;
   display: grid;
   justify-items: center;
   gap: 0.85rem;
   width: min(28rem, calc(100vw - 2rem));
-  padding: 1.6rem;
-  border-radius: 1.4rem;
-  background: rgb(255 253 241 / 78%);
-  box-shadow: 0 20px 60px rgb(19 34 56 / 18%);
+  border-radius: 8px;
+  padding: 1.4rem;
+  box-sizing: border-box;
+  background: rgb(255 255 255 / 84%);
+  box-shadow: 0 16px 44px rgb(16 36 31 / 18%);
   text-align: center;
-}
-
-.screen-playing {
-  background: rgb(255 253 241 / 54%);
 }
 
 .screen-title {
   margin: 0;
-  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-size: 2rem;
   font-weight: 800;
 }
 
@@ -114,88 +100,42 @@ button {
   line-height: 1.5;
 }
 
-.countdown {
-  margin: 0;
-  font-size: clamp(4rem, 14vw, 7rem);
-  font-weight: 900;
-  color: #ff6f61;
-  text-shadow: 0 8px 20px rgb(255 111 97 / 28%);
+.screen-button,
+.camera-select {
+  border-radius: 8px;
 }
 
 .screen-button {
   border: 0;
-  border-radius: 999px;
-  padding: 0.9rem 1.5rem;
-  background: linear-gradient(135deg, #ff7b54, #ffb547);
-  color: #132238;
+  padding: 0.85rem 1.15rem;
+  background: #00b894;
+  color: #ffffff;
   font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 12px 30px rgb(255 123 84 / 30%);
 }
 
 .screen-button:hover {
-  transform: translateY(-1px);
+  background: #009f80;
 }
 
 .screen-button:active {
   transform: translateY(1px);
 }
 
-.debug-root {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  pointer-events: auto;
-}
-
-.debug-panel {
-  display: grid;
-  gap: 0.5rem;
-  padding: 0.85rem 1rem;
-  border-radius: 0.9rem;
-  background: rgb(19 34 56 / 72%);
-  color: #fffdf1;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 14px 30px rgb(19 34 56 / 24%);
-  min-width: 13rem;
-}
-
-.debug-panel-row {
-  display: grid;
-  grid-template-columns: 4.5rem 1fr;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.debug-panel input[type="range"] {
+.camera-select {
   width: 100%;
-  accent-color: #ff7b54;
+  padding: 0.75rem;
+  border: 1px solid #178a7a;
+  background: #ffffff;
+  color: #10241f;
 }
 
 @media (max-width: 640px) {
-  .overlay {
-    padding: 0.75rem;
-  }
-
-  .hud {
-    gap: 0.6rem;
-    font-size: 0.9rem;
-  }
-
   .screen {
-    padding: 1.2rem;
+    padding: 1.1rem;
   }
 
-  .debug-root {
-    top: 0.5rem;
-    left: 0.5rem;
-    right: auto;
-  }
-
-  .debug-panel {
-    min-width: 0;
+  .screen-title {
+    font-size: 1.6rem;
   }
 }

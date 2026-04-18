@@ -5,6 +5,10 @@ import type {
   LaneHealthStatus
 } from "../../shared/types/camera";
 import type {
+  AimInputFrame,
+  FrontAimTelemetry
+} from "../../shared/types/aim";
+import type {
   FrontHandDetection,
   SideHandDetection
 } from "../../shared/types/hand";
@@ -17,6 +21,7 @@ import {
   type SideTriggerTuning
 } from "../side-trigger";
 import { formatFrameTimestamp } from "./timestampFormat";
+import { renderFrontAimPanel } from "./renderFrontAimPanel";
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
 import { renderTuningControls } from "./renderTuningControls";
@@ -28,6 +33,8 @@ export interface WorkbenchInspectionState {
   readonly sideFrameTimestamp?: FrameTimestamp;
   readonly frontLaneHealth: LaneHealthStatus;
   readonly sideLaneHealth: LaneHealthStatus;
+  readonly frontAimFrame: AimInputFrame | undefined;
+  readonly frontAimTelemetry: FrontAimTelemetry | undefined;
   readonly sideTriggerFrame: TriggerInputFrame | undefined;
   readonly sideTriggerTelemetry: SideTriggerTelemetry | undefined;
   readonly sideTriggerTuning: SideTriggerTuning;
@@ -127,6 +134,8 @@ const defaultInspectionState: WorkbenchInspectionState = {
   sideDetection: undefined,
   frontLaneHealth: "notStarted",
   sideLaneHealth: "notStarted",
+  frontAimFrame: undefined,
+  frontAimTelemetry: undefined,
   sideTriggerFrame: undefined,
   sideTriggerTelemetry: undefined,
   sideTriggerTuning: defaultSideTriggerTuning
@@ -187,7 +196,11 @@ const renderPreviewing = (
         "フロント（照準）",
         state.frontAssignment?.label ?? "未選択",
         inspection.frontLaneHealth,
-        inspection.frontDetection?.timestamp ?? inspection.frontFrameTimestamp
+        inspection.frontDetection?.timestamp ?? inspection.frontFrameTimestamp,
+        renderFrontAimPanel(
+          inspection.frontAimFrame,
+          inspection.frontAimTelemetry
+        )
       )}
       ${renderInspectionLane(
         "side",

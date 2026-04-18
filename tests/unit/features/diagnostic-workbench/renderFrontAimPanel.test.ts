@@ -1,0 +1,84 @@
+import { describe, expect, it } from "vitest";
+import { renderFrontAimPanel } from "../../../../src/features/diagnostic-workbench/renderFrontAimPanel";
+import type {
+  AimInputFrame,
+  FrontAimTelemetry
+} from "../../../../src/shared/types/aim";
+import { testTimestamp } from "../front-aim/testFactory";
+
+const createAimFrame = (): AimInputFrame => ({
+  laneRole: "frontAim",
+  timestamp: testTimestamp(),
+  aimAvailability: "available",
+  aimPointViewport: { x: 123.4567, y: 78.9 },
+  aimPointNormalized: { x: 0.192901, y: 0.164375 },
+  aimSmoothingState: "tracking",
+  frontHandDetected: true,
+  frontTrackingConfidence: 0.8765,
+  sourceFrameSize: { width: 640, height: 480 }
+});
+
+const createTelemetry = (
+  patch: Partial<FrontAimTelemetry> = {}
+): FrontAimTelemetry => ({
+  aimAvailability: "available",
+  aimSmoothingState: "tracking",
+  frontHandDetected: true,
+  frontTrackingConfidence: 0.8765,
+  aimPointViewport: { x: 123.4567, y: 78.9 },
+  aimPointNormalized: { x: 0.192901, y: 0.164375 },
+  sourceFrameSize: { width: 640, height: 480 },
+  lastLostReason: undefined,
+  ...patch
+});
+
+describe("renderFrontAimPanel", () => {
+  it("renders available aim coordinates with stable formatting", () => {
+    const html = renderFrontAimPanel(createAimFrame(), createTelemetry());
+
+    expect(html).toContain("フロント aim mapping");
+    expect(html).toMatch(
+      /<span>viewport x<\/span>\s*<strong>123\.5<\/strong>/
+    );
+    expect(html).toMatch(
+      /<span>viewport y<\/span>\s*<strong>78\.9<\/strong>/
+    );
+    expect(html).toMatch(
+      /<span>normalized x<\/span>\s*<strong>0\.193<\/strong>/
+    );
+    expect(html).toMatch(
+      /<span>tracking confidence<\/span>\s*<strong>0\.877<\/strong>/
+    );
+  });
+
+  it("renders unavailable values before the first mapped frame", () => {
+    const html = renderFrontAimPanel(undefined, undefined);
+
+    expect(html).toContain("aim mapping unavailable");
+    expect(html).toMatch(
+      /<span>viewport x<\/span>\s*<strong>unavailable<\/strong>/
+    );
+    expect(html).toMatch(
+      /<span>tracking confidence<\/span>\s*<strong>unavailable<\/strong>/
+    );
+  });
+
+  it("escapes all text values", () => {
+    const html = renderFrontAimPanel(undefined, {
+      ...createTelemetry({
+        aimAvailability: "unavailable",
+        lastLostReason: "handNotDetected"
+      }),
+      aimSmoothingState: "recoveringAfterLoss"
+    });
+
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("handNotDetected");
+  });
+
+  it("does not render raw device ids", () => {
+    const html = renderFrontAimPanel(createAimFrame(), createTelemetry());
+
+    expect(html).not.toContain("front-device");
+  });
+});

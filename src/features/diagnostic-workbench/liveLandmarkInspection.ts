@@ -12,6 +12,7 @@ import {
   type SideTriggerTuning,
   type SideTriggerTuningKey
 } from "../side-trigger";
+import { createFrontAimMapper } from "../front-aim";
 import { gameConfig } from "../../shared/config/gameConfig";
 import type {
   FrameTimestamp,
@@ -25,6 +26,7 @@ import type {
 } from "../../shared/types/hand";
 import type { WorkbenchState } from "./DiagnosticWorkbench";
 import { createLandmarkOverlayModel } from "./landmarkOverlay";
+import { renderFrontAimPanel } from "./renderFrontAimPanel";
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
 import type { WorkbenchInspectionState } from "./renderWorkbench";
@@ -64,6 +66,8 @@ const createInitialInspectionState = (): WorkbenchInspectionState => ({
   sideDetection: undefined,
   frontLaneHealth: "notStarted",
   sideLaneHealth: "notStarted",
+  frontAimFrame: undefined,
+  frontAimTelemetry: undefined,
   sideTriggerFrame: undefined,
   sideTriggerTelemetry: undefined,
   sideTriggerTuning: defaultSideTriggerTuning
@@ -89,6 +93,28 @@ const updateOuterHTML = (id: string, value: string): void => {
   if (element !== null) {
     element.outerHTML = value;
   }
+};
+
+const positiveDimension = (value: number): number | undefined =>
+  value > 0 ? value : undefined;
+
+const videoViewportSize = (
+  video: HTMLVideoElement,
+  detection: FrontHandDetection | undefined
+): { width: number; height: number } => {
+  const fallbackFrame = detection?.filteredFrame;
+  const width =
+    positiveDimension(video.clientWidth) ??
+    positiveDimension(video.videoWidth) ??
+    fallbackFrame?.width ??
+    1;
+  const height =
+    positiveDimension(video.clientHeight) ??
+    positiveDimension(video.videoHeight) ??
+    fallbackFrame?.height ??
+    1;
+
+  return { width, height };
 };
 
 const drawOverlay = (
@@ -190,6 +216,7 @@ type LaneDetection = FrontHandDetection | SideHandDetection | undefined;
 export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   let inspectionState = createInitialInspectionState();
   let activeTracking: ActiveTracking | undefined;
+  let frontAimMapper = createFrontAimMapper();
   let sideTriggerMapper: SideTriggerMapper = createSideTriggerMapper();
 
   const setInspection = (patch: Partial<WorkbenchInspectionState>): void => {
@@ -235,6 +262,13 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       "#34d399"
     );
     updateOuterHTML(
+      "wb-front-aim-panel",
+      renderFrontAimPanel(
+        inspectionState.frontAimFrame,
+        inspectionState.frontAimTelemetry
+      )
+    );
+    updateOuterHTML(
       "wb-side-world-landmarks",
       renderSideWorldLandmarks(inspectionState.sideDetection)
     );
@@ -272,7 +306,8 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   const setLaneDetection = (
     role: LaneTrackingOptions["role"],
     detection: FrontHandDetection | SideHandDetection | undefined,
-    timestamp: FrameTimestamp
+    timestamp: FrameTimestamp,
+    video: HTMLVideoElement
   ): void => {
     if (role === "sideTrigger") {
       const sideResult = sideTriggerMapper.update({
@@ -288,8 +323,17 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       return;
     }
 
+    const frontDetection = detection as FrontHandDetection | undefined;
+    const frontResult = frontAimMapper.update({
+      detection: frontDetection,
+      viewportSize: videoViewportSize(video, frontDetection),
+      projectionOptions: { objectFit: "cover" }
+    });
+
     setInspection({
-      frontDetection: detection as FrontHandDetection | undefined
+      frontDetection,
+      frontAimFrame: frontResult.aimFrame,
+      frontAimTelemetry: frontResult.telemetry
     });
   };
 
@@ -364,7 +408,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
           return;
         }
 
-        setLaneDetection(options.role, laneDetection, timestamp);
+        setLaneDetection(options.role, laneDetection, timestamp, options.video);
         setLaneHealth(options.role, "tracking");
       } catch (error: unknown) {
         if (isStopped()) {
@@ -439,6 +483,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       ...createInitialInspectionState(),
       sideTriggerTuning
     };
+    frontAimMapper = createFrontAimMapper();
     sideTriggerMapper = createSideTriggerMapper();
     updateDom();
   };
