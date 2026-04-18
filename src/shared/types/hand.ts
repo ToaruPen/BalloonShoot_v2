@@ -66,7 +66,9 @@ export interface FrontHandDetection extends LaneHandDetectionBase {
   readonly trackingQuality: "good" | "uncertain" | "lost";
 }
 
+export type SideViewQuality = "good" | "frontLike" | "tooOccluded" | "lost";
+
 export interface SideHandDetection extends LaneHandDetectionBase {
   readonly laneRole: "sideTrigger";
-  readonly sideViewQuality: "good" | "frontLike" | "tooOccluded" | "lost";
+  readonly sideViewQuality: SideViewQuality;
 }

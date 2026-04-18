@@ -108,10 +108,32 @@ const handleClick = (e: MouseEvent): void => {
     case "reselect":
       workbench.reselect();
       break;
+    case "resetSideTriggerTuning":
+      liveInspection.resetSideTriggerTuning();
+      render();
+      break;
   }
 };
 
 root.addEventListener("click", handleClick);
+root.addEventListener("input", (e: Event) => {
+  const target = e.target;
+
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+
+  const key = target.dataset["sideTriggerTuning"];
+
+  if (key === undefined) {
+    return;
+  }
+
+  liveInspection.setSideTriggerTuning(
+    key as Parameters<typeof liveInspection.setSideTriggerTuning>[0],
+    target.valueAsNumber
+  );
+});
 workbench.subscribe(render);
 window.addEventListener("beforeunload", () => {
   liveInspection.destroy();

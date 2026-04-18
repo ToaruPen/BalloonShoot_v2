@@ -8,7 +8,18 @@ import type {
   FrontHandDetection,
   SideHandDetection
 } from "../../shared/types/hand";
+import type {
+  SideTriggerTelemetry,
+  TriggerInputFrame
+} from "../../shared/types/trigger";
+import {
+  defaultSideTriggerTuning,
+  type SideTriggerTuning
+} from "../side-trigger";
 import { formatFrameTimestamp } from "./timestampFormat";
+import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
+import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
+import { renderTuningControls } from "./renderTuningControls";
 
 export interface WorkbenchInspectionState {
   readonly frontDetection: FrontHandDetection | undefined;
@@ -17,6 +28,9 @@ export interface WorkbenchInspectionState {
   readonly sideFrameTimestamp?: FrameTimestamp;
   readonly frontLaneHealth: LaneHealthStatus;
   readonly sideLaneHealth: LaneHealthStatus;
+  readonly sideTriggerFrame: TriggerInputFrame | undefined;
+  readonly sideTriggerTelemetry: SideTriggerTelemetry | undefined;
+  readonly sideTriggerTuning: SideTriggerTuning;
 }
 
 const renderPermissionScreen = (): string => `
@@ -112,7 +126,10 @@ const defaultInspectionState: WorkbenchInspectionState = {
   frontDetection: undefined,
   sideDetection: undefined,
   frontLaneHealth: "notStarted",
-  sideLaneHealth: "notStarted"
+  sideLaneHealth: "notStarted",
+  sideTriggerFrame: undefined,
+  sideTriggerTelemetry: undefined,
+  sideTriggerTuning: defaultSideTriggerTuning
 };
 
 const renderInspectionPane = (
@@ -141,7 +158,8 @@ const renderInspectionLane = (
   title: string,
   deviceLabel: string,
   health: LaneHealthStatus,
-  timestamp: FrameTimestamp | undefined
+  timestamp: FrameTimestamp | undefined,
+  extraContent = ""
 ): string => `
   <section class="wb-preview-lane wb-inspection-lane">
     <h3>${title}</h3>
@@ -152,6 +170,7 @@ const renderInspectionLane = (
       ${renderInspectionPane(lanePrefix, "raw")}
       ${renderInspectionPane(lanePrefix, "filtered")}
     </div>
+    ${extraContent}
   </section>
 `;
 
@@ -175,9 +194,15 @@ const renderPreviewing = (
         "サイド（トリガー）",
         state.sideAssignment?.label ?? "未選択",
         inspection.sideLaneHealth,
-        inspection.sideDetection?.timestamp ?? inspection.sideFrameTimestamp
+        inspection.sideDetection?.timestamp ?? inspection.sideFrameTimestamp,
+        `${renderSideWorldLandmarks(inspection.sideDetection)}
+        ${renderSideTriggerPanel(
+          inspection.sideTriggerFrame,
+          inspection.sideTriggerTelemetry
+        )}`
       )}
     </div>
+    ${renderTuningControls(inspection.sideTriggerTuning)}
     <div class="wb-controls">
       <button class="wb-btn" data-wb-action="swap">左右入れ替え</button>
       <button class="wb-btn wb-btn-secondary" data-wb-action="reselect">再選択</button>
