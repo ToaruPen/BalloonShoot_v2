@@ -94,9 +94,17 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
   let requestGeneration = 0;
   let deviceRefreshGeneration = 0;
   let permissionGranted = false;
+  let permissionEnumerationGeneration: number | undefined;
+  let pendingDeviceRefreshAfterPermission = false;
 
   const invalidateDeviceRefresh = (): void => {
     deviceRefreshGeneration += 1;
+  };
+
+  const finishPermissionEnumeration = (generation: number): void => {
+    if (permissionEnumerationGeneration === generation) {
+      permissionEnumerationGeneration = undefined;
+    }
   };
 
   const emit = (): void => {
@@ -288,6 +296,8 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     sideId: string,
     preservePreviewOnFailure: boolean
   ): Promise<void> => {
+    openGeneration += 1;
+    const myGeneration = openGeneration;
     const reconnectKey = JSON.stringify([frontId, sideId]);
     const nowMs = Date.now();
 
@@ -296,8 +306,6 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       return;
     }
 
-    openGeneration += 1;
-    const myGeneration = openGeneration;
     const previousFrontStream = state.frontStream;
     const previousSideStream = state.sideStream;
     const openedStreams: DevicePinnedStream[] = [];
@@ -421,6 +429,48 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     });
   };
 
+  const refreshDevicesFromDeviceChange = async (): Promise<void> => {
+    if (!permissionGranted) {
+      if (permissionEnumerationGeneration !== undefined) {
+        pendingDeviceRefreshAfterPermission = true;
+      }
+      return;
+    }
+
+    invalidateDeviceRefresh();
+    const myGeneration = deviceRefreshGeneration;
+
+    let devices: MediaDeviceInfo[];
+
+    try {
+      devices = await enumerateVideoDevices();
+    } catch {
+      if (myGeneration !== deviceRefreshGeneration) {
+        return;
+      }
+
+      applyDeviceRefreshFailure();
+      return;
+    }
+
+    if (myGeneration !== deviceRefreshGeneration) {
+      return;
+    }
+
+    applyDeviceRefreshSuccess(devices);
+  };
+
+  const applyPendingDeviceRefreshAfterPermission =
+    async (): Promise<boolean> => {
+      if (!pendingDeviceRefreshAfterPermission) {
+        return false;
+      }
+
+      pendingDeviceRefreshAfterPermission = false;
+      await refreshDevicesFromDeviceChange();
+      return true;
+    };
+
   return {
     getState() {
       return state;
@@ -438,6 +488,8 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       openGeneration += 1;
       invalidateDeviceRefresh();
       permissionGranted = false;
+      permissionEnumerationGeneration = undefined;
+      pendingDeviceRefreshAfterPermission = false;
       const myGeneration = requestGeneration;
 
       stopCurrentStreams();
@@ -464,14 +516,22 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
         return;
       }
 
-      permissionGranted = true;
-
       let devices: MediaDeviceInfo[];
+
+      permissionEnumerationGeneration = myGeneration;
 
       try {
         devices = await enumerateVideoDevices();
       } catch {
+        finishPermissionEnumeration(myGeneration);
+
         if (myGeneration !== requestGeneration) {
+          return;
+        }
+
+        permissionGranted = true;
+
+        if (await applyPendingDeviceRefreshAfterPermission()) {
           return;
         }
 
@@ -480,7 +540,15 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
         return;
       }
 
+      finishPermissionEnumeration(myGeneration);
+
       if (myGeneration !== requestGeneration) {
+        return;
+      }
+
+      permissionGranted = true;
+
+      if (await applyPendingDeviceRefreshAfterPermission()) {
         return;
       }
 
@@ -513,33 +581,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       );
     },
 
-    async refreshDevicesFromDeviceChange() {
-      if (!permissionGranted) {
-        return;
-      }
-
-      invalidateDeviceRefresh();
-      const myGeneration = deviceRefreshGeneration;
-
-      let devices: MediaDeviceInfo[];
-
-      try {
-        devices = await enumerateVideoDevices();
-      } catch {
-        if (myGeneration !== deviceRefreshGeneration) {
-          return;
-        }
-
-        applyDeviceRefreshFailure();
-        return;
-      }
-
-      if (myGeneration !== deviceRefreshGeneration) {
-        return;
-      }
-
-      applyDeviceRefreshSuccess(devices);
-    },
+    refreshDevicesFromDeviceChange,
 
     async swapRoles() {
       invalidateDeviceRefresh();
@@ -561,6 +603,8 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       requestGeneration += 1;
       openGeneration += 1;
       invalidateDeviceRefresh();
+      permissionEnumerationGeneration = undefined;
+      pendingDeviceRefreshAfterPermission = false;
       stopCurrentStreams();
       update({
         screen: "deviceSelection",
@@ -577,6 +621,8 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       openGeneration += 1;
       invalidateDeviceRefresh();
       permissionGranted = false;
+      permissionEnumerationGeneration = undefined;
+      pendingDeviceRefreshAfterPermission = false;
       stopCurrentStreams();
       listeners.clear();
     }

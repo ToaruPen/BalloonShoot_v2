@@ -3,51 +3,7 @@ import {
   observeTrackEnded,
   type TrackEndedPayload
 } from "../../../../src/features/camera/observeTrackEnded";
-
-class FakeTrack {
-  readonly kind: string;
-  readonly id: string;
-  readonly label: string;
-  readyState: MediaStreamTrackState = "live";
-  private readonly listeners = new Set<EventListener>();
-
-  constructor({
-    id,
-    kind = "video",
-    label = ""
-  }: {
-    readonly id: string;
-    readonly kind?: string;
-    readonly label?: string;
-  }) {
-    this.id = id;
-    this.kind = kind;
-    this.label = label;
-  }
-
-  addEventListener(type: string, listener: EventListener): void {
-    if (type === "ended") {
-      this.listeners.add(listener);
-    }
-  }
-
-  removeEventListener(type: string, listener: EventListener): void {
-    if (type === "ended") {
-      this.listeners.delete(listener);
-    }
-  }
-
-  fireEnded(): void {
-    this.readyState = "ended";
-    for (const listener of this.listeners) {
-      listener(new Event("ended"));
-    }
-  }
-
-  listenerCount(): number {
-    return this.listeners.size;
-  }
-}
+import { FakeTrack } from "../../../helpers/fakeTrack";
 
 const createStream = (tracks: readonly FakeTrack[]): MediaStream =>
   ({
@@ -63,7 +19,7 @@ describe("observeTrackEnded", () => {
   });
 
   it("calls the callback with ended video track details", () => {
-    const track = new FakeTrack({ id: "front-track", label: "Front <Cam>" });
+    const track = new FakeTrack("front-track", "Front <Cam>");
     const callback = vi.fn<(payload: TrackEndedPayload) => void>();
 
     observeTrackEnded(createStream([track]), callback);
@@ -76,8 +32,8 @@ describe("observeTrackEnded", () => {
   });
 
   it("detaches listeners when stopped and ignores non-video tracks", () => {
-    const videoTrack = new FakeTrack({ id: "video-track" });
-    const audioTrack = new FakeTrack({ id: "audio-track", kind: "audio" });
+    const videoTrack = new FakeTrack("video-track");
+    const audioTrack = new FakeTrack("audio-track", "audio-track", "audio");
     const callback = vi.fn<(payload: TrackEndedPayload) => void>();
     const observer = observeTrackEnded(
       createStream([videoTrack, audioTrack]),
@@ -96,8 +52,8 @@ describe("observeTrackEnded", () => {
   });
 
   it("observes every video track independently", () => {
-    const firstTrack = new FakeTrack({ id: "front-a" });
-    const secondTrack = new FakeTrack({ id: "front-b" });
+    const firstTrack = new FakeTrack("front-a");
+    const secondTrack = new FakeTrack("front-b");
     const callback = vi.fn<(payload: TrackEndedPayload) => void>();
 
     observeTrackEnded(createStream([firstTrack, secondTrack]), callback);

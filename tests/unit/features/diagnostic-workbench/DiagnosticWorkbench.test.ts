@@ -411,6 +411,36 @@ describe("createDiagnosticWorkbench", () => {
     ).toEqual(["front-id", "side-id", "fresh-id"]);
   });
 
+  it("keeps devicechange results newer than in-flight permission enumeration", async () => {
+    const permissionEnumeration = createDeferred<MediaDeviceInfo[]>();
+    grantPermission();
+    vi.mocked(enumerateVideoDevices)
+      .mockReturnValueOnce(permissionEnumeration.promise)
+      .mockResolvedValueOnce([
+        createDevice("new-front-id", "New Front Camera"),
+        createDevice("new-side-id", "New Side Camera"),
+        createDevice("new-extra-id", "New Extra Camera")
+      ]);
+    const workbench = createDiagnosticWorkbench();
+
+    const request = workbench.requestPermission();
+    await vi.waitFor(() => {
+      expect(enumerateVideoDevices).toHaveBeenCalledOnce();
+    });
+    await workbench.refreshDevicesFromDeviceChange();
+    permissionEnumeration.resolve([
+      createDevice("old-front-id", "Old Front Camera"),
+      createDevice("old-side-id", "Old Side Camera")
+    ]);
+    await request;
+
+    expect(enumerateVideoDevices).toHaveBeenCalledTimes(2);
+    expect(workbench.getState().screen).toBe("deviceSelection");
+    expect(
+      workbench.getState().devices.map((device) => device.deviceId)
+    ).toEqual(["new-front-id", "new-side-id", "new-extra-id"]);
+  });
+
   it("ignores stale devicechange results after assigning devices", async () => {
     grantPermission();
     enumerateTwoDevices();
@@ -502,6 +532,46 @@ describe("createDiagnosticWorkbench", () => {
     expect(sideStream.stopMock).toHaveBeenCalledOnce();
     expect(workbench.getState().screen).toBe("deviceSelection");
     expect(workbench.getState().frontStream).toBeUndefined();
+  });
+
+  it("keeps a reconnect cooldown action newer than an in-flight preview open", async () => {
+    grantPermission();
+    vi.mocked(enumerateVideoDevices).mockResolvedValue([
+      createDevice("front-id", "Front Camera"),
+      createDevice("side-id", "Side Camera"),
+      createDevice("cooldown-front-id", "Cooldown Front Camera"),
+      createDevice("cooldown-side-id", "Cooldown Side Camera")
+    ]);
+    vi.mocked(createDevicePinnedStream)
+      .mockRejectedValueOnce(createCameraError("NotReadableError"))
+      .mockRejectedValueOnce(createCameraError("NotReadableError"))
+      .mockRejectedValueOnce(createCameraError("NotReadableError"));
+    const workbench = createDiagnosticWorkbench();
+    await workbench.requestPermission();
+    await workbench.assignDevices("cooldown-front-id", "cooldown-side-id");
+    await workbench.assignDevices("cooldown-front-id", "cooldown-side-id");
+    await workbench.assignDevices("cooldown-front-id", "cooldown-side-id");
+    const frontDeferred = createDeferred<DevicePinnedStream>();
+    const sideDeferred = createDeferred<DevicePinnedStream>();
+    const frontStream = createPinnedStream("front-id");
+    const sideStream = createPinnedStream("side-id");
+    vi.mocked(createDevicePinnedStream)
+      .mockReturnValueOnce(frontDeferred.promise)
+      .mockReturnValueOnce(sideDeferred.promise);
+
+    const assignment = workbench.assignDevices("front-id", "side-id");
+    frontDeferred.resolve(frontStream);
+    await Promise.resolve();
+    await workbench.assignDevices("cooldown-front-id", "cooldown-side-id");
+    sideDeferred.resolve(sideStream);
+    await assignment;
+
+    expect(frontStream.stopMock).toHaveBeenCalledOnce();
+    expect(sideStream.stopMock).toHaveBeenCalledOnce();
+    expect(workbench.getState().screen).toBe("cameraOpenFailed");
+    expect(workbench.getState().error?.kind).toBe("reconnectCooldown");
+    expect(workbench.getState().frontStream).toBeUndefined();
+    expect(workbench.getState().sideStream).toBeUndefined();
   });
 
   it("stops streams returned after destroy invalidates an in-flight open", async () => {

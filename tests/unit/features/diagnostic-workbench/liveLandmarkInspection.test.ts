@@ -1320,13 +1320,14 @@ describe("createLiveLandmarkInspection", () => {
   });
 
   it("preserves calibration across same-device reselection after capture loss", () => {
+    const frontTrack = new FakeTrack("front-track");
     const liveInspection = createLiveLandmarkInspection();
     const previewState = {
       screen: "previewing" as const,
       devices: [],
       frontAssignment: undefined,
       sideAssignment: undefined,
-      frontStream: createPinnedStream("front-id"),
+      frontStream: createPinnedStream("front-id", [frontTrack]),
       sideStream: createPinnedStream("side-id"),
       error: undefined
     };
@@ -1339,15 +1340,22 @@ describe("createLiveLandmarkInspection", () => {
       sideStream: undefined,
       error: undefined
     };
+    const sameDevicePreviewState = {
+      ...previewState,
+      frontStream: createPinnedStream("front-id")
+    };
 
+    installPreviewVideos();
+    liveInspection.sync(previewState);
     liveInspection.setFrontAimCalibration("centerX", 0.6);
     liveInspection.setSideTriggerCalibration("openPoseDistance", 1);
+    frontTrack.fireEnded();
 
-    installPreviewVideos();
-    liveInspection.sync(previewState);
+    expect(liveInspection.getState().frontLaneHealth).toBe("captureLost");
+
     liveInspection.sync(deviceSelectionState);
     installPreviewVideos();
-    liveInspection.sync(previewState);
+    liveInspection.sync(sameDevicePreviewState);
 
     expect(liveInspection.getState().frontAimCalibration.center.x).toBe(0.6);
     expect(
@@ -1357,13 +1365,14 @@ describe("createLiveLandmarkInspection", () => {
   });
 
   it("resets calibration when a different device is selected after capture loss", () => {
+    const frontTrack = new FakeTrack("front-track");
     const liveInspection = createLiveLandmarkInspection();
     const initialPreviewState = {
       screen: "previewing" as const,
       devices: [],
       frontAssignment: undefined,
       sideAssignment: undefined,
-      frontStream: createPinnedStream("front-id"),
+      frontStream: createPinnedStream("front-id", [frontTrack]),
       sideStream: createPinnedStream("side-id"),
       error: undefined
     };
@@ -1381,11 +1390,14 @@ describe("createLiveLandmarkInspection", () => {
       frontStream: createPinnedStream("front-replacement-id")
     };
 
-    liveInspection.setFrontAimCalibration("centerX", 0.6);
-    liveInspection.setSideTriggerCalibration("openPoseDistance", 1);
-
     installPreviewVideos();
     liveInspection.sync(initialPreviewState);
+    liveInspection.setFrontAimCalibration("centerX", 0.6);
+    liveInspection.setSideTriggerCalibration("openPoseDistance", 1);
+    frontTrack.fireEnded();
+
+    expect(liveInspection.getState().frontLaneHealth).toBe("captureLost");
+
     liveInspection.sync(deviceSelectionState);
     installPreviewVideos();
     liveInspection.sync(differentPreviewState);

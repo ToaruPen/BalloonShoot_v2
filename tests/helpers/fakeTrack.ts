@@ -1,13 +1,18 @@
 export class FakeTrack {
   readonly id: string;
-  readonly kind = "video";
+  readonly kind: MediaStreamTrack["kind"];
   readonly label: string;
   readyState: MediaStreamTrackState = "live";
   private readonly endedListeners = new Set<EventListener>();
 
-  constructor(id: string, label = id) {
+  constructor(
+    id: string,
+    label = id,
+    kind: MediaStreamTrack["kind"] = "video"
+  ) {
     this.id = id;
     this.label = label;
+    this.kind = kind;
   }
 
   addEventListener(type: string, listener: EventListener): void {
