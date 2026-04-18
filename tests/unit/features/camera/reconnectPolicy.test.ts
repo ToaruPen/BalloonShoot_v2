@@ -27,10 +27,12 @@ describe("createReconnectBudget", () => {
     budget.recordFailure("frontAim", 1_000);
     budget.recordFailure("frontAim", 1_100);
     budget.recordFailure("frontAim", 1_200);
+    budget.recordFailure("sideTrigger", 1_000);
+    budget.recordFailure("sideTrigger", 1_100);
     budget.recordFailure("sideTrigger", 1_200);
     budget.recordSuccess("frontAim");
 
     expect(budget.canAttempt("frontAim", 1_300)).toBe(true);
-    expect(budget.canAttempt("sideTrigger", 1_300)).toBe(true);
+    expect(budget.canAttempt("sideTrigger", 1_300)).toBe(false);
   });
 });

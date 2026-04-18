@@ -463,6 +463,76 @@ describe("createLiveLandmarkInspection", () => {
     ).toHaveBeenCalledOnce();
   });
 
+  it("retains MediaPipe trackers when passive devicechange keeps the same preview streams", async () => {
+    const frontTracker = createFakeTracker();
+    const sideTracker = createFakeTracker();
+    createMediaPipeHandTrackerMock
+      .mockResolvedValueOnce(frontTracker)
+      .mockResolvedValueOnce(sideTracker)
+      .mockResolvedValue(createFakeTracker());
+    const frontStream = createPinnedStream("front-id");
+    const sideStream = createPinnedStream("side-id");
+    vi.mocked(createDevicePinnedStream)
+      .mockResolvedValueOnce(frontStream)
+      .mockResolvedValueOnce(sideStream);
+    const workbench = createDiagnosticWorkbench();
+    const liveInspection = createLiveLandmarkInspection();
+    let currentVideos: ReturnType<typeof installPreviewVideos> | undefined;
+    const render = (): void => {
+      const state = workbench.getState();
+      renderWorkbenchHTML(state, liveInspection.getState());
+
+      if (state.screen === "previewing") {
+        currentVideos = installPreviewVideos();
+        attachVideoStreams(workbench, currentVideos);
+      }
+
+      liveInspection.sync(state);
+      liveInspection.updateDom();
+    };
+
+    workbench.subscribe(render);
+    await workbench.requestPermission();
+    await workbench.assignDevices("front-id", "side-id");
+
+    const initialVideos = currentVideos;
+    expect(initialVideos).toBeDefined();
+    if (initialVideos === undefined) {
+      throw new Error("preview videos should be installed");
+    }
+    initialVideos.frontVideo.fireFrame();
+    initialVideos.sideVideo.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(createMediaPipeHandTrackerMock).toHaveBeenCalledTimes(2);
+    });
+    vi.mocked(enumerateVideoDevices).mockResolvedValueOnce([
+      createDevice("front-id", "Front Camera"),
+      createDevice("side-id", "Side Camera"),
+      createDevice("extra-id", "Extra Camera")
+    ]);
+
+    await workbench.refreshDevicesFromDeviceChange();
+
+    const rerenderedVideos = currentVideos;
+    expect(rerenderedVideos).toBeDefined();
+    if (rerenderedVideos === undefined) {
+      throw new Error("rerendered preview videos should be installed");
+    }
+    expect(rerenderedVideos.frontVideo).not.toBe(initialVideos.frontVideo);
+    expect(rerenderedVideos.sideVideo).not.toBe(initialVideos.sideVideo);
+    rerenderedVideos.frontVideo.fireFrame();
+    rerenderedVideos.sideVideo.fireFrame();
+
+    await vi.waitFor(() => {
+      expect(frontTracker.detect).toHaveBeenCalledTimes(2);
+      expect(sideTracker.detect).toHaveBeenCalledTimes(2);
+    });
+    expect(createMediaPipeHandTrackerMock).toHaveBeenCalledTimes(2);
+    expect(frontTracker.cleanup).not.toHaveBeenCalled();
+    expect(sideTracker.cleanup).not.toHaveBeenCalled();
+  });
+
   it("preserves calibration when the same preview session re-renders fresh video elements", () => {
     const liveInspection = createLiveLandmarkInspection();
     const previewState = {

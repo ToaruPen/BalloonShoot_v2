@@ -10,6 +10,17 @@ const createDevice = (deviceId: string, label: string): MediaDeviceInfo =>
     toJSON: () => ({})
   }) as MediaDeviceInfo;
 
+const createDeferred = <T>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, resolve, reject };
+};
+
 const createRoot = () => {
   let clickListener: ((event: Event) => void) | undefined;
   const elements = new Map<string, unknown>([
@@ -174,5 +185,85 @@ describe("createBalloonGamePage", () => {
     expect(root.innerHTML).toMatch(
       /<option value="replacement" selected>Replacement Camera<\/option>/
     );
+  });
+
+  it("keeps a still-present side camera in the side role when front is replaced", async () => {
+    const root = createRoot();
+    const runtime = { start: vi.fn(), retry: vi.fn(), destroy: vi.fn() };
+    const enumerateVideoDevices = vi
+      .fn()
+      .mockResolvedValueOnce([
+        createDevice("front", "Front Camera"),
+        createDevice("side", "Side Camera")
+      ])
+      .mockResolvedValueOnce([
+        createDevice("side", "Side Camera"),
+        createDevice("replacement", "Replacement Camera")
+      ]);
+    const page = createBalloonGamePage({
+      requestCameraPermission: vi.fn(() =>
+        Promise.resolve({ status: "granted" as const })
+      ),
+      enumerateVideoDevices,
+      createBalloonGameRuntime: vi.fn(() => runtime)
+    });
+
+    page.mount(root);
+    await page.requestCameraAccess();
+    page.selectCameras("front", "side");
+    root.clickAction("reselectCameras");
+
+    await vi.waitFor(() => {
+      expect(root.innerHTML).toContain("カメラ選択");
+    });
+    expect(root.innerHTML).toMatch(
+      /id="front-camera-select"[\s\S]*<option value="side">Side Camera<\/option><option value="replacement" selected>Replacement Camera<\/option>/
+    );
+    expect(root.innerHTML).toMatch(
+      /id="side-camera-select"[\s\S]*<option value="side" selected>Side Camera<\/option><option value="replacement">Replacement Camera<\/option>/
+    );
+  });
+
+  it("ignores stale camera reselect results after a newer reselect completes", async () => {
+    const root = createRoot();
+    const runtime = { start: vi.fn(), retry: vi.fn(), destroy: vi.fn() };
+    const staleReselect = createDeferred<MediaDeviceInfo[]>();
+    const enumerateVideoDevices = vi
+      .fn()
+      .mockResolvedValueOnce([
+        createDevice("front", "Front Camera"),
+        createDevice("side", "Side Camera")
+      ])
+      .mockReturnValueOnce(staleReselect.promise)
+      .mockResolvedValueOnce([
+        createDevice("front", "Front Camera"),
+        createDevice("fresh", "Fresh Camera")
+      ]);
+    const page = createBalloonGamePage({
+      requestCameraPermission: vi.fn(() =>
+        Promise.resolve({ status: "granted" as const })
+      ),
+      enumerateVideoDevices,
+      createBalloonGameRuntime: vi.fn(() => runtime)
+    });
+
+    page.mount(root);
+    await page.requestCameraAccess();
+    page.selectCameras("front", "side");
+    root.clickAction("reselectCameras");
+    root.clickAction("reselectCameras");
+
+    await vi.waitFor(() => {
+      expect(root.innerHTML).toContain("Fresh Camera");
+    });
+    staleReselect.resolve([
+      createDevice("stale-front", "Stale Front"),
+      createDevice("stale-side", "Stale Side")
+    ]);
+    await Promise.resolve();
+
+    expect(root.innerHTML).toContain("Fresh Camera");
+    expect(root.innerHTML).not.toContain("Stale Front");
+    expect(root.innerHTML).not.toContain("Stale Side");
   });
 });

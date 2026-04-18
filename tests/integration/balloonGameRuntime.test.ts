@@ -353,6 +353,53 @@ describe("createBalloonGameRuntime", () => {
     vi.unstubAllGlobals();
   });
 
+  it("logs tracker cleanup failures instead of leaking unhandled rejections", async () => {
+    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+    const raf = createRaf();
+    const cleanupError = new Error("cleanup failed");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const tracker = createTracker();
+    const sideTracker = createTracker();
+    tracker.cleanupMock.mockRejectedValueOnce(cleanupError);
+    const createMediaPipeHandTracker = vi
+      .fn()
+      .mockResolvedValueOnce(tracker)
+      .mockResolvedValueOnce(sideTracker);
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: createVideo(),
+      sideVideo: createVideo(),
+      canvas: createCanvas(),
+      hudRoot: { innerHTML: "" } as HTMLElement,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      createDevicePinnedStream: (deviceId) =>
+        Promise.resolve(createPinnedStream(deviceId)),
+      createMediaPipeHandTracker
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(createMediaPipeHandTracker).toHaveBeenCalledTimes(2);
+    });
+
+    runtime.destroy();
+
+    await vi.waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        "[balloon game runtime] tracker cleanup failed",
+        cleanupError
+      );
+    });
+    vi.unstubAllGlobals();
+  });
+
   it("restores front lane health before fusing after a transient frame error", async () => {
     capturedFusionContexts.length = 0;
     vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });

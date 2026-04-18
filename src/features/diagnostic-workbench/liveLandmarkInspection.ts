@@ -98,8 +98,14 @@ interface LiveLandmarkInspection {
 
 interface ActiveTracking {
   readonly key: string;
-  readonly frontVideo: HTMLVideoElement;
-  readonly sideVideo: HTMLVideoElement;
+  frontVideo: HTMLVideoElement;
+  sideVideo: HTMLVideoElement;
+  bindVideos(frontVideo: HTMLVideoElement, sideVideo: HTMLVideoElement): void;
+  stop(): void;
+}
+
+interface LaneTracking {
+  bindVideo(video: HTMLVideoElement): void;
   stop(): void;
 }
 
@@ -489,9 +495,8 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     }
   };
 
-  const startLaneTracking = (
-    options: LaneTrackingOptions
-  ): { stop(): void } => {
+  const startLaneTracking = (options: LaneTrackingOptions): LaneTracking => {
+    let video = options.video;
     let stopped = false;
     let cleanupStarted = false;
     let callbackId: number | undefined;
@@ -516,9 +521,9 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     const cancelScheduledFrame = (): void => {
       if (
         callbackId !== undefined &&
-        typeof options.video.cancelVideoFrameCallback === "function"
+        typeof video.cancelVideoFrameCallback === "function"
       ) {
-        options.video.cancelVideoFrameCallback(callbackId);
+        video.cancelVideoFrameCallback(callbackId);
         callbackId = undefined;
       }
 
@@ -537,7 +542,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       const context = frameCalibrationContext();
       setLaneTimestamp(options.role, timestamp);
 
-      if (!videoReadyForBitmap(options.video)) {
+      if (!videoReadyForBitmap(video)) {
         schedule();
         return;
       }
@@ -564,7 +569,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
 
         const laneDetection = await runLaneDetection(
           tracker,
-          options,
+          { ...options, video },
           timestamp
         );
 
@@ -577,7 +582,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
           options.role,
           laneDetection,
           timestamp,
-          options.video,
+          video,
           context
         );
       } catch (error: unknown) {
@@ -599,8 +604,8 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
         return;
       }
 
-      if (typeof options.video.requestVideoFrameCallback === "function") {
-        callbackId = options.video.requestVideoFrameCallback(
+      if (typeof video.requestVideoFrameCallback === "function") {
+        callbackId = video.requestVideoFrameCallback(
           (_now, metadata) => {
             void processFrame(metadata);
           }
@@ -682,6 +687,15 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     schedule();
 
     return {
+      bindVideo(nextVideo) {
+        if (stopped || nextVideo === video) {
+          return;
+        }
+
+        cancelScheduledFrame();
+        video = nextVideo;
+        schedule();
+      },
       stop() {
         stopLane();
       }
@@ -764,13 +778,13 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       return;
     }
 
-    const key = `${state.frontStream.stream.id}:${state.sideStream.stream.id}`;
+    const key = JSON.stringify([
+      [state.frontStream.deviceId, state.frontStream.stream.id],
+      [state.sideStream.deviceId, state.sideStream.stream.id]
+    ]);
 
-    if (
-      activeTracking?.key === key &&
-      activeTracking.frontVideo === frontVideo &&
-      activeTracking.sideVideo === sideVideo
-    ) {
+    if (activeTracking?.key === key) {
+      activeTracking.bindVideos(frontVideo, sideVideo);
       return;
     }
 
@@ -799,15 +813,22 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       streamId: state.sideStream.stream.id
     });
 
-    activeTracking = {
+    const tracking: ActiveTracking = {
       key,
       frontVideo,
       sideVideo,
+      bindVideos(nextFrontVideo, nextSideVideo) {
+        frontLane.bindVideo(nextFrontVideo);
+        sideLane.bindVideo(nextSideVideo);
+        tracking.frontVideo = nextFrontVideo;
+        tracking.sideVideo = nextSideVideo;
+      },
       stop() {
         frontLane.stop();
         sideLane.stop();
       }
     };
+    activeTracking = tracking;
   };
 
   return {

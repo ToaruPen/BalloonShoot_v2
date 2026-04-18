@@ -155,11 +155,38 @@ const hasDeviceId = (
   deviceId !== undefined &&
   devices.some((device) => device.deviceId === deviceId);
 
-const firstDeviceIdExcept = (
+const firstDeviceIdExcluding = (
   devices: readonly MediaDeviceInfo[],
-  excludedDeviceId: string | undefined
+  excludedDeviceIds: readonly (string | undefined)[]
 ): string | undefined =>
-  devices.find((device) => device.deviceId !== excludedDeviceId)?.deviceId;
+  devices.find((device) => !excludedDeviceIds.includes(device.deviceId))
+    ?.deviceId;
+
+const selectReselectedCameraIds = (
+  devices: readonly MediaDeviceInfo[],
+  previousFrontId: string | undefined,
+  previousSideId: string | undefined
+): {
+  readonly selectedFrontDeviceId: string | undefined;
+  readonly selectedSideDeviceId: string | undefined;
+} => {
+  const previousFrontPresent = hasDeviceId(devices, previousFrontId);
+  const previousSidePresent = hasDeviceId(devices, previousSideId);
+  const selectedFrontDeviceId = previousFrontPresent
+    ? previousFrontId
+    : (firstDeviceIdExcluding(devices, [
+        previousSidePresent ? previousSideId : undefined
+      ]) ?? devices[0]?.deviceId);
+  const selectedSideDeviceId =
+    previousSidePresent && previousSideId !== selectedFrontDeviceId
+      ? previousSideId
+      : firstDeviceIdExcluding(devices, [
+          selectedFrontDeviceId,
+          previousFrontPresent ? previousFrontId : undefined
+        ]);
+
+  return { selectedFrontDeviceId, selectedSideDeviceId };
+};
 
 export const createBalloonGamePage = ({
   requestCameraPermission: requestPermission = requestCameraPermission,
@@ -169,6 +196,19 @@ export const createBalloonGamePage = ({
   let root: HTMLElement | undefined;
   let state = initialState();
   let runtime: BalloonGameRuntime | undefined;
+  let reselectGeneration = 0;
+
+  const buildCameraErrorState = (
+    title: string,
+    cause: string,
+    nextAction: string
+  ): GamePageState => ({
+    ...initialState(),
+    screen: "error",
+    errorTitle: title,
+    errorCause: cause,
+    errorNextAction: nextAction
+  });
 
   const commit = (nextState: GamePageState): void => {
     state = nextState;
@@ -229,33 +269,33 @@ export const createBalloonGamePage = ({
   };
 
   const reselectCameras = async (): Promise<void> => {
+    reselectGeneration += 1;
+    const generation = reselectGeneration;
     runtime?.destroy();
     runtime = undefined;
 
     try {
       const devices = await enumerateDevices();
 
+      if (generation !== reselectGeneration) {
+        return;
+      }
+
       if (devices.length < 2) {
-        commit({
-          ...initialState(),
-          screen: "error",
-          errorTitle: "カメラが1台しか検出されません",
-          errorCause: "このゲームには2台のカメラが必要です。",
-          errorNextAction: "別のカメラを接続してからリトライしてください。"
-        });
+        commit(
+          buildCameraErrorState(
+            "カメラが1台しか検出されません",
+            "このゲームには2台のカメラが必要です。",
+            "別のカメラを接続してからリトライしてください。"
+          )
+        );
         return;
       }
 
       const previousFrontId = state.selectedFrontDeviceId;
       const previousSideId = state.selectedSideDeviceId;
-      const selectedFrontDeviceId = hasDeviceId(devices, previousFrontId)
-        ? previousFrontId
-        : devices[0]?.deviceId;
-      const selectedSideDeviceId =
-        hasDeviceId(devices, previousSideId) &&
-        previousSideId !== selectedFrontDeviceId
-          ? previousSideId
-          : firstDeviceIdExcept(devices, selectedFrontDeviceId);
+      const { selectedFrontDeviceId, selectedSideDeviceId } =
+        selectReselectedCameraIds(devices, previousFrontId, previousSideId);
       const selectionChanged =
         selectedFrontDeviceId !== previousFrontId ||
         selectedSideDeviceId !== previousSideId;
@@ -271,13 +311,17 @@ export const createBalloonGamePage = ({
           : undefined
       });
     } catch (error: unknown) {
-      commit({
-        ...initialState(),
-        screen: "error",
-        errorTitle: "カメラ一覧を取得できません",
-        errorCause: error instanceof Error ? error.message : String(error),
-        errorNextAction: "カメラ接続を確認してからリトライしてください。"
-      });
+      if (generation !== reselectGeneration) {
+        return;
+      }
+
+      commit(
+        buildCameraErrorState(
+          "カメラ一覧を取得できません",
+          error instanceof Error ? error.message : String(error),
+          "カメラ接続を確認してからリトライしてください。"
+        )
+      );
     }
   };
 
@@ -375,6 +419,7 @@ export const createBalloonGamePage = ({
       startRuntime(frontDeviceId, sideDeviceId);
     },
     destroy() {
+      reselectGeneration += 1;
       runtime?.destroy();
       root?.removeEventListener("click", handleClick);
       root = undefined;

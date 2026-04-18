@@ -108,4 +108,12 @@ describe("observeTrackEnded", () => {
     expect(callback.mock.calls[0]?.[0].trackId).toBe("front-a");
     expect(callback.mock.calls[1]?.[0].trackId).toBe("front-b");
   });
+
+  it("fails fast when the stream exposes no track accessors", () => {
+    const stream = {} as MediaStream;
+
+    expect(() => observeTrackEnded(stream, vi.fn())).toThrow(
+      "MediaStream does not support getVideoTracks or getTracks"
+    );
+  });
 });

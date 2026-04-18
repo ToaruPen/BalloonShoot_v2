@@ -66,4 +66,25 @@ describe("observeDeviceChange", () => {
     observer.stop();
     expect(mediaDevices.ondevicechange).toBe(previous);
   });
+
+  it("does not overwrite a fallback handler installed after observation starts", () => {
+    const previous = vi.fn();
+    const thirdParty = vi.fn();
+    const mediaDevices: FakeMediaDevices = { ondevicechange: previous };
+    stubMediaDevices(mediaDevices);
+    const callback = vi.fn();
+
+    const observer = observeDeviceChange(callback);
+    mediaDevices.ondevicechange = thirdParty;
+
+    observer.stop();
+
+    expect(mediaDevices.ondevicechange).toBe(thirdParty);
+    (mediaDevices.ondevicechange as (event: Event) => void)(
+      new Event("devicechange")
+    );
+    expect(thirdParty).toHaveBeenCalledOnce();
+    expect(previous).not.toHaveBeenCalled();
+    expect(callback).not.toHaveBeenCalled();
+  });
 });

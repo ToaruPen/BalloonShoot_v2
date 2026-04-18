@@ -93,6 +93,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
   let openGeneration = 0;
   let requestGeneration = 0;
   let deviceRefreshGeneration = 0;
+  let permissionGranted = false;
 
   const emit = (): void => {
     for (const fn of listeners) {
@@ -283,7 +284,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     sideId: string,
     preservePreviewOnFailure: boolean
   ): Promise<void> => {
-    const reconnectKey = `${frontId}:${sideId}`;
+    const reconnectKey = JSON.stringify([frontId, sideId]);
     const nowMs = Date.now();
 
     if (!reconnectBudget.canAttempt(reconnectKey, nowMs)) {
@@ -431,6 +432,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     async requestPermission() {
       requestGeneration += 1;
       openGeneration += 1;
+      permissionGranted = false;
       const myGeneration = requestGeneration;
 
       stopCurrentStreams();
@@ -456,6 +458,8 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
         update({ screen: errorScreenFor(error), error });
         return;
       }
+
+      permissionGranted = true;
 
       let devices: MediaDeviceInfo[];
 
@@ -503,7 +507,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
     },
 
     async refreshDevicesFromDeviceChange() {
-      if (state.screen === "permission") {
+      if (!permissionGranted) {
         return;
       }
 
@@ -562,6 +566,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       requestGeneration += 1;
       openGeneration += 1;
       deviceRefreshGeneration += 1;
+      permissionGranted = false;
       stopCurrentStreams();
       listeners.clear();
     }

@@ -51,13 +51,15 @@ export const observeDeviceChange = (
 
   const previous = mediaDevices.ondevicechange ?? null;
 
-  mediaDevices.ondevicechange = (event: Event): void => {
+  const handler = (event: Event): void => {
     previous?.(event);
 
     if (!stopped) {
       callback();
     }
   };
+
+  mediaDevices.ondevicechange = handler;
 
   return {
     stop() {
@@ -66,7 +68,10 @@ export const observeDeviceChange = (
       }
 
       stopped = true;
-      mediaDevices.ondevicechange = previous;
+
+      if (mediaDevices.ondevicechange === handler) {
+        mediaDevices.ondevicechange = previous;
+      }
     }
   };
 };

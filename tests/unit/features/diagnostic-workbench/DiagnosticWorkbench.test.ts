@@ -88,6 +88,27 @@ describe("createDiagnosticWorkbench", () => {
     expect(enumerateVideoDevices).not.toHaveBeenCalled();
   });
 
+  it("ignores devicechange refreshes after camera permission was denied", async () => {
+    vi.mocked(requestCameraPermission).mockResolvedValue({
+      status: "denied",
+      error: createCameraError("NotAllowedError")
+    });
+    vi.mocked(enumerateVideoDevices).mockResolvedValue([
+      createDevice("front-id", "Front Camera"),
+      createDevice("side-id", "Side Camera")
+    ]);
+
+    const workbench = createDiagnosticWorkbench();
+
+    await workbench.requestPermission();
+    vi.mocked(enumerateVideoDevices).mockClear();
+    await workbench.refreshDevicesFromDeviceChange();
+
+    expect(enumerateVideoDevices).not.toHaveBeenCalled();
+    expect(workbench.getState().screen).toBe("permissionDenied");
+    expect(workbench.getState().error?.kind).toBe("permissionDenied");
+  });
+
   it("renders permissionFailed state for non-denied permission failures", async () => {
     vi.mocked(requestCameraPermission).mockResolvedValue({
       status: "failed",
@@ -264,6 +285,29 @@ describe("createDiagnosticWorkbench", () => {
     ).resolves.toBeUndefined();
     expect(workbench.getState().screen).toBe("deviceSelection");
     expect(workbench.getState().error?.kind).toBe("distinctDevicesRequired");
+  });
+
+  it("keeps reconnect failure budgets independent for device ids containing colons", async () => {
+    grantPermission();
+    vi.mocked(enumerateVideoDevices).mockResolvedValue([
+      createDevice("a:b", "Front With Colon"),
+      createDevice("c", "Side C"),
+      createDevice("a", "Front A"),
+      createDevice("b:c", "Side With Colon")
+    ]);
+    vi.mocked(createDevicePinnedStream).mockRejectedValue(
+      createCameraError("NotReadableError")
+    );
+    const workbench = createDiagnosticWorkbench();
+
+    await workbench.requestPermission();
+    await workbench.assignDevices("a:b", "c");
+    await workbench.assignDevices("a:b", "c");
+    await workbench.assignDevices("a:b", "c");
+    await workbench.assignDevices("a", "b:c");
+
+    expect(createDevicePinnedStream).toHaveBeenCalledTimes(4);
+    expect(workbench.getState().error?.kind).toBe("cameraOpenFailed");
   });
 
   it("stops a successful first stream when the paired side stream fails", async () => {

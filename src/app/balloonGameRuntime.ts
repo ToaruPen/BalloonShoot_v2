@@ -227,6 +227,18 @@ export const createBalloonGameRuntime = ({
   const trackers: MediaPipeHandTracker[] = [];
   const laneStops: (() => void)[] = [];
 
+  const safeCleanupTracker = (tracker: MediaPipeHandTracker): void => {
+    removeItem(trackers, tracker);
+
+    try {
+      void Promise.resolve(tracker.cleanup()).catch((error: unknown) => {
+        console.error("[balloon game runtime] tracker cleanup failed", error);
+      });
+    } catch (error: unknown) {
+      console.error("[balloon game runtime] tracker cleanup failed", error);
+    }
+  };
+
   if (initialBalloons !== undefined) {
     engine.forceBalloons([...initialBalloons]);
   }
@@ -521,8 +533,7 @@ export const createBalloonGameRuntime = ({
       stream.stop();
 
       if (tracker !== undefined) {
-        removeItem(trackers, tracker);
-        void tracker.cleanup();
+        safeCleanupTracker(tracker);
       }
     };
 
@@ -553,7 +564,7 @@ export const createBalloonGameRuntime = ({
     }
 
     if (!laneStillActive()) {
-      void tracker.cleanup();
+      safeCleanupTracker(tracker);
       return;
     }
 
@@ -677,8 +688,8 @@ export const createBalloonGameRuntime = ({
     }
     streams.length = 0;
 
-    for (const tracker of trackers) {
-      void tracker.cleanup();
+    for (const tracker of [...trackers]) {
+      safeCleanupTracker(tracker);
     }
     trackers.length = 0;
 

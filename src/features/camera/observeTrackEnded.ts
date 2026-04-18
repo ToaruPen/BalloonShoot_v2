@@ -28,7 +28,7 @@ const videoTracksFor = (stream: MediaStream): TrackLike[] => {
     );
   }
 
-  return [];
+  throw new Error("MediaStream does not support getVideoTracks or getTracks");
 };
 
 export const observeTrackEnded = (
