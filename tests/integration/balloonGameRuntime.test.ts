@@ -228,20 +228,38 @@ const createHandDetection = (): HandDetection => {
   };
 };
 
-const createPinnedStream = (deviceId: string): DevicePinnedStream => ({
-  deviceId,
-  stream: { id: `${deviceId}-stream` } as MediaStream,
-  stop: vi.fn()
-});
+interface FakePinnedStream extends DevicePinnedStream {
+  readonly stopMock: ReturnType<typeof vi.fn>;
+}
+
+const createPinnedStream = (deviceId: string): FakePinnedStream => {
+  const stopMock = vi.fn();
+
+  return {
+    deviceId,
+    stream: { id: `${deviceId}-stream` } as MediaStream,
+    stop: stopMock,
+    stopMock
+  };
+};
+
+interface FakeTracker extends MediaPipeHandTracker {
+  readonly cleanupMock: ReturnType<typeof vi.fn>;
+}
 
 const createTracker = (
   detect: MediaPipeHandTracker["detect"] = vi.fn(() =>
     Promise.resolve(undefined)
   )
-): MediaPipeHandTracker => ({
-  detect,
-  cleanup: vi.fn(() => Promise.resolve())
-});
+): FakeTracker => {
+  const cleanupMock = vi.fn(() => Promise.resolve());
+
+  return {
+    detect,
+    cleanup: cleanupMock,
+    cleanupMock
+  };
+};
 
 const createAudio = () => ({
   startBgm: vi.fn(() => Promise.resolve()),
@@ -428,6 +446,43 @@ describe("createBalloonGameRuntime", () => {
     );
   });
 
+  it("shows HUD status while side input is missing but front aim remains usable", () => {
+    const raf = createRaf();
+    const hudRoot = { innerHTML: "" } as HTMLElement;
+    const frontOnlyFrame = createFusedFrame({
+      fusionMode: "frontOnlyAim",
+      trigger: undefined,
+      shotFired: false,
+      sideSource: {
+        ...createFusedFrame().sideSource,
+        frameTimestamp: undefined,
+        frameAgeMs: undefined,
+        availability: "unavailable",
+        rejectReason: "sideMissing"
+      },
+      fusionRejectReason: "sideMissing"
+    });
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: {} as HTMLVideoElement,
+      sideVideo: {} as HTMLVideoElement,
+      canvas: createCanvas(),
+      hudRoot,
+      readFusedInputFrame: () => frontOnlyFrame,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame
+    });
+
+    runtime.start();
+    raf.fire(4_000);
+
+    expect(hudRoot.innerHTML).toContain("サイドカメラの入力を待っています");
+  });
+
   it("ignores a shot committed before countdown completes", () => {
     const raf = createRaf();
     const hudRoot = { innerHTML: "" } as HTMLElement;
@@ -603,6 +658,18 @@ describe("createBalloonGameRuntime", () => {
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
+    const frontStream = createPinnedStream("front");
+    const sideStream = createPinnedStream("side");
+    const frontTracker = createTracker();
+    const sideTracker = createTracker();
+    const createDevicePinnedStream = vi
+      .fn()
+      .mockResolvedValueOnce(frontStream)
+      .mockResolvedValueOnce(sideStream);
+    const createMediaPipeHandTracker = vi
+      .fn()
+      .mockResolvedValueOnce(frontTracker)
+      .mockResolvedValueOnce(sideTracker);
     const runtime = createBalloonGameRuntime({
       frontDeviceId: "front",
       sideDeviceId: "side",
@@ -615,9 +682,8 @@ describe("createBalloonGameRuntime", () => {
       drawGameFrame: vi.fn(),
       requestAnimationFrame: raf.requestAnimationFrame,
       cancelAnimationFrame: raf.cancelAnimationFrame,
-      createDevicePinnedStream: (deviceId) =>
-        Promise.resolve(createPinnedStream(deviceId)),
-      createMediaPipeHandTracker: vi.fn(() => Promise.resolve(createTracker())),
+      createDevicePinnedStream,
+      createMediaPipeHandTracker,
       createImageBitmap: vi.fn(() =>
         Promise.reject(new Error("bitmap keeps failing"))
       )
@@ -654,6 +720,10 @@ describe("createBalloonGameRuntime", () => {
     expect(capturedFusionContexts.at(-1)).toMatchObject({
       frontLaneHealth: "failed"
     });
+    expect(frontStream.stopMock).toHaveBeenCalledOnce();
+    expect(frontTracker.cleanupMock).toHaveBeenCalledOnce();
+    expect(sideStream.stopMock).not.toHaveBeenCalled();
+    expect(sideTracker.cleanupMock).not.toHaveBeenCalled();
 
     runtime.destroy();
     vi.unstubAllGlobals();

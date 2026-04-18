@@ -37,12 +37,12 @@ const listSourceFiles = (dir: string): string[] =>
 const importsFrom = (absolutePath: string): string[] => {
   const source = readFileSync(absolutePath, "utf8");
   const importRegex =
-    /from\s+["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)/g;
+    /from\s+["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g;
   const imports: string[] = [];
   let match = importRegex.exec(source);
 
   while (match !== null) {
-    imports.push(match[1] ?? match[2] ?? "");
+    imports.push(match[1] ?? match[2] ?? match[3] ?? "");
     match = importRegex.exec(source);
   }
 
@@ -199,6 +199,34 @@ describe("M5 import boundaries", () => {
     writeFileSync(
       join(gameplayDir, "violates.ts"),
       'import { mapper } from "../input-fusion/mapper";\nexport const leaked = mapper;\n'
+    );
+
+    try {
+      const gameplayFiles = listSourceFiles(gameplayDir);
+      const offenders = gameplayBoundaryOffenders(gameplayFiles, dir);
+
+      expect(offenders.map((file) => relative(dir, file))).toEqual([
+        "src/features/gameplay/violates.ts"
+      ]);
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
+  });
+
+  it("catches gameplay side-effect imports from input-fusion modules", () => {
+    const dir = join(
+      tmpdir(),
+      `balloon-gameplay-side-effect-boundary-${String(process.pid)}`
+    );
+    const gameplayDir = join(dir, "src/features/gameplay");
+    const fusionDir = join(dir, "src/features/input-fusion");
+    rmSync(dir, { force: true, recursive: true });
+    mkdirSync(gameplayDir, { recursive: true });
+    mkdirSync(fusionDir, { recursive: true });
+    writeFileSync(join(fusionDir, "dummy.ts"), "export const dummy = {};\n");
+    writeFileSync(
+      join(gameplayDir, "violates.ts"),
+      'import "../input-fusion/dummy";\nexport const gameplay = {};\n'
     );
 
     try {

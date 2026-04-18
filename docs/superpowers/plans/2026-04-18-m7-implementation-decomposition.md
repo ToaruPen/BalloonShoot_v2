@@ -1,8 +1,8 @@
 # M7 Implementation-Granularity Task Decomposition
 
 **対象:** Issue #7, Minimal Balloon Gameplay with Fused Input  
-**Goal:** [index.html](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/index.html) を 60 秒の production-clean balloon gameplay にする。gameplay は `FusedGameInputFrame` だけを読み、front aim crosshair、side-triggered shots、balloons、score/time HUD、countdown、result/retry を動かす。  
-**前提:** M7 は M6 完了後に開始する。現調査時点の checkout は `7ff8a06` で、[src/features/input-fusion](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/input-fusion) は未作成。ローカル `claude/m6-followup` は `7ff8a06` と同一、`origin/claude/m6-followup` は未存在だった。read-only 環境のため `git fetch` は未実行。
+**Goal:** [index.html](index.html) を 60 秒の production-clean balloon gameplay にする。gameplay は `FusedGameInputFrame` だけを読み、front aim crosshair、side-triggered shots、balloons、score/time HUD、countdown、result/retry を動かす。
+**前提:** M7 は M6 完了後に開始する。現調査時点の checkout は `7ff8a06` で、[src/features/input-fusion](src/features/input-fusion) は未作成。ローカル `claude/m6-followup` は `7ff8a06` と同一、`origin/claude/m6-followup` は未存在だった。read-only 環境のため `git fetch` は未実行。
 
 ## 1. Pre-flight Checks
 
@@ -12,10 +12,10 @@ M7 開始前の post-M6 `main` で必ず確認する。
    - `git fetch --prune origin`
    - `git rev-parse --short HEAD` が post-M6 merge commit を指すこと。
    - `git log --oneline origin/claude/m6-followup -- src` を、branch が存在する場合だけ確認する。
-   - M6 decomposition の untracked plan [docs/superpowers/plans/2026-04-18-m6-implementation-decomposition.md](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/docs/superpowers/plans/2026-04-18-m6-implementation-decomposition.md) が正式 plan と矛盾しないこと。
+   - M6 decomposition の untracked plan [docs/superpowers/plans/2026-04-18-m6-implementation-decomposition.md](docs/superpowers/plans/2026-04-18-m6-implementation-decomposition.md) が正式 plan と矛盾しないこと。
 
 2. M6 fusion contract shape
-   - [src/shared/types/fusion.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/shared/types/fusion.ts) が存在する。
+   - [src/shared/types/fusion.ts](src/shared/types/fusion.ts) が存在する。
    - `FusedGameInputFrame` が少なくとも以下を持つことを確認する:
      - `fusionTimestampMs`
      - `fusionMode`
@@ -32,7 +32,7 @@ M7 開始前の post-M6 `main` で必ず確認する。
    - Fusion timestamp policy は `FrameTimestamp.frameTimestampMs` を使い、callback order / `Date.now()` / ad hoc `performance.now()` で pairing していない。
 
 3. M6 input-fusion public surface
-   - [src/features/input-fusion/index.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/input-fusion/index.ts) から production game が使える最小 API が export されている:
+   - [src/features/input-fusion/index.ts](src/features/input-fusion/index.ts) から production game が使える最小 API が export されている:
      - `createInputFusionMapper`
      - `defaultFusionTuning` or equivalent defaults
      - `FusionTuning` type
@@ -43,13 +43,13 @@ M7 開始前の post-M6 `main` で必ず確認する。
      - `resetFrontLane()`
      - `resetSideLane()`
      - `resetAll()`
-   - [src/features/input-fusion](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/input-fusion) は [src/features/diagnostic-workbench](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/diagnostic-workbench), [src/features/gameplay](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/gameplay), [src/app](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app), [src/features/rendering](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/rendering), [src/features/camera](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/camera), [src/features/hand-tracking](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/hand-tracking) を import しない。
+   - [src/features/input-fusion](src/features/input-fusion) は [src/features/diagnostic-workbench](src/features/diagnostic-workbench), [src/features/gameplay](src/features/gameplay), [src/app](src/app), [src/features/rendering](src/features/rendering), [src/features/camera](src/features/camera), [src/features/hand-tracking](src/features/hand-tracking) を import しない。
 
 4. Existing lane contracts
-   - M3: [src/shared/types/camera.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/shared/types/camera.ts), [src/shared/types/hand.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/shared/types/hand.ts)
-   - M4: [src/shared/types/trigger.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/shared/types/trigger.ts), [src/features/side-trigger](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/side-trigger)
-   - M5: [src/shared/types/aim.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/shared/types/aim.ts), [src/features/front-aim](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/front-aim)
-   - M6: [src/shared/types/fusion.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/shared/types/fusion.ts), [src/features/input-fusion](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/input-fusion)
+   - M3: [src/shared/types/camera.ts](src/shared/types/camera.ts), [src/shared/types/hand.ts](src/shared/types/hand.ts)
+   - M4: [src/shared/types/trigger.ts](src/shared/types/trigger.ts), [src/features/side-trigger](src/features/side-trigger)
+   - M5: [src/shared/types/aim.ts](src/shared/types/aim.ts), [src/features/front-aim](src/features/front-aim)
+   - M6: [src/shared/types/fusion.ts](src/shared/types/fusion.ts), [src/features/input-fusion](src/features/input-fusion)
 
 5. Baseline behavior
    - `/diagnostic.html` remains operational and shows M4/M5/M6 workbench surfaces.
@@ -65,14 +65,14 @@ M7 開始前の post-M6 `main` で必ず確認する。
 **Scope:** Lock the M7 rule that gameplay consumes only `FusedGameInputFrame`.
 
 **Files:**
-- Create [tests/unit/features/gameplay/fusedInputContract.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/unit/features/gameplay/fusedInputContract.test.ts)
-- Modify [tests/integration/importBoundaries.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/integration/importBoundaries.test.ts)
-- Modify [tests/e2e/home.smoke.spec.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/e2e/home.smoke.spec.ts)
+- Create [tests/unit/features/gameplay/fusedInputContract.test.ts](tests/unit/features/gameplay/fusedInputContract.test.ts)
+- Modify [tests/integration/importBoundaries.test.ts](tests/integration/importBoundaries.test.ts)
+- Modify [tests/e2e/home.smoke.spec.ts](tests/e2e/home.smoke.spec.ts)
 
 **Implementation notes:**
 - Extend import scanner to include `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, preserving the import-boundary file-extension lesson.
-- Update boundary rule: [src/main.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/main.ts) and [src/app](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app) may import [src/features/input-fusion](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/input-fusion) after M7, but must not import [src/features/diagnostic-workbench](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/diagnostic-workbench).
-- [src/features/gameplay](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/gameplay) must not import [src/features/front-aim](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/front-aim), [src/features/side-trigger](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/side-trigger), [src/features/camera](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/camera), [src/features/hand-tracking](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/hand-tracking), or [src/features/diagnostic-workbench](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/diagnostic-workbench).
+- Update boundary rule: [src/main.ts](src/main.ts) and [src/app](src/app) may import [src/features/input-fusion](src/features/input-fusion) after M7, but must not import [src/features/diagnostic-workbench](src/features/diagnostic-workbench).
+- [src/features/gameplay](src/features/gameplay) must not import [src/features/front-aim](src/features/front-aim), [src/features/side-trigger](src/features/side-trigger), [src/features/camera](src/features/camera), [src/features/hand-tracking](src/features/hand-tracking), or [src/features/diagnostic-workbench](src/features/diagnostic-workbench).
 - E2E absence assertions must include no `wb-fusion-panel`, no `data-fusion-tuning`, no side-trigger slider labels, no landmark overlay, no `threshold`, no `wireframe`.
 
 **Test plan:**
@@ -90,9 +90,9 @@ M7 開始前の post-M6 `main` で必ず確認する。
 **Scope:** Add game flow state independent of DOM, camera, MediaPipe, rendering, and audio.
 
 **Files:**
-- Create [src/features/gameplay/domain/gameSession.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/gameplay/domain/gameSession.ts)
-- Create [tests/unit/features/gameplay/gameSession.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/unit/features/gameplay/gameSession.test.ts)
-- Modify [src/features/gameplay/AGENTS.md](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/gameplay/AGENTS.md) only if it needs one short note about pure state machines.
+- Create [src/features/gameplay/domain/gameSession.ts](src/features/gameplay/domain/gameSession.ts)
+- Create [tests/unit/features/gameplay/gameSession.test.ts](tests/unit/features/gameplay/gameSession.test.ts)
+- Modify [src/features/gameplay/AGENTS.md](src/features/gameplay/AGENTS.md) only if it needs one short note about pure state machines.
 
 **Implementation notes:**
 - Use a discriminated union, not loose booleans:
@@ -127,10 +127,10 @@ M7 開始前の post-M6 `main` で必ず確認する。
 **Scope:** Carry over the existing skeleton while removing hard-coded spawn coordinates tied to one canvas size.
 
 **Files:**
-- Modify [src/features/gameplay/domain/createGameEngine.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/gameplay/domain/createGameEngine.ts)
-- Modify [src/features/gameplay/domain/balloon.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/gameplay/domain/balloon.ts)
-- Modify [src/features/gameplay/domain/difficulty.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/gameplay/domain/difficulty.ts)
-- Modify [tests/unit/features/gameplay/createGameEngine.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/unit/features/gameplay/createGameEngine.test.ts)
+- Modify [src/features/gameplay/domain/createGameEngine.ts](src/features/gameplay/domain/createGameEngine.ts)
+- Modify [src/features/gameplay/domain/balloon.ts](src/features/gameplay/domain/balloon.ts)
+- Modify [src/features/gameplay/domain/difficulty.ts](src/features/gameplay/domain/difficulty.ts)
+- Modify [tests/unit/features/gameplay/createGameEngine.test.ts](tests/unit/features/gameplay/createGameEngine.test.ts)
 
 **Implementation notes:**
 - `createGameEngine({ width, height, durationMs })` or `resizeViewport({ width, height })` must drive spawn range and offscreen cleanup.
@@ -158,7 +158,7 @@ M7 開始前の post-M6 `main` で必ず確認する。
 
 **Dependencies:**
 - Foundation gameplay design
-- Existing skeleton in [src/features/gameplay/domain](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/gameplay/domain)
+- Existing skeleton in [src/features/gameplay/domain](src/features/gameplay/domain)
 - Prior lessons: deterministic tests, `toBe` for scalar assertions, no hidden fallback
 
 ### 4. Add Fused Input to Gameplay Adapter
@@ -166,8 +166,8 @@ M7 開始前の post-M6 `main` で必ず確認する。
 **Scope:** Convert `FusedGameInputFrame` into production gameplay actions without raw lane access.
 
 **Files:**
-- Create [src/features/gameplay/domain/fusedGameInput.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/gameplay/domain/fusedGameInput.ts)
-- Create [tests/unit/features/gameplay/fusedGameInput.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/unit/features/gameplay/fusedGameInput.test.ts)
+- Create [src/features/gameplay/domain/fusedGameInput.ts](src/features/gameplay/domain/fusedGameInput.ts)
+- Create [tests/unit/features/gameplay/fusedGameInput.test.ts](tests/unit/features/gameplay/fusedGameInput.test.ts)
 
 **Implementation notes:**
 - Input is only `FusedGameInputFrame`.
@@ -202,9 +202,9 @@ M7 開始前の post-M6 `main` で必ず確認する。
 **Scope:** Keep production HUD clean and testable without diagnostic text.
 
 **Files:**
-- Create [src/app/gameHud.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app/gameHud.ts)
-- Create [tests/unit/app/gameHud.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/unit/app/gameHud.test.ts)
-- Modify [src/styles/app.css](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/styles/app.css)
+- Create [src/app/gameHud.ts](src/app/gameHud.ts)
+- Create [tests/unit/app/gameHud.test.ts](tests/unit/app/gameHud.test.ts)
+- Modify [src/styles/app.css](src/styles/app.css)
 
 **Implementation notes:**
 - HUD fields:
@@ -217,7 +217,7 @@ M7 開始前の post-M6 `main` で必ず確認する。
   - retry button
   - production-friendly lane status copy such as `入力を準備中` only when degraded
 - Do not render `fusionMode`, `fusionRejectReason`, threshold names, raw `unavailable`, or diagnostic constants on `/`.
-- Escape all user/device-derived text via [src/shared/browser/escapeHTML.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/shared/browser/escapeHTML.ts).
+- Escape all user/device-derived text via [src/shared/browser/escapeHTML.ts](src/shared/browser/escapeHTML.ts).
 - Use key/value pair assertions in tests for score/time/combo rather than loose `toContain`.
 
 **Test plan:**
@@ -238,8 +238,8 @@ M7 開始前の post-M6 `main` で必ず確認する。
 **Scope:** Render balloons, crosshair, shot feedback, and simple result-safe clearing on Canvas 2D.
 
 **Files:**
-- Modify [src/features/rendering/drawGameFrame.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/rendering/drawGameFrame.ts)
-- Modify [tests/unit/features/rendering/drawGameFrame.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/unit/features/rendering/drawGameFrame.test.ts)
+- Modify [src/features/rendering/drawGameFrame.ts](src/features/rendering/drawGameFrame.ts)
+- Modify [tests/unit/features/rendering/drawGameFrame.test.ts](tests/unit/features/rendering/drawGameFrame.test.ts)
 
 **Implementation notes:**
 - Keep rendering as view layer only. No score, no hit rules, no input inference.
@@ -271,19 +271,19 @@ M7 開始前の post-M6 `main` で必ず確認する。
 **Scope:** Include PoC audio hooks in M7 using existing public assets, with asset polish deferred.
 
 **Files:**
-- Modify [src/features/audio/createAudioController.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/audio/createAudioController.ts)
-- Modify [tests/unit/features/audio/createAudioController.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/unit/features/audio/createAudioController.test.ts)
-- Runtime-served assets already exist under [public/audio](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/public/audio)
+- Modify [src/features/audio/createAudioController.ts](src/features/audio/createAudioController.ts)
+- Modify [tests/unit/features/audio/createAudioController.test.ts](tests/unit/features/audio/createAudioController.test.ts)
+- Runtime-served assets already exist under [public/audio](public/audio)
 
 **Implementation notes:**
 - Audio belongs in M7 for hooks and existing asset playback because foundation spec includes BGM, shot, hit, time-up, result in PoC scope.
 - New asset production/mixing is deferred to later polish, not M8 calibration.
 - M7 uses these existing files:
-  - [public/audio/bgm.mp3](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/public/audio/bgm.mp3)
-  - [public/audio/shot.mp3](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/public/audio/shot.mp3)
-  - [public/audio/hit.mp3](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/public/audio/hit.mp3)
-  - [public/audio/time-up.mp3](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/public/audio/time-up.mp3)
-  - [public/audio/result.mp3](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/public/audio/result.mp3)
+  - [public/audio/bgm.mp3](public/audio/bgm.mp3)
+  - [public/audio/shot.mp3](public/audio/shot.mp3)
+  - [public/audio/hit.mp3](public/audio/hit.mp3)
+  - [public/audio/time-up.mp3](public/audio/time-up.mp3)
+  - [public/audio/result.mp3](public/audio/result.mp3)
 - Hook policy:
   - start BGM on user-initiated game start/countdown
   - stop BGM on result/destroy
@@ -304,7 +304,7 @@ M7 開始前の post-M6 `main` で必ず確認する。
 
 **Dependencies:**
 - Foundation audio scope
-- Existing [src/features/audio/AGENTS.md](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/audio/AGENTS.md)
+- Existing [src/features/audio/AGENTS.md](src/features/audio/AGENTS.md)
 - Prior lessons: no hidden fallback, browser-boundary failure handling
 
 ### 8. Build Production Two-Camera Runtime
@@ -312,12 +312,12 @@ M7 開始前の post-M6 `main` で必ず確認する。
 **Scope:** Replace aim-only runtime with two-camera front/side/fusion/gameplay runtime.
 
 **Files:**
-- Create [src/app/balloonGameRuntime.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app/balloonGameRuntime.ts)
-- Create [tests/integration/balloonGameRuntime.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/integration/balloonGameRuntime.test.ts)
-- Create or move side conversion helper to [src/features/side-trigger/sideTriggerDetectionConversion.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/side-trigger/sideTriggerDetectionConversion.ts)
-- Modify [src/features/side-trigger/index.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/side-trigger/index.ts)
-- Modify [src/features/diagnostic-workbench/liveLandmarkInspection.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/diagnostic-workbench/liveLandmarkInspection.ts) only if moving shared `toSideDetection` out of workbench
-- Eventually retire [src/app/frontAimGameRuntime.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app/frontAimGameRuntime.ts) after M7 page tests migrate.
+- Create [src/app/balloonGameRuntime.ts](src/app/balloonGameRuntime.ts)
+- Create [tests/integration/balloonGameRuntime.test.ts](tests/integration/balloonGameRuntime.test.ts)
+- Create or move side conversion helper to [src/features/side-trigger/sideTriggerDetectionConversion.ts](src/features/side-trigger/sideTriggerDetectionConversion.ts)
+- Modify [src/features/side-trigger/index.ts](src/features/side-trigger/index.ts)
+- Modify [src/features/diagnostic-workbench/liveLandmarkInspection.ts](src/features/diagnostic-workbench/liveLandmarkInspection.ts) only if moving shared `toSideDetection` out of workbench
+- Eventually retire [src/app/frontAimGameRuntime.ts](src/app/frontAimGameRuntime.ts) after M7 page tests migrate.
 
 **Implementation notes:**
 - Runtime owns browser lifecycle only:
@@ -329,8 +329,8 @@ M7 開始前の post-M6 `main` で必ず確認する。
   - create input fusion mapper
   - create gameplay engine/session
   - render frame
-- Runtime must not import [src/features/diagnostic-workbench](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/diagnostic-workbench).
-- Runtime may import [src/features/front-aim](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/front-aim), [src/features/side-trigger](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/side-trigger), and [src/features/input-fusion](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/input-fusion) because app wiring is the composition layer.
+- Runtime must not import [src/features/diagnostic-workbench](src/features/diagnostic-workbench).
+- Runtime may import [src/features/front-aim](src/features/front-aim), [src/features/side-trigger](src/features/side-trigger), and [src/features/input-fusion](src/features/input-fusion) because app wiring is the composition layer.
 - Preserve lessons:
   - cleanup both streams and both trackers
   - generation token for async race guard
@@ -339,7 +339,7 @@ M7 開始前の post-M6 `main` で必ず確認する。
   - stop pending stream if tracker startup fails or destroy happens mid-start
   - reset side mapper/fusion side buffer on side stream replacement
   - reset front mapper/fusion front buffer on front stream replacement
-- Use `requestVideoFrameCallback` timestamp metadata through [src/features/camera/frameTimestamp.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/camera/frameTimestamp.ts). Do not create a new timestamp policy.
+- Use `requestVideoFrameCallback` timestamp metadata through [src/features/camera/frameTimestamp.ts](src/features/camera/frameTimestamp.ts). Do not create a new timestamp policy.
 - rAF loop advances gameplay by deterministic delta. Lane frame callbacks update latest fused input.
 
 **Test plan:**
@@ -367,11 +367,11 @@ M7 開始前の post-M6 `main` で必ず確認する。
 **Scope:** Transform `/` from front-aim shell into full two-camera game page.
 
 **Files:**
-- Create [src/app/balloonGamePage.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app/balloonGamePage.ts)
-- Create [tests/unit/app/balloonGamePage.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/unit/app/balloonGamePage.test.ts)
-- Modify [src/main.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/main.ts)
-- Modify [src/styles/app.css](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/styles/app.css)
-- Retire or delete [src/app/frontAimGamePage.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app/frontAimGamePage.ts) and [tests/unit/app/frontAimGamePage.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/unit/app/frontAimGamePage.test.ts) once replacements are green, to avoid misleading names and knip issues.
+- Create [src/app/balloonGamePage.ts](src/app/balloonGamePage.ts)
+- Create [tests/unit/app/balloonGamePage.test.ts](tests/unit/app/balloonGamePage.test.ts)
+- Modify [src/main.ts](src/main.ts)
+- Modify [src/styles/app.css](src/styles/app.css)
+- Retire or delete [src/app/frontAimGamePage.ts](src/app/frontAimGamePage.ts) and [tests/unit/app/frontAimGamePage.test.ts](tests/unit/app/frontAimGamePage.test.ts) once replacements are green, to avoid misleading names and knip issues.
 
 **Implementation notes:**
 - Page flow:
@@ -394,7 +394,7 @@ M7 開始前の post-M6 `main` で必ず確認する。
   - no landmark overlays
   - no wireframe
   - no fusion telemetry labels
-- Keep [src/app](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app) thin; rules remain in [src/features/gameplay](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/gameplay).
+- Keep [src/app](src/app) thin; rules remain in [src/features/gameplay](src/features/gameplay).
 
 **Test plan:**
 - Unit tests:
@@ -417,10 +417,10 @@ M7 開始前の post-M6 `main` で必ず確認する。
 **Scope:** Connect pure state, engine, fused input, rendering, HUD patching, and audio.
 
 **Files:**
-- Modify [src/app/balloonGameRuntime.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app/balloonGameRuntime.ts)
-- Modify [src/app/gameHud.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app/gameHud.ts)
-- Modify [tests/integration/balloonGameRuntime.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/integration/balloonGameRuntime.test.ts)
-- Modify [tests/unit/app/gameHud.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/unit/app/gameHud.test.ts)
+- Modify [src/app/balloonGameRuntime.ts](src/app/balloonGameRuntime.ts)
+- Modify [src/app/gameHud.ts](src/app/gameHud.ts)
+- Modify [tests/integration/balloonGameRuntime.test.ts](tests/integration/balloonGameRuntime.test.ts)
+- Modify [tests/unit/app/gameHud.test.ts](tests/unit/app/gameHud.test.ts)
 
 **Implementation notes:**
 - Each animation frame:
@@ -465,9 +465,9 @@ M7 開始前の post-M6 `main` で必ず確認する。
 **Scope:** Verify `/` is playable shell and `/diagnostic.html` remains unchanged.
 
 **Files:**
-- Modify [tests/e2e/home.smoke.spec.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/e2e/home.smoke.spec.ts)
-- Modify [tests/e2e/diagnostic.smoke.spec.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/e2e/diagnostic.smoke.spec.ts)
-- Modify [tests/integration/importBoundaries.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/integration/importBoundaries.test.ts)
+- Modify [tests/e2e/home.smoke.spec.ts](tests/e2e/home.smoke.spec.ts)
+- Modify [tests/e2e/diagnostic.smoke.spec.ts](tests/e2e/diagnostic.smoke.spec.ts)
+- Modify [tests/integration/importBoundaries.test.ts](tests/integration/importBoundaries.test.ts)
 
 **Implementation notes:**
 - Home smoke should mock two video input devices.
@@ -504,8 +504,8 @@ M7 開始前の post-M6 `main` で必ず確認する。
 **Scope:** Deterministic multi-frame gameplay sequences outside browser DOM.
 
 **Files:**
-- Create [tests/replay/fusedGameplaySequenceReplay.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/replay/fusedGameplaySequenceReplay.test.ts)
-- Modify [tests/replay/AGENTS.md](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/replay/AGENTS.md) if the “Future” note becomes current guidance.
+- Create [tests/replay/fusedGameplaySequenceReplay.test.ts](tests/replay/fusedGameplaySequenceReplay.test.ts)
+- Modify [tests/replay/AGENTS.md](tests/replay/AGENTS.md) if the “Future” note becomes current guidance.
 
 **Implementation notes:**
 - Use synthetic `FusedGameInputFrame` arrays from M6 contract.
@@ -534,10 +534,10 @@ M7 開始前の post-M6 `main` で必ず確認する。
 **Scope:** Prevent misleading app names and unused exports after M7 is wired.
 
 **Files:**
-- Delete or replace [src/app/frontAimGamePage.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app/frontAimGamePage.ts)
-- Delete or replace [src/app/frontAimGameRuntime.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app/frontAimGameRuntime.ts)
-- Delete or replace [tests/unit/app/frontAimGamePage.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/unit/app/frontAimGamePage.test.ts)
-- Delete or replace [tests/integration/gameFrontAimRuntime.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/integration/gameFrontAimRuntime.test.ts)
+- Delete or replace [src/app/frontAimGamePage.ts](src/app/frontAimGamePage.ts)
+- Delete or replace [src/app/frontAimGameRuntime.ts](src/app/frontAimGameRuntime.ts)
+- Delete or replace [tests/unit/app/frontAimGamePage.test.ts](tests/unit/app/frontAimGamePage.test.ts)
+- Delete or replace [tests/integration/gameFrontAimRuntime.test.ts](tests/integration/gameFrontAimRuntime.test.ts)
 
 **Implementation notes:**
 - Prefer new `balloonGame*` names over keeping aim-only names for fused gameplay.
@@ -571,8 +571,8 @@ M7 開始前の post-M6 `main` で必ず確認する。
 - BGM, shot, hit, time-up, result audio hooks exist.
 - `/` has no threshold sliders/debug overlay/landmark wireframe/diagnostic telemetry.
 - `/diagnostic.html` remains operational.
-- [src/main.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/main.ts) does not import [src/features/diagnostic-workbench](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/diagnostic-workbench).
-- [src/features/gameplay](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/gameplay) does not import raw lane modules.
+- [src/main.ts](src/main.ts) does not import [src/features/diagnostic-workbench](src/features/diagnostic-workbench).
+- [src/features/gameplay](src/features/gameplay) does not import raw lane modules.
 
 **Test plan:**
 - `npm run check`
@@ -688,10 +688,10 @@ M7 開始前の post-M6 `main` で必ず確認する。
 
 ## 5. Boundaries Reminder
 
-- [index.html](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/index.html) and [src/main.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/main.ts) must not import [src/features/diagnostic-workbench](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/diagnostic-workbench).
+- [index.html](index.html) and [src/main.ts](src/main.ts) must not import [src/features/diagnostic-workbench](src/features/diagnostic-workbench).
 - Game page reads only `FusedGameInputFrame` as semantic gameplay input.
-- [src/features/gameplay](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/gameplay) must not read raw `AimInputFrame`, raw `TriggerInputFrame`, `FrontHandDetection`, `SideHandDetection`, camera streams, MediaPipe trackers, or diagnostic telemetry.
-- App/runtime may compose front/side/fusion because [src/app](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app) is the browser wiring layer.
+- [src/features/gameplay](src/features/gameplay) must not read raw `AimInputFrame`, raw `TriggerInputFrame`, `FrontHandDetection`, `SideHandDetection`, camera streams, MediaPipe trackers, or diagnostic telemetry.
+- App/runtime may compose front/side/fusion because [src/app](src/app) is the browser wiring layer.
 - No threshold sliders, debug overlay, workbench panels, landmark wireframe, fusion telemetry, or trigger evidence on `/`.
 - Diagnostic workbench user-facing behavior must remain unchanged except for any M6-approved fusion diagnostics already present on `/diagnostic.html`.
 - Lane invariant stays fixed:
@@ -704,46 +704,46 @@ M7 開始前の post-M6 `main` で必ず確認する。
 
 Expected M6/M7 coordination points:
 
-1. [src/shared/types/fusion.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/shared/types/fusion.ts)
+1. [src/shared/types/fusion.ts](src/shared/types/fusion.ts)
    - M6 owns contract creation.
    - M7 consumes it from gameplay adapter/runtime.
    - Risk: M7 must not reshape it to fit gameplay if diagnostic already depends on it. Add an adapter in gameplay instead.
 
-2. [src/features/input-fusion/index.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/input-fusion/index.ts)
+2. [src/features/input-fusion/index.ts](src/features/input-fusion/index.ts)
    - M6 exports diagnostic-used fusion API.
    - M7 uses the same public API in production runtime.
    - Risk: `knip` and import-boundary tests need updating because app imports `input-fusion` become valid in M7.
 
-3. [src/features/diagnostic-workbench/liveLandmarkInspection.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/diagnostic-workbench/liveLandmarkInspection.ts)
+3. [src/features/diagnostic-workbench/liveLandmarkInspection.ts](src/features/diagnostic-workbench/liveLandmarkInspection.ts)
    - M6 likely wires fusion here.
    - M7 should not import from it, but may extract shared side detection conversion out of it.
    - Risk: extraction must preserve M6 diagnostic behavior and tests.
 
-4. [src/features/diagnostic-workbench/renderWorkbench.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/diagnostic-workbench/renderWorkbench.ts)
+4. [src/features/diagnostic-workbench/renderWorkbench.ts](src/features/diagnostic-workbench/renderWorkbench.ts)
    - M6 may extend `WorkbenchInspectionState` with `fusionFrame`, `fusionTelemetry`, `fusionTuning`.
    - M7 should not need to touch it unless shared helper extraction causes type imports to move.
    - Risk: default-state mismatch if M7 changes shared types.
 
-5. [src/diagnostic-main.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/diagnostic-main.ts)
+5. [src/diagnostic-main.ts](src/diagnostic-main.ts)
    - M6 likely adds fusion tuning event handling.
    - M7 should avoid touching it.
    - Risk: app-level shared helper changes must not create a second diagnostic event system.
 
-6. [tests/integration/importBoundaries.test.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/integration/importBoundaries.test.ts)
+6. [tests/integration/importBoundaries.test.ts](tests/integration/importBoundaries.test.ts)
    - M6 likely forbids game app importing `input-fusion`.
    - M7 must relax that specific rule while keeping `diagnostic-workbench` forbidden.
    - Risk: stale M6 absence rule blocks intended production fusion wiring.
 
-7. [tests/e2e/home.smoke.spec.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/tests/e2e/home.smoke.spec.ts)
+7. [tests/e2e/home.smoke.spec.ts](tests/e2e/home.smoke.spec.ts)
    - M6 likely adds fusion absence assertions.
    - M7 must keep absence of diagnostic UI, but no longer assert that production game lacks all fusion behavior internally.
    - Risk: assertions should target visible diagnostic text/controls, not implementation imports.
 
-8. [src/app/frontAimGameRuntime.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app/frontAimGameRuntime.ts) and [src/app/frontAimGamePage.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/app/frontAimGamePage.ts)
+8. [src/app/frontAimGameRuntime.ts](src/app/frontAimGameRuntime.ts) and [src/app/frontAimGamePage.ts](src/app/frontAimGamePage.ts)
    - M6 should not touch them by plan, but any `claude/m6-followup` changes must be inspected before M7 replacement.
    - Risk: M5 follow-up fixes for cleanup/processFrame recovery must be carried into new `balloonGame*` files.
 
-9. [src/styles/diagnostic.css](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/styles/diagnostic.css) and [src/styles/app.css](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/styles/app.css)
+9. [src/styles/diagnostic.css](src/styles/diagnostic.css) and [src/styles/app.css](src/styles/app.css)
    - M6 touches diagnostic styles.
    - M7 touches app styles.
    - Risk: class names like `wb-*` must remain diagnostic-only; app CSS should not reuse workbench selectors.
@@ -753,11 +753,11 @@ Expected M6/M7 coordination points:
 Audio is in M7 scope for playback hooks and existing runtime-served assets. It is not deferred to M8 because M8 is calibration/tuning, while foundation spec includes audio in PoC gameplay scope.
 
 M7 includes:
-- BGM hook: [public/audio/bgm.mp3](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/public/audio/bgm.mp3)
-- shot hook: [public/audio/shot.mp3](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/public/audio/shot.mp3)
-- hit hook: [public/audio/hit.mp3](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/public/audio/hit.mp3)
-- time-up hook: [public/audio/time-up.mp3](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/public/audio/time-up.mp3)
-- result hook: [public/audio/result.mp3](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/public/audio/result.mp3)
+- BGM hook: [public/audio/bgm.mp3](public/audio/bgm.mp3)
+- shot hook: [public/audio/shot.mp3](public/audio/shot.mp3)
+- hit hook: [public/audio/hit.mp3](public/audio/hit.mp3)
+- time-up hook: [public/audio/time-up.mp3](public/audio/time-up.mp3)
+- result hook: [public/audio/result.mp3](public/audio/result.mp3)
 
 M7 defers:
 - new audio asset production
@@ -766,4 +766,4 @@ M7 defers:
 - persistent audio preferences
 - detailed audio mixing
 
-The runtime should use [src/features/audio/createAudioController.ts](/Users/sankenbisha/Dev/after-school_daycare/BalloonShoot_v2/src/features/audio/createAudioController.ts), catch/log browser playback failures at the app boundary, and keep gameplay functional if an audio promise rejects.
+The runtime should use [src/features/audio/createAudioController.ts](src/features/audio/createAudioController.ts), catch/log browser playback failures at the app boundary, and keep gameplay functional if an audio promise rejects.

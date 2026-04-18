@@ -48,7 +48,10 @@ import {
   startGameSession,
   type GameSession
 } from "../features/gameplay/domain/gameSession";
-import type { FusedGameInputFrame } from "../shared/types/fusion";
+import type {
+  FusedGameInputFrame,
+  FusionRejectReason
+} from "../shared/types/fusion";
 import type { FrameTimestamp, LaneHealthStatus } from "../shared/types/camera";
 import type { HandDetection } from "../shared/types/hand";
 import { renderGameHud } from "./gameHud";
@@ -139,6 +142,37 @@ const VIDEO_FRAME_FALLBACK_INTERVAL_MS = 66;
 // Ten consecutive frame failures spans ~330ms at 30fps, enough for transient browser hiccups.
 export const MAX_CONSECUTIVE_FRAME_ERRORS = 10;
 
+const degradedInputMessages = {
+  frontMissing: "正面カメラの入力を待っています",
+  frontStale: "正面カメラの入力を待っています",
+  sideMissing: "サイドカメラの入力を待っています",
+  sideStale: "サイドカメラの入力を待っています",
+  laneFailed: "カメラが失敗しました。リトライしてください",
+  timestampGapTooLarge: "タイミングずれを再同期中"
+} satisfies Record<Exclude<FusionRejectReason, "none">, string>;
+
+const statusMessageForFusedFrame = (
+  frame: FusedGameInputFrame | undefined
+): string | undefined => {
+  if (frame === undefined) {
+    return "入力を準備中";
+  }
+
+  if (frame.fusionRejectReason !== "none") {
+    return degradedInputMessages[frame.fusionRejectReason];
+  }
+
+  return frame.fusionMode === "noUsableInput" ? "入力を準備中" : undefined;
+};
+
+const removeItem = <T>(items: T[], item: T): void => {
+  const index = items.indexOf(item);
+
+  if (index !== -1) {
+    items.splice(index, 1);
+  }
+};
+
 export const createBalloonGameRuntime = ({
   canvas,
   hudRoot,
@@ -204,8 +238,8 @@ export const createBalloonGameRuntime = ({
       timeRemainingMs: session.timeRemainingMs,
       countdownLabel: session.countdownLabel,
       statusMessage:
-        session.state === "playing" && currentFusedFrame === undefined
-          ? "入力を準備中"
+        session.state === "playing"
+          ? statusMessageForFusedFrame(currentFusedFrame)
           : undefined,
       result:
         session.state === "result"
@@ -460,6 +494,15 @@ export const createBalloonGameRuntime = ({
     trackers.push(tracker);
     setLaneHealth("tracking");
 
+    const releaseLaneResources = (): void => {
+      stopLane();
+      removeItem(laneStops, stopLane);
+      removeItem(streams, stream);
+      removeItem(trackers, tracker);
+      stream.stop();
+      void tracker.cleanup();
+    };
+
     const scheduleVideoFrame = (): void => {
       if (!laneStillActive()) {
         return;
@@ -542,7 +585,7 @@ export const createBalloonGameRuntime = ({
       }
 
       if (consecutiveFrameErrors >= MAX_CONSECUTIVE_FRAME_ERRORS) {
-        laneStopped = true;
+        releaseLaneResources();
         return;
       }
 
