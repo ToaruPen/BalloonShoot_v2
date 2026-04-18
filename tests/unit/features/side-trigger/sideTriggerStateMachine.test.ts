@@ -42,6 +42,13 @@ describe("updateSideTriggerState", () => {
   const openEvidence = (): SideTriggerEvidence =>
     goodEvidence({ releaseEvidenceScalar: 0.9, pullEvidenceScalar: 0.1 });
 
+  const unusableEvidence = (): SideTriggerEvidence =>
+    goodEvidence({
+      sideViewQuality: "frontLike",
+      triggerPostureConfidence: 0.2,
+      rejectReason: "sideViewQualityRejected"
+    });
+
   const driveToPulledLatched = () => {
     let state = createInitialSideTriggerState();
 
@@ -54,6 +61,21 @@ describe("updateSideTriggerState", () => {
     }
 
     expect(state.phase).toBe("SideTriggerPulledLatched");
+    return state;
+  };
+
+  const driveToCooldown = () => {
+    let state = driveToPulledLatched();
+
+    for (const evidence of [openEvidence(), openEvidence()]) {
+      state = updateSideTriggerState(
+        state,
+        evidence,
+        defaultSideTriggerTuning
+      ).state;
+    }
+
+    expect(state.phase).toBe("SideTriggerCooldown");
     return state;
   };
 
@@ -188,6 +210,30 @@ describe("updateSideTriggerState", () => {
     expect(rejected.state.lastRejectReason).toBe("insufficientPullEvidence");
   });
 
+  it("returns to pose searching when pull candidate loses usable posture", () => {
+    let state = updateSideTriggerState(
+      createInitialSideTriggerState(),
+      goodEvidence(),
+      defaultSideTriggerTuning
+    ).state;
+
+    state = updateSideTriggerState(
+      state,
+      pulledEvidence(),
+      defaultSideTriggerTuning
+    ).state;
+
+    const rejected = updateSideTriggerState(
+      state,
+      unusableEvidence(),
+      defaultSideTriggerTuning
+    );
+
+    expect(rejected.state.phase).toBe("SideTriggerPoseSearching");
+    expect(rejected.state.phase).not.toBe("SideTriggerOpenReady");
+    expect(rejected.state.lastRejectReason).toBe("sideViewQualityRejected");
+  });
+
   it("requires release dwell and cooldown before returning to open ready", () => {
     let state = createInitialSideTriggerState();
 
@@ -307,6 +353,26 @@ describe("updateSideTriggerState", () => {
     expect(rejected.state.lastRejectReason).toBe("insufficientReleaseEvidence");
   });
 
+  it("returns to pose searching when release candidate loses usable posture", () => {
+    let state = driveToPulledLatched();
+
+    state = updateSideTriggerState(
+      state,
+      openEvidence(),
+      defaultSideTriggerTuning
+    ).state;
+
+    const rejected = updateSideTriggerState(
+      state,
+      unusableEvidence(),
+      defaultSideTriggerTuning
+    );
+
+    expect(rejected.state.phase).toBe("SideTriggerPoseSearching");
+    expect(rejected.state.phase).not.toBe("SideTriggerPulledLatched");
+    expect(rejected.state.lastRejectReason).toBe("sideViewQualityRejected");
+  });
+
   it("does not treat hand loss as release", () => {
     const pulled = updateSideTriggerState(
       updateSideTriggerState(
@@ -391,6 +457,44 @@ describe("updateSideTriggerState", () => {
     expect(recovered.edge).toBe("none");
     expect(recovered.state.phase).toBe("SideTriggerOpenReady");
     expect(recovered.state.triggerPulled).toBe(false);
+  });
+
+  it("preserves cooldown across brief hand loss and resumes it after reacquisition", () => {
+    let state = driveToCooldown();
+    const cooldownBeforeLoss = state.dwellFrameCounts.cooldownRemainingFrames;
+
+    for (let i = 0; i < defaultSideTriggerTuning.lostHandGraceFrames - 1; i += 1) {
+      state = updateSideTriggerState(
+        state,
+        noHandEvidence(),
+        defaultSideTriggerTuning
+      ).state;
+    }
+
+    expect(state.phase).toBe("SideTriggerRecoveringAfterLoss");
+    expect(state.dwellFrameCounts.cooldownRemainingFrames).toBe(cooldownBeforeLoss);
+
+    state = updateSideTriggerState(
+      state,
+      openEvidence(),
+      defaultSideTriggerTuning
+    ).state;
+
+    expect(state.phase).toBe("SideTriggerCooldown");
+    expect(state.dwellFrameCounts.cooldownRemainingFrames).toBe(
+      cooldownBeforeLoss - 1
+    );
+
+    for (let i = state.dwellFrameCounts.cooldownRemainingFrames; i > 0; i -= 1) {
+      state = updateSideTriggerState(
+        state,
+        openEvidence(),
+        defaultSideTriggerTuning
+      ).state;
+    }
+
+    expect(state.phase).toBe("SideTriggerOpenReady");
+    expect(state.dwellFrameCounts.cooldownRemainingFrames).toBe(0);
   });
 
   it("blocks shot commitment when side view quality is rejected", () => {

@@ -235,12 +235,7 @@ const pullCandidate = (
   tuning: SideTriggerTuning
 ): SideTriggerMachineResult => {
   if (!poseUsable(evidence, tuning)) {
-    return result({
-      ...previous,
-      phase: "SideTriggerOpenReady",
-      dwellFrameCounts: withCounts(previous, { pullDwellFrames: 0 }),
-      lastRejectReason: evidence.rejectReason
-    });
+    return poseSearching(previous, evidence, tuning);
   }
 
   if (evidence.pullEvidenceScalar < tuning.pullExitThreshold) {
@@ -248,7 +243,7 @@ const pullCandidate = (
       ...previous,
       phase: "SideTriggerOpenReady",
       dwellFrameCounts: withCounts(previous, { pullDwellFrames: 0 }),
-      lastRejectReason: evidence.rejectReason ?? "insufficientPullEvidence"
+      lastRejectReason: "insufficientPullEvidence"
     });
   }
 
@@ -304,12 +299,7 @@ const releaseCandidate = (
   tuning: SideTriggerTuning
 ): SideTriggerMachineResult => {
   if (!poseUsable(evidence, tuning)) {
-    return result({
-      ...previous,
-      phase: "SideTriggerPulledLatched",
-      dwellFrameCounts: withCounts(previous, { releaseDwellFrames: 0 }),
-      lastRejectReason: evidence.rejectReason
-    });
+    return poseSearching(previous, evidence, tuning);
   }
 
   if (evidence.releaseEvidenceScalar < tuning.releaseExitThreshold) {
@@ -317,7 +307,7 @@ const releaseCandidate = (
       ...previous,
       phase: "SideTriggerPulledLatched",
       dwellFrameCounts: withCounts(previous, { releaseDwellFrames: 0 }),
-      lastRejectReason: evidence.rejectReason ?? "insufficientReleaseEvidence"
+      lastRejectReason: "insufficientReleaseEvidence"
     });
   }
 
@@ -381,6 +371,15 @@ const recoveringAfterLoss = (
 ): SideTriggerMachineResult => {
   if (!poseUsable(evidence, tuning)) {
     return poseSearching(previous, evidence, tuning);
+  }
+
+  if (previous.recoveringFromPhase === "SideTriggerCooldown") {
+    return cooldown({
+      phase: "SideTriggerCooldown",
+      triggerPulled: false,
+      dwellFrameCounts: withCounts(previous, { lostHandFrames: 0 }),
+      lastRejectReason: undefined
+    });
   }
 
   if (!previous.triggerPulled) {

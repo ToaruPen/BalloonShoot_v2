@@ -6,6 +6,9 @@ import type {
 
 const formatScalar = (value: number): string => value.toFixed(3);
 
+const formatScalarOrUnavailable = (value: number | undefined): string =>
+  value === undefined ? "unavailable" : formatScalar(value);
+
 const renderValue = (label: string, value: string): string => `
   <div class="wb-trigger-value">
     <span>${escapeHTML(label)}</span>
@@ -31,6 +34,8 @@ export const renderSideTriggerPanel = (
   const counts = triggerFrame?.dwellFrameCounts ?? telemetry?.dwellFrameCounts;
   const triggerPulled =
     triggerFrame === undefined ? "unavailable" : String(triggerFrame.triggerPulled);
+  const lastReject =
+    telemetry === undefined ? "unavailable" : telemetry.lastRejectReason ?? "none";
   const shotCommitted =
     edge.includes("shotCommitted")
       ? '<p class="wb-shot-committed">SHOT COMMITTED</p>'
@@ -45,14 +50,14 @@ export const renderSideTriggerPanel = (
         ${renderValue("triggerEdge", edge)}
         ${renderValue("calibration", telemetry?.calibrationStatus ?? "unavailable")}
         ${renderValue("triggerPulled", triggerPulled)}
-        ${renderValue("pull evidence", formatScalar(telemetry?.pullEvidenceScalar ?? 0))}
-        ${renderValue("release evidence", formatScalar(telemetry?.releaseEvidenceScalar ?? 0))}
-        ${renderValue("posture confidence", formatScalar(telemetry?.triggerPostureConfidence ?? 0))}
+        ${renderValue("pull evidence", formatScalarOrUnavailable(telemetry?.pullEvidenceScalar))}
+        ${renderValue("release evidence", formatScalarOrUnavailable(telemetry?.releaseEvidenceScalar))}
+        ${renderValue("posture confidence", formatScalarOrUnavailable(telemetry?.triggerPostureConfidence))}
         ${renderValue("shot confidence", formatScalar(triggerFrame?.shotCandidateConfidence ?? telemetry?.shotCandidateConfidence ?? 0))}
         ${renderValue("pull dwell", String(counts?.pullDwellFrames ?? 0))}
         ${renderValue("release dwell", String(counts?.releaseDwellFrames ?? 0))}
         ${renderValue("cooldown", String(telemetry?.cooldownRemainingFrames ?? counts?.cooldownRemainingFrames ?? 0))}
-        ${renderValue("last reject", telemetry?.lastRejectReason ?? "none")}
+        ${renderValue("last reject", lastReject)}
       </div>
     </section>
   `;
