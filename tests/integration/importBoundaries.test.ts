@@ -8,7 +8,7 @@ import {
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, win32 } from "node:path";
 
 const rootDir = process.cwd();
 const sourceExtensions = new Set([
@@ -68,6 +68,27 @@ const resolveImportSpecifier = (
   return undefined;
 };
 
+const usesWindowsSeparators = (path: string): boolean =>
+  /^[A-Za-z]:[\\/]/.test(path) || path.includes("\\");
+
+const isSameOrInsidePath = (
+  resolved: string,
+  forbiddenRoot: string
+): boolean => {
+  const pathModule =
+    usesWindowsSeparators(resolved) || usesWindowsSeparators(forbiddenRoot)
+      ? win32
+      : { isAbsolute, relative };
+  const relativePath = pathModule.relative(forbiddenRoot, resolved);
+
+  return (
+    resolved === forbiddenRoot ||
+    (relativePath !== "" &&
+      !relativePath.startsWith("..") &&
+      !pathModule.isAbsolute(relativePath))
+  );
+};
+
 const importsForbiddenPath = (
   sourceFile: string,
   specifier: string,
@@ -77,10 +98,7 @@ const importsForbiddenPath = (
   const resolved = resolveImportSpecifier(sourceFile, specifier, projectRoot);
   const forbiddenRoot = resolve(forbiddenPath);
 
-  return (
-    resolved !== undefined &&
-    (resolved === forbiddenRoot || resolved.startsWith(`${forbiddenRoot}/`))
-  );
+  return resolved !== undefined && isSameOrInsidePath(resolved, forbiddenRoot);
 };
 
 describe("M5 import boundaries", () => {
@@ -242,6 +260,12 @@ describe("M5 import boundaries", () => {
     } finally {
       rmSync(dir, { force: true, recursive: true });
     }
+  });
+
+  it("detects forbidden subpaths with Windows path separators", () => {
+    expect(
+      isSameOrInsidePath("C:\\repo\\src\\app\\state", "C:\\repo\\src\\app")
+    ).toBe(true);
   });
 
   it("keeps threshold slider labels out of index.html", () => {

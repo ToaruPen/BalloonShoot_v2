@@ -3,6 +3,9 @@ import type { TriggerInputFrame } from "../../shared/types/trigger";
 
 interface PairingOptions {
   readonly maxPairDeltaMs: number;
+  readonly isCandidateUsable?: (
+    frame: AimInputFrame | TriggerInputFrame
+  ) => boolean;
 }
 
 export interface FusionFramePair {
@@ -11,21 +14,24 @@ export interface FusionFramePair {
   readonly timeDeltaBetweenLanesMs: number;
 }
 
-const frameTime = (
-  frame: AimInputFrame | TriggerInputFrame
-): number => frame.timestamp.frameTimestampMs;
+const frameTime = (frame: AimInputFrame | TriggerInputFrame): number =>
+  frame.timestamp.frameTimestampMs;
 
 const pickNearest = <T extends AimInputFrame | TriggerInputFrame>(
   incomingFrameTimestampMs: number,
   candidates: readonly T[],
-  maxPairDeltaMs: number
+  options: PairingOptions
 ): { frame: T; deltaMs: number } | undefined => {
   let best: { frame: T; deltaMs: number } | undefined;
 
   for (const frame of candidates) {
+    if (options.isCandidateUsable?.(frame) === false) {
+      continue;
+    }
+
     const deltaMs = Math.abs(frameTime(frame) - incomingFrameTimestampMs);
 
-    if (deltaMs > maxPairDeltaMs) {
+    if (deltaMs > options.maxPairDeltaMs) {
       continue;
     }
 
@@ -49,7 +55,7 @@ export const pairAimWithSideFrames = (
   const nearest = pickNearest(
     frontFrame.timestamp.frameTimestampMs,
     sideFrames,
-    options.maxPairDeltaMs
+    options
   );
 
   return nearest === undefined
@@ -69,7 +75,7 @@ export const pairTriggerWithFrontFrames = (
   const nearest = pickNearest(
     sideFrame.timestamp.frameTimestampMs,
     frontFrames,
-    options.maxPairDeltaMs
+    options
   );
 
   return nearest === undefined

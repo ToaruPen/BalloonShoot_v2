@@ -113,6 +113,108 @@ describe("createInputFusionMapper", () => {
     expect(repeat.telemetry.shotEdgeConsumed).toBe(false);
   });
 
+  it("skips unavailable side candidates before consuming an earlier committed shot", () => {
+    const mapper = createInputFusionMapper();
+    const pairingContext = {
+      ...context,
+      tuning: { ...context.tuning, maxPairDeltaMs: 40 }
+    };
+
+    mapper.updateTriggerFrame(
+      createTriggerFrame(100, { triggerEdge: "shotCommitted" }),
+      pairingContext
+    );
+    mapper.updateTriggerFrame(
+      createTriggerFrame(120, { triggerAvailability: "unavailable" }),
+      pairingContext
+    );
+
+    const result = mapper.updateAimFrame(createAimFrame(130), pairingContext);
+
+    expect(result.fusedFrame.fusionMode).toBe("pairedFrontAndSide");
+    expect(result.fusedFrame.shotFired).toBe(true);
+    expect(result.fusedFrame.trigger?.timestamp.frameTimestampMs).toBe(100);
+  });
+
+  it("keeps the nearest side candidate when it is usable", () => {
+    const mapper = createInputFusionMapper();
+    const pairingContext = {
+      ...context,
+      tuning: { ...context.tuning, maxPairDeltaMs: 40 }
+    };
+
+    mapper.updateTriggerFrame(
+      createTriggerFrame(100, { triggerEdge: "shotCommitted" }),
+      pairingContext
+    );
+    mapper.updateTriggerFrame(createTriggerFrame(120), pairingContext);
+
+    const result = mapper.updateAimFrame(createAimFrame(130), pairingContext);
+
+    expect(result.fusedFrame.fusionMode).toBe("pairedFrontAndSide");
+    expect(result.fusedFrame.shotFired).toBe(false);
+    expect(result.fusedFrame.trigger?.timestamp.frameTimestampMs).toBe(120);
+  });
+
+  it("skips unavailable front candidates before pairing an incoming shot commit", () => {
+    const mapper = createInputFusionMapper();
+    const pairingContext = {
+      ...context,
+      tuning: { ...context.tuning, maxPairDeltaMs: 40 }
+    };
+
+    mapper.updateAimFrame(createAimFrame(100), pairingContext);
+    mapper.updateAimFrame(
+      createAimFrame(120, { aimAvailability: "unavailable" }),
+      pairingContext
+    );
+
+    const result = mapper.updateTriggerFrame(
+      createTriggerFrame(130, { triggerEdge: "shotCommitted" }),
+      pairingContext
+    );
+
+    expect(result.fusedFrame.fusionMode).toBe("pairedFrontAndSide");
+    expect(result.fusedFrame.shotFired).toBe(true);
+    expect(result.fusedFrame.aim?.timestamp.frameTimestampMs).toBe(100);
+  });
+
+  it("attributes laneFailed only to sources whose current lane health failed", () => {
+    const sideFailed = createInputFusionMapper().updateAimFrame(
+      createAimFrame(100),
+      {
+        ...context,
+        sideLaneHealth: "failed"
+      }
+    ).fusedFrame;
+
+    expect(sideFailed.frontSource.rejectReason).toBe("none");
+    expect(sideFailed.sideSource.rejectReason).toBe("laneFailed");
+
+    const frontFailed = createInputFusionMapper().updateTriggerFrame(
+      createTriggerFrame(100),
+      {
+        ...context,
+        frontLaneHealth: "failed"
+      }
+    ).fusedFrame;
+
+    expect(frontFailed.frontSource.rejectReason).toBe("laneFailed");
+    expect(frontFailed.sideSource.rejectReason).toBe("none");
+
+    const bothFailed = createInputFusionMapper().updateAimFrame(
+      createAimFrame(100),
+      {
+        ...context,
+        frontLaneHealth: "failed",
+        sideLaneHealth: "failed"
+      }
+    ).fusedFrame;
+
+    expect(bothFailed.frontSource.rejectReason).toBe("laneFailed");
+    expect(bothFailed.sideSource.rejectReason).toBe("laneFailed");
+  });
+
   it("resets affected buffers and side shot consumption independently", () => {
     const mapper = createInputFusionMapper();
     const sideCommit = createTriggerFrame(100, {

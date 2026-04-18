@@ -1,7 +1,5 @@
 import type { AimInputFrame } from "../../shared/types/aim";
-import type {
-  LaneHealthStatus
-} from "../../shared/types/camera";
+import type { LaneHealthStatus } from "../../shared/types/camera";
 import type {
   FusedGameInputFrame,
   FusionRejectReason,
@@ -73,9 +71,9 @@ const isFresh = (
   }
 
   return (
-    frameAgeMs(fusionTimestampMs, frame.timestamp.frameTimestampMs) ??
-    Number.POSITIVE_INFINITY
-  ) <= maxFrameAgeMs;
+    (frameAgeMs(fusionTimestampMs, frame.timestamp.frameTimestampMs) ??
+      Number.POSITIVE_INFINITY) <= maxFrameAgeMs
+  );
 };
 
 const rejectReasonFor = (
@@ -155,6 +153,22 @@ const isSideUsable = (
   !isFailed(context.sideLaneHealth) &&
   isFresh(fusionTimestampMs, frame, context.tuning.maxFrameAgeMs);
 
+const isFrontPairCandidateUsable = (
+  frame: AimInputFrame | TriggerInputFrame,
+  context: InputFusionMapperContext
+): boolean =>
+  "aimAvailability" in frame &&
+  frame.aimAvailability !== "unavailable" &&
+  !isFailed(context.frontLaneHealth);
+
+const isSidePairCandidateUsable = (
+  frame: AimInputFrame | TriggerInputFrame,
+  context: InputFusionMapperContext
+): boolean =>
+  "triggerAvailability" in frame &&
+  frame.triggerAvailability !== "unavailable" &&
+  !isFailed(context.sideLaneHealth);
+
 const fusionModeFor = (
   pair: FusionFramePair | undefined,
   frontUsable: boolean,
@@ -189,7 +203,7 @@ const frontSourceFor = (
   rejectReason:
     rejectReason === "frontMissing" ||
     rejectReason === "frontStale" ||
-    rejectReason === "laneFailed"
+    (rejectReason === "laneFailed" && isFailed(laneHealth))
       ? rejectReason
       : "none"
 });
@@ -208,7 +222,7 @@ const sideSourceFor = (
   rejectReason:
     rejectReason === "sideMissing" ||
     rejectReason === "sideStale" ||
-    rejectReason === "laneFailed"
+    (rejectReason === "laneFailed" && isFailed(laneHealth))
       ? rejectReason
       : "none"
 });
@@ -282,7 +296,9 @@ export const createInputFusionMapper = (): InputFusionMapper => {
     updateAimFrame(frame, context) {
       buffers.addFrontFrame(frame, context.tuning.recentFrameRetentionWindowMs);
       const pair = pairAimWithSideFrames(frame, buffers.sideFrames, {
-        maxPairDeltaMs: context.tuning.maxPairDeltaMs
+        maxPairDeltaMs: context.tuning.maxPairDeltaMs,
+        isCandidateUsable: (candidate) =>
+          isSidePairCandidateUsable(candidate, context)
       });
 
       return buildResult(
@@ -296,7 +312,9 @@ export const createInputFusionMapper = (): InputFusionMapper => {
     updateTriggerFrame(frame, context) {
       buffers.addSideFrame(frame, context.tuning.recentFrameRetentionWindowMs);
       const pair = pairTriggerWithFrontFrames(frame, buffers.frontFrames, {
-        maxPairDeltaMs: context.tuning.maxPairDeltaMs
+        maxPairDeltaMs: context.tuning.maxPairDeltaMs,
+        isCandidateUsable: (candidate) =>
+          isFrontPairCandidateUsable(candidate, context)
       });
 
       return buildResult(
