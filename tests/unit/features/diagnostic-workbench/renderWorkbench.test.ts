@@ -5,6 +5,11 @@ import type {
   WorkbenchState
 } from "../../../../src/features/diagnostic-workbench/DiagnosticWorkbench";
 import { renderWorkbenchHTML } from "../../../../src/features/diagnostic-workbench/renderWorkbench";
+import type {
+  FrontHandDetection,
+  HandFrame,
+  SideHandDetection
+} from "../../../../src/shared/types/hand";
 
 const createState = (patch: Partial<WorkbenchState>): WorkbenchState => ({
   screen: "permission",
@@ -34,6 +39,53 @@ const createDevice = (deviceId: string, label: string): MediaDeviceInfo =>
     groupId: `${deviceId}-group`,
     toJSON: () => ({})
   }) as MediaDeviceInfo;
+
+const createHandFrame = (offset: number): HandFrame => ({
+  width: 640,
+  height: 480,
+  landmarks: {
+    wrist: { x: 0.1 + offset, y: 0.2, z: 0 },
+    thumbIp: { x: 0.2 + offset, y: 0.3, z: 0 },
+    thumbTip: { x: 0.3 + offset, y: 0.4, z: 0 },
+    indexMcp: { x: 0.4 + offset, y: 0.5, z: 0 },
+    indexTip: { x: 0.5 + offset, y: 0.6, z: 0 },
+    middleTip: { x: 0.6 + offset, y: 0.7, z: 0 },
+    ringTip: { x: 0.7 + offset, y: 0.8, z: 0 },
+    pinkyTip: { x: 0.8 + offset, y: 0.9, z: 0 }
+  }
+});
+
+const createFrontDetection = (): FrontHandDetection => ({
+  laneRole: "frontAim",
+  deviceId: "front-secret-device-id",
+  streamId: "front-stream",
+  timestamp: {
+    frameTimestampMs: 1234.5,
+    timestampSource: "requestVideoFrameCallbackCaptureTime",
+    presentedFrames: 7,
+    receivedAtPerformanceMs: 1250
+  },
+  rawFrame: createHandFrame(0),
+  filteredFrame: createHandFrame(0.01),
+  handPresenceConfidence: 0.97,
+  trackingQuality: "good"
+});
+
+const createSideDetection = (): SideHandDetection => ({
+  laneRole: "sideTrigger",
+  deviceId: "side-secret-device-id",
+  streamId: "side-stream",
+  timestamp: {
+    frameTimestampMs: 1240,
+    timestampSource: "requestVideoFrameCallbackExpectedDisplayTime",
+    presentedFrames: 8,
+    receivedAtPerformanceMs: 1255
+  },
+  rawFrame: createHandFrame(0.02),
+  filteredFrame: createHandFrame(0.03),
+  handPresenceConfidence: 0.88,
+  sideViewQuality: "good"
+});
 
 describe("renderWorkbenchHTML", () => {
   it("renders the permission screen", () => {
@@ -89,7 +141,9 @@ describe("renderWorkbenchHTML", () => {
     const html = renderWorkbenchHTML(createState({ screen: "singleCamera" }));
 
     expect(html).toContain("カメラが1台しか検出されません");
-    expect(html).toContain("1台のカメラをフロントとサイドの両方に再利用することはできません");
+    expect(html).toContain(
+      "1台のカメラをフロントとサイドの両方に再利用することはできません"
+    );
   });
 
   it("escapes device labels and ids in device selection", () => {
@@ -132,5 +186,40 @@ describe("renderWorkbenchHTML", () => {
     expect(html).toContain("Side &lt;Camera&gt;");
     expect(html).not.toContain(rawFrontId.slice(0, 8));
     expect(html).not.toContain(rawSideId.slice(0, 8));
+  });
+
+  it("renders raw and filtered landmark inspection panes with timestamp readouts", () => {
+    const html = renderWorkbenchHTML(
+      createState({
+        screen: "previewing",
+        frontAssignment: {
+          role: "frontAim",
+          deviceId: "front-secret-device-id",
+          label: "Front Camera"
+        },
+        sideAssignment: {
+          role: "sideTrigger",
+          deviceId: "side-secret-device-id",
+          label: "Side Camera"
+        }
+      }),
+      {
+        frontDetection: createFrontDetection(),
+        sideDetection: createSideDetection(),
+        frontLaneHealth: "tracking",
+        sideLaneHealth: "tracking"
+      }
+    );
+
+    expect(html).toContain("生ランドマーク");
+    expect(html).toContain("フィルタ後ランドマーク");
+    expect(html).toContain('id="wb-front-raw-overlay"');
+    expect(html).toContain('id="wb-front-filtered-overlay"');
+    expect(html).toContain('id="wb-side-raw-overlay"');
+    expect(html).toContain('id="wb-side-filtered-overlay"');
+    expect(html).toContain("1234.5 ms");
+    expect(html).toContain("captureTime");
+    expect(html).toContain("1240.0 ms");
+    expect(html).toContain("expectedDisplayTime");
   });
 });

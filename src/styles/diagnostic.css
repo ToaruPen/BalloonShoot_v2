@@ -13,7 +13,7 @@ body {
 }
 
 #diagnostic-app {
-  max-width: 960px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 1rem;
 }
@@ -28,6 +28,12 @@ h3 {
   font-size: 1rem;
   margin-bottom: 0.5rem;
   color: #a8d8ea;
+}
+
+h4 {
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+  color: #d7f4ff;
 }
 
 .wb-screen {
@@ -117,16 +123,59 @@ h3 {
   padding: 0.75rem;
 }
 
+.wb-inspection-lane {
+  text-align: left;
+}
+
 .wb-preview-lane video {
   width: 100%;
   border-radius: 4px;
   background: #000;
 }
 
+.wb-inspection-panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.wb-inspection-pane {
+  min-width: 0;
+}
+
+.wb-video-stack {
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #000;
+}
+
+.wb-video-stack video {
+  display: block;
+  width: 100%;
+}
+
+.wb-landmark-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 .wb-device-label {
   font-size: 0.8rem;
   color: #888;
   margin-bottom: 0.5rem;
+}
+
+.wb-lane-health,
+.wb-timestamp-readout {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #c9d4dc;
+  margin-bottom: 0.4rem;
 }
 
 .wb-controls {
@@ -140,4 +189,11 @@ h3 {
   margin: 1rem 0;
   background: rgba(231, 76, 60, 0.1);
   text-align: left;
+}
+
+@media (max-width: 780px) {
+  .wb-preview-grid,
+  .wb-inspection-panes {
+    grid-template-columns: 1fr;
+  }
 }

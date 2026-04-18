@@ -4,6 +4,7 @@ import {
   type DiagnosticWorkbench
 } from "./features/diagnostic-workbench/DiagnosticWorkbench";
 import { renderWorkbenchHTML } from "./features/diagnostic-workbench/renderWorkbench";
+import { createLiveLandmarkInspection } from "./features/diagnostic-workbench/liveLandmarkInspection";
 
 const root = document.querySelector<HTMLDivElement>("#diagnostic-app");
 
@@ -12,11 +13,14 @@ if (!root) {
 }
 
 const workbench: DiagnosticWorkbench = createDiagnosticWorkbench();
+const liveInspection = createLiveLandmarkInspection();
 
 const render = (): void => {
   const state = workbench.getState();
-  root.innerHTML = renderWorkbenchHTML(state);
+  root.innerHTML = renderWorkbenchHTML(state, liveInspection.getState());
   attachVideoStreams(state);
+  liveInspection.sync(state);
+  liveInspection.updateDom();
 };
 
 const attachVideoStreams = (
@@ -26,15 +30,30 @@ const attachVideoStreams = (
     return;
   }
 
-  const frontVideo = document.querySelector<HTMLVideoElement>("#wb-front-video");
+  const frontVideo =
+    document.querySelector<HTMLVideoElement>("#wb-front-video");
+  const frontFilteredVideo = document.querySelector<HTMLVideoElement>(
+    "#wb-front-filtered-video"
+  );
   const sideVideo = document.querySelector<HTMLVideoElement>("#wb-side-video");
+  const sideFilteredVideo = document.querySelector<HTMLVideoElement>(
+    "#wb-side-filtered-video"
+  );
 
   if (frontVideo !== null && state.frontStream !== undefined) {
     frontVideo.srcObject = state.frontStream.stream;
   }
 
+  if (frontFilteredVideo !== null && state.frontStream !== undefined) {
+    frontFilteredVideo.srcObject = state.frontStream.stream;
+  }
+
   if (sideVideo !== null && state.sideStream !== undefined) {
     sideVideo.srcObject = state.sideStream.stream;
+  }
+
+  if (sideFilteredVideo !== null && state.sideStream !== undefined) {
+    sideFilteredVideo.srcObject = state.sideStream.stream;
   }
 };
 
@@ -94,6 +113,10 @@ const handleClick = (e: MouseEvent): void => {
 
 root.addEventListener("click", handleClick);
 workbench.subscribe(render);
+window.addEventListener("beforeunload", () => {
+  liveInspection.destroy();
+  workbench.destroy();
+});
 
 // Initial render
 render();

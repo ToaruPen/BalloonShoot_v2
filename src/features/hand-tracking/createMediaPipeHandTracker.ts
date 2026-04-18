@@ -28,14 +28,14 @@ interface HandLandmarkerResultLike {
   handednesses?: HandednessLike[][];
 }
 
-interface MediaPipeHandTracker {
+export interface MediaPipeHandTracker {
   detect(
     bitmap: ImageBitmap,
     frameAtMs: number
   ): Promise<HandDetection | undefined>;
 }
 
-interface MediaPipeHandTrackerOptions {
+export interface MediaPipeHandTrackerOptions {
   getFilterConfig: () => OneEuroFilterConfig;
 }
 
@@ -118,7 +118,6 @@ const filterPoint = (
   z: filters.z.filter(point.z, frameAtMs)
 });
 
-
 // Keep this helper thin: filter timestamp must be supplied at call-site.
 const filterHandFrame = (
   raw: HandFrame,
@@ -128,18 +127,50 @@ const filterHandFrame = (
   ...raw,
   landmarks: {
     wrist: filterPoint(raw.landmarks.wrist, filters.image.wrist, frameAtMs),
-    thumbIp: filterPoint(raw.landmarks.thumbIp, filters.image.thumbIp, frameAtMs),
-    thumbTip: filterPoint(raw.landmarks.thumbTip, filters.image.thumbTip, frameAtMs),
-    indexMcp: filterPoint(raw.landmarks.indexMcp, filters.image.indexMcp, frameAtMs),
-    indexTip: filterPoint(raw.landmarks.indexTip, filters.image.indexTip, frameAtMs),
-    middleTip: filterPoint(raw.landmarks.middleTip, filters.image.middleTip, frameAtMs),
-    ringTip: filterPoint(raw.landmarks.ringTip, filters.image.ringTip, frameAtMs),
-    pinkyTip: filterPoint(raw.landmarks.pinkyTip, filters.image.pinkyTip, frameAtMs)
+    thumbIp: filterPoint(
+      raw.landmarks.thumbIp,
+      filters.image.thumbIp,
+      frameAtMs
+    ),
+    thumbTip: filterPoint(
+      raw.landmarks.thumbTip,
+      filters.image.thumbTip,
+      frameAtMs
+    ),
+    indexMcp: filterPoint(
+      raw.landmarks.indexMcp,
+      filters.image.indexMcp,
+      frameAtMs
+    ),
+    indexTip: filterPoint(
+      raw.landmarks.indexTip,
+      filters.image.indexTip,
+      frameAtMs
+    ),
+    middleTip: filterPoint(
+      raw.landmarks.middleTip,
+      filters.image.middleTip,
+      frameAtMs
+    ),
+    ringTip: filterPoint(
+      raw.landmarks.ringTip,
+      filters.image.ringTip,
+      frameAtMs
+    ),
+    pinkyTip: filterPoint(
+      raw.landmarks.pinkyTip,
+      filters.image.pinkyTip,
+      frameAtMs
+    )
   },
   ...(raw.worldLandmarks
     ? {
         worldLandmarks: {
-          wrist: filterPoint(raw.worldLandmarks.wrist, filters.world.wrist, frameAtMs),
+          wrist: filterPoint(
+            raw.worldLandmarks.wrist,
+            filters.world.wrist,
+            frameAtMs
+          ),
           thumbIp: filterPoint(
             raw.worldLandmarks.thumbIp,
             filters.world.thumbIp,
