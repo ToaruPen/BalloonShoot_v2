@@ -234,15 +234,21 @@ const pullCandidate = (
   evidence: SideTriggerEvidence,
   tuning: SideTriggerTuning
 ): SideTriggerMachineResult => {
-  if (
-    !poseUsable(evidence, tuning) ||
-    evidence.pullEvidenceScalar < tuning.pullExitThreshold
-  ) {
+  if (!poseUsable(evidence, tuning)) {
     return result({
       ...previous,
       phase: "SideTriggerOpenReady",
       dwellFrameCounts: withCounts(previous, { pullDwellFrames: 0 }),
       lastRejectReason: evidence.rejectReason
+    });
+  }
+
+  if (evidence.pullEvidenceScalar < tuning.pullExitThreshold) {
+    return result({
+      ...previous,
+      phase: "SideTriggerOpenReady",
+      dwellFrameCounts: withCounts(previous, { pullDwellFrames: 0 }),
+      lastRejectReason: evidence.rejectReason ?? "insufficientPullEvidence"
     });
   }
 
@@ -297,15 +303,21 @@ const releaseCandidate = (
   evidence: SideTriggerEvidence,
   tuning: SideTriggerTuning
 ): SideTriggerMachineResult => {
-  if (
-    !poseUsable(evidence, tuning) ||
-    evidence.releaseEvidenceScalar < tuning.releaseExitThreshold
-  ) {
+  if (!poseUsable(evidence, tuning)) {
     return result({
       ...previous,
       phase: "SideTriggerPulledLatched",
       dwellFrameCounts: withCounts(previous, { releaseDwellFrames: 0 }),
       lastRejectReason: evidence.rejectReason
+    });
+  }
+
+  if (evidence.releaseEvidenceScalar < tuning.releaseExitThreshold) {
+    return result({
+      ...previous,
+      phase: "SideTriggerPulledLatched",
+      dwellFrameCounts: withCounts(previous, { releaseDwellFrames: 0 }),
+      lastRejectReason: evidence.rejectReason ?? "insufficientReleaseEvidence"
     });
   }
 

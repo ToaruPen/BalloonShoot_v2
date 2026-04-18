@@ -57,7 +57,7 @@ Before starting M4, verify all of the following on the post-M3 `main` branch, th
    - **M4 implication:** add side trigger fields to `WorkbenchInspectionState` (in `renderWorkbench.ts`), populate them from `liveLandmarkInspection.ts`, and render via a new `renderSideTriggerPanel.ts`. Live tuning controller state (sliders) can extend `DiagnosticWorkbench.ts` or live in a new controller — either is acceptable as long as workbench-only.
    - All workbench files remain workbench-only (no game page import).
 
-6. Baseline quality gates must pass before coding.
+5. Baseline quality gates must pass before coding.
    - `npm run lint`
    - `npm run typecheck`
    - `npm run test`

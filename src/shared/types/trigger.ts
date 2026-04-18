@@ -33,6 +33,8 @@ export interface SideTriggerDwellFrameCounts {
 
 export type SideTriggerRejectReason =
   | "handNotDetected"
+  | "insufficientPullEvidence"
+  | "insufficientReleaseEvidence"
   | "worldLandmarksUnavailable"
   | "sideViewQualityRejected"
   | "lowHandConfidence";
@@ -62,6 +64,7 @@ export interface SideTriggerTelemetry {
   readonly triggerPostureConfidence: number;
   readonly shotCandidateConfidence: number;
   readonly dwellFrameCounts: SideTriggerDwellFrameCounts;
+  /** Mirrors dwellFrameCounts.cooldownRemainingFrames for diagnostic UI convenience. */
   readonly cooldownRemainingFrames: number;
   readonly lastRejectReason: SideTriggerRejectReason | undefined;
   readonly usedWorldLandmarks: boolean;

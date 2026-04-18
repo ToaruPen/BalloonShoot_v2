@@ -39,7 +39,8 @@ describe("renderSideTriggerPanel", () => {
     "SideTriggerCooldown",
     "SideTriggerRecoveringAfterLoss"
   ])("renders phase %s", (phase) => {
-    const html = renderSideTriggerPanel(createFrame(phase), {
+    const frame = createFrame(phase);
+    const html = renderSideTriggerPanel(frame, {
       phase,
       edge: "none",
       triggerAvailability: "available",
@@ -48,7 +49,7 @@ describe("renderSideTriggerPanel", () => {
       releaseEvidenceScalar: 0.9876,
       triggerPostureConfidence: 0.8123,
       shotCandidateConfidence: 0.8765,
-      dwellFrameCounts: createFrame(phase).dwellFrameCounts,
+      dwellFrameCounts: frame.dwellFrameCounts,
       cooldownRemainingFrames: 4,
       lastRejectReason: undefined,
       usedWorldLandmarks: true
@@ -76,5 +77,39 @@ describe("renderSideTriggerPanel", () => {
     const html = renderSideTriggerPanel(undefined, undefined);
 
     expect(html).toContain("side trigger unavailable");
+  });
+
+  it("renders unavailable triggerPulled value when trigger frame is missing", () => {
+    const frame = createFrame("SideTriggerOpenReady");
+    const html = renderSideTriggerPanel(undefined, {
+      phase: "SideTriggerOpenReady",
+      edge: "none",
+      triggerAvailability: "available",
+      calibrationStatus: "liveTuning",
+      pullEvidenceScalar: 0.1234,
+      releaseEvidenceScalar: 0.9876,
+      triggerPostureConfidence: 0.8123,
+      shotCandidateConfidence: 0.8765,
+      dwellFrameCounts: frame.dwellFrameCounts,
+      cooldownRemainingFrames: 4,
+      lastRejectReason: undefined,
+      usedWorldLandmarks: true
+    });
+
+    expect(html).toMatch(
+      /<span>triggerPulled<\/span>\s*<strong>unavailable<\/strong>/
+    );
+  });
+
+  it("renders false triggerPulled value from an open trigger frame", () => {
+    const html = renderSideTriggerPanel(createFrame("SideTriggerOpenReady"));
+
+    expect(html).toMatch(/<span>triggerPulled<\/span>\s*<strong>false<\/strong>/);
+  });
+
+  it("renders true triggerPulled value from a pulled trigger frame", () => {
+    const html = renderSideTriggerPanel(createFrame("SideTriggerPulledLatched"));
+
+    expect(html).toMatch(/<span>triggerPulled<\/span>\s*<strong>true<\/strong>/);
   });
 });

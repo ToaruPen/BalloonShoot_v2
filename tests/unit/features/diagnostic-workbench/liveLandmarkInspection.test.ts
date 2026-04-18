@@ -184,6 +184,17 @@ const createHandDetectionWithWorld = (
   };
 };
 
+const setupSideTrackerSequence = (): FakeTracker => {
+  const sideTracker = createFakeTracker();
+  sideTracker.detect
+    .mockResolvedValueOnce(createHandDetectionWithWorld(openWorldLandmarks()))
+    .mockResolvedValueOnce(createHandDetectionWithWorld(pulledWorldLandmarks()))
+    .mockResolvedValueOnce(createHandDetectionWithWorld(pulledWorldLandmarks()));
+  createMediaPipeHandTrackerMock.mockResolvedValueOnce(sideTracker);
+
+  return sideTracker;
+};
+
 const createDeferred = <T>() => {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
@@ -457,16 +468,7 @@ describe("createLiveLandmarkInspection", () => {
   });
 
   it("maps live side detections into trigger frames and telemetry", async () => {
-    const sideTracker = createFakeTracker();
-    sideTracker.detect
-      .mockResolvedValueOnce(createHandDetectionWithWorld(openWorldLandmarks()))
-      .mockResolvedValueOnce(
-        createHandDetectionWithWorld(pulledWorldLandmarks())
-      )
-      .mockResolvedValueOnce(
-        createHandDetectionWithWorld(pulledWorldLandmarks())
-      );
-    createMediaPipeHandTrackerMock.mockResolvedValueOnce(sideTracker);
+    setupSideTrackerSequence();
     const liveInspection = createLiveLandmarkInspection();
     const videos = installPreviewVideos();
 
@@ -506,16 +508,7 @@ describe("createLiveLandmarkInspection", () => {
   });
 
   it("passes live tuning changes to subsequent side trigger mapper updates", async () => {
-    const sideTracker = createFakeTracker();
-    sideTracker.detect
-      .mockResolvedValueOnce(createHandDetectionWithWorld(openWorldLandmarks()))
-      .mockResolvedValueOnce(
-        createHandDetectionWithWorld(pulledWorldLandmarks())
-      )
-      .mockResolvedValueOnce(
-        createHandDetectionWithWorld(pulledWorldLandmarks())
-      );
-    createMediaPipeHandTrackerMock.mockResolvedValueOnce(sideTracker);
+    const sideTracker = setupSideTrackerSequence();
     const liveInspection = createLiveLandmarkInspection();
     const videos = installPreviewVideos();
 

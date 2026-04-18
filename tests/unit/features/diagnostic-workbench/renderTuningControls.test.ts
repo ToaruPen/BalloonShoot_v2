@@ -5,14 +5,20 @@ import {
 } from "../../../../src/features/side-trigger/sideTriggerConfig";
 import { renderTuningControls } from "../../../../src/features/diagnostic-workbench/renderTuningControls";
 
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 describe("renderTuningControls", () => {
   it("renders every named side trigger threshold slider", () => {
     const html = renderTuningControls(defaultSideTriggerTuning);
 
     for (const metadata of sideTriggerSliderMetadata) {
       expect(html).toContain(metadata.constantName);
-      expect(html).toContain(`data-side-trigger-tuning="${metadata.key}"`);
-      expect(html).toContain(`value="${String(metadata.defaultValue)}"`);
+      expect(html).toMatch(
+        new RegExp(
+          `<input(?=[^>]*\\bvalue="${escapeRegExp(String(metadata.defaultValue))}")(?=[^>]*\\bdata-side-trigger-tuning="${escapeRegExp(metadata.key)}")[^>]*>`
+        )
+      );
     }
   });
 

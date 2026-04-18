@@ -161,6 +161,33 @@ describe("updateSideTriggerState", () => {
     expect(commit.state.phase).toBe("SideTriggerPulledLatched");
   });
 
+  it("records insufficient pull evidence when pull candidate falls below exit threshold", () => {
+    let state = updateSideTriggerState(
+      createInitialSideTriggerState(),
+      goodEvidence(),
+      defaultSideTriggerTuning
+    ).state;
+
+    state = updateSideTriggerState(
+      state,
+      pulledEvidence(),
+      defaultSideTriggerTuning
+    ).state;
+
+    const rejected = updateSideTriggerState(
+      state,
+      goodEvidence({
+        pullEvidenceScalar: defaultSideTriggerTuning.pullExitThreshold - 0.01,
+        releaseEvidenceScalar: 0.9,
+        rejectReason: undefined
+      }),
+      defaultSideTriggerTuning
+    );
+
+    expect(rejected.state.phase).toBe("SideTriggerOpenReady");
+    expect(rejected.state.lastRejectReason).toBe("insufficientPullEvidence");
+  });
+
   it("requires release dwell and cooldown before returning to open ready", () => {
     let state = createInitialSideTriggerState();
 
@@ -254,6 +281,30 @@ describe("updateSideTriggerState", () => {
 
     expect(releaseConfirmed.edge).toBe("releaseConfirmed");
     expect(releaseConfirmed.state.phase).toBe("SideTriggerCooldown");
+  });
+
+  it("records insufficient release evidence when release candidate falls below exit threshold", () => {
+    let state = driveToPulledLatched();
+
+    state = updateSideTriggerState(
+      state,
+      openEvidence(),
+      defaultSideTriggerTuning
+    ).state;
+
+    const rejected = updateSideTriggerState(
+      state,
+      goodEvidence({
+        pullEvidenceScalar: 0.9,
+        releaseEvidenceScalar:
+          defaultSideTriggerTuning.releaseExitThreshold - 0.01,
+        rejectReason: undefined
+      }),
+      defaultSideTriggerTuning
+    );
+
+    expect(rejected.state.phase).toBe("SideTriggerPulledLatched");
+    expect(rejected.state.lastRejectReason).toBe("insufficientReleaseEvidence");
   });
 
   it("does not treat hand loss as release", () => {
