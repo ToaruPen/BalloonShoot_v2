@@ -36,6 +36,21 @@ describe("createFrontAimMapper", () => {
     expect(lost.telemetry.lastLostReason).toBe("handNotDetected");
   });
 
+  it("keeps a recent aim estimate for transient hand loss without explicit rejection", () => {
+    const mapper = createFrontAimMapper();
+    const tracked = mapper.update({
+      detection: createFrontDetection(),
+      viewportSize
+    });
+
+    const transientLoss = mapper.update({ detection: undefined, viewportSize });
+
+    expect(tracked.aimFrame?.aimAvailability).toBe("available");
+    expect(transientLoss.aimFrame?.aimAvailability).toBe(
+      "estimatedFromRecentFrame"
+    );
+  });
+
   it("expires the aim estimate after the grace window", () => {
     const mapper = createFrontAimMapper();
     mapper.update({ detection: createFrontDetection(), viewportSize });
@@ -75,5 +90,31 @@ describe("createFrontAimMapper", () => {
     expect(lowConfidence.aimFrame).toBeUndefined();
     expect(lowConfidence.telemetry.aimAvailability).toBe("unavailable");
     expect(lowConfidence.telemetry.lastLostReason).toBe("lowHandConfidence");
+  });
+
+  it("clears the recent aim estimate after explicit tracking loss", () => {
+    const mapper = createFrontAimMapper();
+    const tracked = mapper.update({
+      detection: createFrontDetection(),
+      viewportSize
+    });
+    const trackingLost = mapper.update({
+      detection: createFrontDetection({ trackingQuality: "lost" }),
+      viewportSize
+    });
+
+    const noDetectionAfterRejection = mapper.update({
+      detection: undefined,
+      viewportSize
+    });
+
+    expect(tracked.aimFrame?.aimAvailability).toBe("available");
+    expect(trackingLost.aimFrame).toBeUndefined();
+    expect(trackingLost.telemetry.aimAvailability).toBe("unavailable");
+    expect(trackingLost.telemetry.lastLostReason).toBe("trackingQualityLost");
+    expect(noDetectionAfterRejection.aimFrame).toBeUndefined();
+    expect(noDetectionAfterRejection.telemetry.aimAvailability).toBe(
+      "unavailable"
+    );
   });
 });

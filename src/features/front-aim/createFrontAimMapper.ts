@@ -119,6 +119,7 @@ export const createFrontAimMapper = (): FrontAimMapper => {
       }
 
       if (lostReason !== undefined) {
+        latestAimFrame = undefined;
         lostFrameCount = 0;
         return {
           aimFrame: undefined,

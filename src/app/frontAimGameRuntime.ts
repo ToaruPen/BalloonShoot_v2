@@ -128,6 +128,11 @@ export const createFrontAimGameRuntime = ({
 
   const isStopped = (): boolean => stopped;
 
+  const stopStream = (): void => {
+    stream?.stop();
+    stream = undefined;
+  };
+
   const cancelScheduledFrame = (): void => {
     if (
       callbackId !== undefined &&
@@ -232,26 +237,28 @@ export const createFrontAimGameRuntime = ({
 
     try {
       openedStream = await openStream(deviceId);
+      stream = openedStream;
 
       if (isStopped()) {
-        openedStream.stop();
+        stopStream();
         return;
       }
 
       const openedTracker = await createTracker({ getFilterConfig });
 
       if (isStopped()) {
-        openedStream.stop();
+        stopStream();
         void openedTracker.cleanup();
         return;
       }
 
-      stream = openedStream;
       tracker = openedTracker;
       video.srcObject = openedStream.stream;
       schedule();
     } catch (error: unknown) {
-      openedStream?.stop();
+      if (stream === openedStream) {
+        stopStream();
+      }
       throw error;
     }
   };
@@ -267,7 +274,7 @@ export const createFrontAimGameRuntime = ({
     destroy() {
       stopped = true;
       cancelScheduledFrame();
-      stream?.stop();
+      stopStream();
       void tracker?.cleanup();
       void startPromise;
     }

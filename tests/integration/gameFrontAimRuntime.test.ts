@@ -213,4 +213,44 @@ describe("createFrontAimGameRuntime", () => {
     ).toHaveLength(0);
     expect(drawGameFrame).not.toHaveBeenCalled();
   });
+
+  it("stops an opened stream immediately when destroyed while tracker startup is pending", async () => {
+    let resolveTracker!: (tracker: MediaPipeHandTracker) => void;
+    const trackerPromise = new Promise<MediaPipeHandTracker>((resolve) => {
+      resolveTracker = resolve;
+    });
+    const tracker: MediaPipeHandTracker = {
+      detect: vi.fn(() => Promise.resolve(undefined)),
+      cleanup: vi.fn()
+    };
+    const stream = createPinnedStream();
+    const runtime = createFrontAimGameRuntime({
+      deviceId: "front-device",
+      video: createFakeVideo() as unknown as HTMLVideoElement,
+      canvas: createCanvas(),
+      createDevicePinnedStream: vi.fn(() => Promise.resolve(stream)),
+      createMediaPipeHandTracker: vi.fn(() => trackerPromise)
+    });
+
+    runtime.start();
+    await flush();
+    runtime.destroy();
+
+    expect(
+      (stream.stop as unknown as ReturnType<typeof vi.fn>).mock.calls
+    ).toHaveLength(1);
+
+    resolveTracker(tracker);
+    await flush();
+
+    expect(
+      (stream.stop as unknown as ReturnType<typeof vi.fn>).mock.calls
+    ).toHaveLength(1);
+    expect(
+      (tracker.cleanup as unknown as ReturnType<typeof vi.fn>).mock.calls
+    ).toHaveLength(1);
+    expect(
+      (tracker.detect as unknown as ReturnType<typeof vi.fn>).mock.calls
+    ).toHaveLength(0);
+  });
 });
