@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { createBalloonGameRuntime } from "../../src/app/balloonGameRuntime";
+import {
+  createBalloonGameRuntime,
+  MAX_CONSECUTIVE_FRAME_ERRORS
+} from "../../src/app/balloonGameRuntime";
 import type { Balloon } from "../../src/features/gameplay/domain/balloon";
 import type { DevicePinnedStream } from "../../src/features/camera/createDevicePinnedStream";
 import { getFrontAimFilterConfig } from "../../src/features/front-aim";
@@ -423,6 +426,237 @@ describe("createBalloonGameRuntime", () => {
         shotEffect: { x: 100, y: 100 }
       })
     );
+  });
+
+  it("ignores a shot committed before countdown completes", () => {
+    const raf = createRaf();
+    const hudRoot = { innerHTML: "" } as HTMLElement;
+    const drawGameFrame = vi.fn();
+    const audio = createAudio();
+    const balloon: Balloon = {
+      id: "target",
+      x: 100,
+      y: 100,
+      radius: 32,
+      vy: 0,
+      size: "normal",
+      alive: true
+    };
+    const countdownShotFrame = createFusedFrame({
+      fusionTimestampMs: 4_006,
+      aim: createAimFrame(4_006, {
+        aimPointViewport: { x: 100, y: 100 },
+        aimPointNormalized: { x: 0.2, y: 0.2 }
+      }),
+      trigger: createTriggerFrame(3_995, {
+        triggerEdge: "shotCommitted",
+        triggerPulled: true
+      }),
+      sideSource: {
+        ...createFusedFrame().sideSource,
+        frameTimestamp: createTriggerFrame(3_995).timestamp
+      }
+    });
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: {} as HTMLVideoElement,
+      sideVideo: {} as HTMLVideoElement,
+      canvas: createCanvas(),
+      hudRoot,
+      readFusedInputFrame: () => countdownShotFrame,
+      initialBalloons: [balloon],
+      nowMs: () => 0,
+      createAudioController: () => audio,
+      drawGameFrame,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame
+    });
+
+    runtime.start();
+    raf.fire(4_006);
+
+    expect(audio.playShot).not.toHaveBeenCalled();
+    expect(audio.playHit).not.toHaveBeenCalled();
+    expect(hudRoot.innerHTML).toMatch(
+      /<span[^>]*>スコア<\/span>\s*<strong[^>]*>0<\/strong>/
+    );
+    expect(drawGameFrame).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        crosshair: { x: 100, y: 100 },
+        shotEffect: undefined
+      })
+    );
+  });
+
+  it("resets failed lane state and restarts tracking on retry", async () => {
+    capturedFusionContexts.length = 0;
+    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+    const raf = createRaf();
+    const hudRoot = { innerHTML: "" } as HTMLElement;
+    const drawGameFrame = vi.fn();
+    const audio = createAudio();
+    const frontVideo = createVideo();
+    const sideVideo = createVideo();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const frontTracker = createTracker(() =>
+      Promise.resolve(createHandDetection())
+    );
+    const sideTracker = createTracker(() =>
+      Promise.resolve(createHandDetection())
+    );
+    const restartedFrontDetect = vi.fn(() =>
+      Promise.resolve(createHandDetection())
+    );
+    const restartedSideDetect = vi.fn(() =>
+      Promise.resolve(createHandDetection())
+    );
+    const restartedFrontTracker = createTracker(restartedFrontDetect);
+    const restartedSideTracker = createTracker(restartedSideDetect);
+    const createMediaPipeHandTracker = vi
+      .fn()
+      .mockResolvedValueOnce(frontTracker)
+      .mockResolvedValueOnce(sideTracker)
+      .mockResolvedValueOnce(restartedFrontTracker)
+      .mockResolvedValueOnce(restartedSideTracker);
+    const createImageBitmap = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("front lane failed"))
+      .mockResolvedValue({
+        width: 640,
+        height: 480,
+        close: vi.fn()
+      } as unknown as ImageBitmap);
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo,
+      sideVideo,
+      canvas: createCanvas(),
+      hudRoot,
+      nowMs: () => 0,
+      createAudioController: () => audio,
+      drawGameFrame,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      createDevicePinnedStream: (deviceId) =>
+        Promise.resolve(createPinnedStream(deviceId)),
+      createMediaPipeHandTracker,
+      createImageBitmap
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(frontVideo.requestVideoFrameCallbackMock).toHaveBeenCalledOnce();
+    });
+
+    frontVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+    await vi.waitFor(() => {
+      expect(frontVideo.requestVideoFrameCallbackMock).toHaveBeenCalledTimes(2);
+    });
+
+    raf.fire(64_000);
+    runtime.retry();
+
+    await vi.waitFor(() => {
+      expect(createMediaPipeHandTracker).toHaveBeenCalledTimes(4);
+    });
+    frontVideo.fireFrame({ captureTime: 64_100, presentedFrames: 2 });
+    sideVideo.fireFrame({ captureTime: 64_100, presentedFrames: 2 });
+    await vi.waitFor(() => {
+      expect(restartedFrontDetect).toHaveBeenCalledOnce();
+      expect(restartedSideDetect).toHaveBeenCalledOnce();
+    });
+
+    expect(
+      capturedFusionContexts.filter(
+        (context) =>
+          context.method === "updateAimFrame" ||
+          context.method === "updateTriggerFrame"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          frontLaneHealth: "tracking",
+          sideLaneHealth: "tracking"
+        })
+      ])
+    );
+    expect(consoleError).toHaveBeenCalledWith(
+      "[balloon game runtime] processFrame failed",
+      expect.any(Error)
+    );
+
+    runtime.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it("stops scheduling a lane after consecutive frame processing failures", async () => {
+    capturedFusionContexts.length = 0;
+    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+    const raf = createRaf();
+    const frontVideo = createVideo();
+    const sideVideo = createVideo();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo,
+      sideVideo,
+      canvas: createCanvas(),
+      hudRoot: { innerHTML: "" } as HTMLElement,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      createDevicePinnedStream: (deviceId) =>
+        Promise.resolve(createPinnedStream(deviceId)),
+      createMediaPipeHandTracker: vi.fn(() => Promise.resolve(createTracker())),
+      createImageBitmap: vi.fn(() =>
+        Promise.reject(new Error("bitmap keeps failing"))
+      )
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(frontVideo.requestVideoFrameCallbackMock).toHaveBeenCalledOnce();
+    });
+    consoleError.mockClear();
+
+    for (
+      let attempt = 0;
+      attempt < MAX_CONSECUTIVE_FRAME_ERRORS;
+      attempt += 1
+    ) {
+      frontVideo.fireFrame({
+        captureTime: 100 + attempt,
+        presentedFrames: attempt
+      });
+      await vi.waitFor(() => {
+        expect(
+          consoleError.mock.calls.filter(
+            ([message]) =>
+              message === "[balloon game runtime] processFrame failed"
+          )
+        ).toHaveLength(attempt + 1);
+      });
+    }
+
+    expect(frontVideo.requestVideoFrameCallbackMock).toHaveBeenCalledTimes(
+      MAX_CONSECUTIVE_FRAME_ERRORS
+    );
+    expect(capturedFusionContexts.at(-1)).toMatchObject({
+      frontLaneHealth: "failed"
+    });
+
+    runtime.destroy();
+    vi.unstubAllGlobals();
   });
 
   it("fires time-up and result audio once when playing duration ends", () => {

@@ -46,6 +46,7 @@ const defaultViewport: ViewportSize = {
   height: 768
 };
 
+// Defensive guard for test overrides that may return out-of-range values.
 const clampRandom = (value: number): number => Math.min(1, Math.max(0, value));
 
 export const createGameEngine = ({

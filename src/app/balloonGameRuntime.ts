@@ -133,6 +133,12 @@ const defaultCreateImageBitmap = (
   source: HTMLVideoElement
 ): Promise<ImageBitmap> => createImageBitmap(source);
 
+// ~15fps fallback for browsers without requestVideoFrameCallback.
+const VIDEO_FRAME_FALLBACK_INTERVAL_MS = 66;
+
+// Ten consecutive frame failures spans ~330ms at 30fps, enough for transient browser hiccups.
+export const MAX_CONSECUTIVE_FRAME_ERRORS = 10;
+
 export const createBalloonGameRuntime = ({
   canvas,
   hudRoot,
@@ -191,7 +197,7 @@ export const createBalloonGameRuntime = ({
   const renderHud = (): void => {
     const currentFusedFrame = readFusedInputFrame?.() ?? latestFusedFrame;
 
-    hudRoot.innerHTML = renderGameHud({
+    const hudHtml = renderGameHud({
       score: engine.score,
       combo: engine.combo,
       multiplier: engine.multiplier,
@@ -206,6 +212,17 @@ export const createBalloonGameRuntime = ({
           ? { finalScore: engine.score, bestCombo }
           : undefined
     });
+
+    if (
+      typeof hudRoot.replaceChildren === "function" &&
+      typeof hudRoot.insertAdjacentHTML === "function"
+    ) {
+      hudRoot.replaceChildren();
+      hudRoot.insertAdjacentHTML("afterbegin", hudHtml);
+      return;
+    }
+
+    Reflect.set(hudRoot, "innerHTML", hudHtml);
   };
 
   const schedule = (): void => {
@@ -255,8 +272,17 @@ export const createBalloonGameRuntime = ({
       fusedFrame === undefined
         ? { crosshair: undefined, shot: undefined }
         : readFusedGameInput(inputAdapter, fusedFrame);
+    const shotTimestampMs =
+      fusedFrame?.trigger?.timestamp.frameTimestampMs ??
+      fusedFrame?.sideSource.frameTimestamp?.frameTimestampMs ??
+      fusedFrame?.fusionTimestampMs;
+    const shotStartedDuringPlaying =
+      session.state === "playing" &&
+      input.shot !== undefined &&
+      shotTimestampMs !== undefined &&
+      shotTimestampMs >= session.playingStartedAtMs;
 
-    if (session.state === "playing" && input.shot !== undefined) {
+    if (shotStartedDuringPlaying) {
       shotEffect = input.shot;
       play(() => audio.playShot());
       const shotResult = registerShot(engine, input.shot);
@@ -368,6 +394,7 @@ export const createBalloonGameRuntime = ({
     let callbackId: number | undefined;
     let timeoutId: number | undefined;
     let laneStopped = false;
+    let consecutiveFrameErrors = 0;
     const laneStillActive = (): boolean => !stopped && !laneStopped;
 
     const setLaneHealth = (health: LaneHealthStatus): void => {
@@ -397,13 +424,14 @@ export const createBalloonGameRuntime = ({
     setLaneHealth("capturing");
 
     const stream = await openStream(deviceId);
-    streams.push(stream);
-    video.srcObject = stream.stream;
 
     if (!laneStillActive()) {
       stream.stop();
       return;
     }
+
+    streams.push(stream);
+    video.srcObject = stream.stream;
 
     let tracker: MediaPipeHandTracker;
 
@@ -446,7 +474,7 @@ export const createBalloonGameRuntime = ({
 
       timeoutId = window.setTimeout(() => {
         void processVideoFrame({ expectedDisplayTime: performance.now() });
-      }, 66);
+      }, VIDEO_FRAME_FALLBACK_INTERVAL_MS);
     };
 
     const updateUnavailable = (timestamp: FrameTimestamp): void => {
@@ -494,6 +522,7 @@ export const createBalloonGameRuntime = ({
           return;
         }
 
+        consecutiveFrameErrors = 0;
         setLaneHealth("tracking");
 
         if (role === "frontAim") {
@@ -504,11 +533,17 @@ export const createBalloonGameRuntime = ({
       } catch (error: unknown) {
         if (laneStillActive()) {
           console.error("[balloon game runtime] processFrame failed", error);
+          consecutiveFrameErrors += 1;
           setLaneHealth("failed");
           updateUnavailable(timestamp);
         }
       } finally {
         bitmap?.close();
+      }
+
+      if (consecutiveFrameErrors >= MAX_CONSECUTIVE_FRAME_ERRORS) {
+        laneStopped = true;
+        return;
       }
 
       scheduleVideoFrame();
@@ -540,6 +575,26 @@ export const createBalloonGameRuntime = ({
     );
   };
 
+  const stopCameraTracking = (): void => {
+    for (const stopLane of laneStops) {
+      stopLane();
+    }
+    laneStops.length = 0;
+
+    for (const stream of streams) {
+      stream.stop();
+    }
+    streams.length = 0;
+
+    for (const tracker of trackers) {
+      void tracker.cleanup();
+    }
+    trackers.length = 0;
+
+    frontLaneHealth = "notStarted";
+    sideLaneHealth = "notStarted";
+  };
+
   return {
     start() {
       if (stopped || session.state !== "idle") {
@@ -560,6 +615,7 @@ export const createBalloonGameRuntime = ({
       }
 
       engine.reset();
+      stopCameraTracking();
       frontAimMapper.reset();
       sideTriggerMapper.reset();
       inputFusionMapper.resetAll();
@@ -570,6 +626,7 @@ export const createBalloonGameRuntime = ({
       shotEffect = undefined;
       hitEffect = undefined;
       play(() => audio.startBgm());
+      startCameraTracking();
       renderHud();
     },
     destroy() {
@@ -577,15 +634,7 @@ export const createBalloonGameRuntime = ({
       if (frameHandle !== undefined) {
         cancelFrame(frameHandle);
       }
-      for (const stopLane of laneStops) {
-        stopLane();
-      }
-      for (const stream of streams) {
-        stream.stop();
-      }
-      for (const tracker of trackers) {
-        void tracker.cleanup();
-      }
+      stopCameraTracking();
       audio.stopBgm();
     }
   };

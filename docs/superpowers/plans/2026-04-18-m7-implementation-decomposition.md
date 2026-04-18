@@ -598,59 +598,59 @@ M7 開始前の post-M6 `main` で必ず確認する。
    - Risk: viewport scaling or canvas CSS size mismatch makes hits feel wrong.
    - Probe: unit test hit detection at canvas edges and after resize; manual probe at four corners and center.
 
-2. Shot edge double-consumption
+1. Shot edge double-consumption
    - Risk: M6 emits one `shotFired`, but M7 rAF processes the same fused frame repeatedly.
    - Probe: replay and runtime tests repeat the same fused frame across multiple ticks and assert one shot.
 
-3. Timer drift
+1. Timer drift
    - Risk: using frame count or wall-clock inconsistently makes 60 seconds inaccurate.
    - Probe: fake rAF sequence totals exactly `60_000ms`; assert result transition once.
 
-4. Countdown race
+1. Countdown race
    - Risk: repeated start clicks or async runtime readiness starts multiple countdowns.
    - Probe: unit test duplicate `start` and delayed runtime readiness.
 
-5. Retry state cleanup
+1. Retry state cleanup
    - Risk: old balloons, consumed shot keys, audio state, or result events leak into retry.
    - Probe: integration test retry after a hit and result, then first new shot can score once.
 
-6. Fused-input availability vs degraded mode
+1. Fused-input availability vs degraded mode
    - Risk: front-only or side-only diagnostic frames accidentally score.
    - Probe: `frontOnlyAim`, `sideOnlyTriggerDiagnostic`, and `noUsableInput` tests assert no shot action.
 
-7. Fusion timestamp policy regression
+1. Fusion timestamp policy regression
    - Risk: gameplay runtime uses rAF time instead of frame timestamps for pairing.
    - Probe: runtime tests assert fusion mapper receives `FrameTimestamp.frameTimestampMs` from `createFrameTimestamp`.
 
-8. MediaPipe lifecycle race
+1. MediaPipe lifecycle race
    - Risk: destroy during stream/tracker startup leaks camera or writes stale DOM.
    - Probe: integration tests for destroy-before-tracker-resolve and stream-open-before-tracker-failure.
 
-9. Stale video element
+1. Stale video element
    - Risk: page re-render replaces video nodes while callbacks keep old nodes alive.
    - Probe: runtime/page test re-renders setup and asserts old callbacks do not draw or fuse.
 
-10. Process frame failure
+1. Process frame failure
    - Risk: one `createImageBitmap` or tracker failure kills the game loop.
    - Probe: mock rejection once, assert logged and next frame recovers.
 
-11. Default-state mismatch
+1. Default-state mismatch
    - Risk: page render defaults differ from runtime initial state and produce `undefined`.
    - Probe: `gameHud` and page tests compare default view model with runtime initial snapshot.
 
-12. Diagnostic contamination
+1. Diagnostic contamination
    - Risk: M7 imports workbench helpers for formatting or side conversion.
    - Probe: import-boundary tests with expected offenders `[]`.
 
-13. Audio autoplay or asset failure
+1. Audio autoplay or asset failure
    - Risk: audio promise rejects and blocks gameplay.
    - Probe: runtime catches/logs audio failures while controller unit tests still surface rejection.
 
-14. `knip` unused exports
+1. `knip` unused exports
    - Risk: old M5 app files or new helpers remain unused.
    - Probe: run `npm run knip` after app replacement and final check.
 
-15. Markdown lint MD029
+1. Markdown lint MD029
    - Risk: if this decomposition is copied into a committed Markdown plan, ordered list numbering fails.
    - Probe: run formatter/markdown lint in the target commit path if plan is saved.
 
