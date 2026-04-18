@@ -10,18 +10,28 @@ const viewportSize = { width: 640, height: 480 };
 describe("createFrontAimMapper", () => {
   it("starts with a cold-start frame and then tracks", () => {
     const mapper = createFrontAimMapper();
+    const firstDetection = createFrontDetection({
+      timestamp: testTimestamp(1000)
+    });
+    const secondDetection = createFrontDetection({
+      timestamp: testTimestamp(1016)
+    });
 
     const first = mapper.update({
-      detection: createFrontDetection({ timestamp: testTimestamp(1000) }),
+      detection: firstDetection,
       viewportSize
     });
     const second = mapper.update({
-      detection: createFrontDetection({ timestamp: testTimestamp(1016) }),
+      detection: secondDetection,
       viewportSize
     });
 
     expect(first.aimFrame?.aimSmoothingState).toBe("coldStart");
+    expect(first.aimFrame?.timestamp).toBe(firstDetection.timestamp);
+    expect(first.aimFrame?.laneRole).toBe("frontAim");
     expect(second.aimFrame?.aimSmoothingState).toBe("tracking");
+    expect(second.aimFrame?.timestamp).toBe(secondDetection.timestamp);
+    expect(second.aimFrame?.laneRole).toBe("frontAim");
   });
 
   it("holds a recent aim estimate during brief hand loss", () => {
@@ -69,13 +79,20 @@ describe("createFrontAimMapper", () => {
     const mapper = createFrontAimMapper();
     mapper.update({ detection: createFrontDetection(), viewportSize });
     mapper.update({ detection: createFrontDetection(), viewportSize });
+    const replacementDetection = createFrontDetection({
+      streamId: "replacement-stream"
+    });
 
     const afterStreamChange = mapper.update({
-      detection: createFrontDetection({ streamId: "replacement-stream" }),
+      detection: replacementDetection,
       viewportSize
     });
 
     expect(afterStreamChange.aimFrame?.aimSmoothingState).toBe("coldStart");
+    expect(afterStreamChange.aimFrame?.timestamp).toBe(
+      replacementDetection.timestamp
+    );
+    expect(afterStreamChange.aimFrame?.laneRole).toBe("frontAim");
   });
 
   it("rejects low-confidence posture without using the recent estimate", () => {

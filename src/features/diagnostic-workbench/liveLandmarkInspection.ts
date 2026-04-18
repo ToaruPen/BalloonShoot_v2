@@ -4,6 +4,13 @@ import {
   type MediaPipeHandTracker
 } from "../hand-tracking/createMediaPipeHandTracker";
 import {
+  createFrontAimMapper,
+  getFrontAimFilterConfig,
+  resolveFrontAimViewportSize,
+  toFrontDetection
+} from "../front-aim";
+import { handPresenceConfidenceFor } from "../front-aim/frontAimDetectionConversion";
+import {
   coerceSideTriggerTuningValue,
   createSideTriggerMapper,
   defaultSideTriggerTuning,
@@ -12,8 +19,6 @@ import {
   type SideTriggerTuning,
   type SideTriggerTuningKey
 } from "../side-trigger";
-import { createFrontAimMapper } from "../front-aim";
-import { gameConfig } from "../../shared/config/gameConfig";
 import type {
   FrameTimestamp,
   LaneHealthStatus
@@ -73,12 +78,6 @@ const createInitialInspectionState = (): WorkbenchInspectionState => ({
   sideTriggerTuning: defaultSideTriggerTuning
 });
 
-const getFilterConfig = () => ({
-  minCutoff: gameConfig.input.handFilterMinCutoff,
-  beta: gameConfig.input.handFilterBeta,
-  dCutoff: gameConfig.input.handFilterDCutoff
-});
-
 const updateText = (id: string, value: string): void => {
   const element = document.querySelector<HTMLElement>(`#${id}`);
 
@@ -95,27 +94,22 @@ const updateOuterHTML = (id: string, value: string): void => {
   }
 };
 
-const positiveDimension = (value: number | undefined): number | undefined =>
-  value !== undefined && value > 0 ? value : undefined;
-
 export const videoViewportSize = (
   video: HTMLVideoElement,
   detection: FrontHandDetection | undefined
-): { width: number; height: number } => {
-  const fallbackFrame = detection?.filteredFrame;
-  const width =
-    positiveDimension(video.clientWidth) ??
-    positiveDimension(video.videoWidth) ??
-    positiveDimension(fallbackFrame?.width) ??
-    1;
-  const height =
-    positiveDimension(video.clientHeight) ??
-    positiveDimension(video.videoHeight) ??
-    positiveDimension(fallbackFrame?.height) ??
-    1;
-
-  return { width, height };
-};
+): { width: number; height: number } =>
+  resolveFrontAimViewportSize({
+    widthCandidates: [
+      video.clientWidth,
+      video.videoWidth,
+      detection?.filteredFrame.width
+    ],
+    heightCandidates: [
+      video.clientHeight,
+      video.videoHeight,
+      detection?.filteredFrame.height
+    ]
+  });
 
 const drawOverlay = (
   canvasId: string,
@@ -167,28 +161,6 @@ const drawOverlay = (
     context.fill();
   }
 };
-
-const handPresenceConfidenceFor = (detection: HandDetection): number => {
-  const scores = detection.rawFrame.handedness?.map((hand) => hand.score) ?? [];
-
-  return scores.length === 0 ? 1 : Math.max(...scores);
-};
-
-const toFrontDetection = (
-  detection: HandDetection,
-  options: LaneTrackingOptions,
-  timestamp: FrameTimestamp
-): FrontHandDetection => ({
-  laneRole: "frontAim",
-  deviceId: options.deviceId,
-  streamId: options.streamId,
-  timestamp,
-  rawFrame: detection.rawFrame,
-  filteredFrame: detection.filteredFrame,
-  handPresenceConfidence: handPresenceConfidenceFor(detection),
-  // TODO(M5): Compute real front tracking quality when front aim lands.
-  trackingQuality: "good"
-});
 
 const toSideDetection = (
   detection: HandDetection,
@@ -353,7 +325,11 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       return detection === undefined
         ? undefined
         : options.role === "frontAim"
-          ? toFrontDetection(detection, options, timestamp)
+          ? toFrontDetection(detection, {
+              deviceId: options.deviceId,
+              streamId: options.streamId,
+              timestamp
+            })
           : toSideDetection(detection, options, timestamp);
     } finally {
       bitmap.close();
@@ -372,7 +348,9 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     setLaneHealth(options.role, "capturing");
 
     const getTracker = (): Promise<MediaPipeHandTracker> => {
-      trackerPromise ??= createMediaPipeHandTracker({ getFilterConfig });
+      trackerPromise ??= createMediaPipeHandTracker({
+        getFilterConfig: getFrontAimFilterConfig
+      });
       return trackerPromise;
     };
 

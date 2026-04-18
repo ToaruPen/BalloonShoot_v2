@@ -6,13 +6,14 @@ import {
   type MediaPipeHandTracker
 } from "../features/hand-tracking/createMediaPipeHandTracker";
 import { drawGameFrame } from "../features/rendering/drawGameFrame";
-import { createFrontAimMapper } from "../features/front-aim";
-import { gameConfig } from "../shared/config/gameConfig";
+import {
+  createFrontAimMapper,
+  getFrontAimFilterConfig,
+  resolveFrontAimViewportSize,
+  toFrontDetection
+} from "../features/front-aim";
 import type { FrameTimestamp } from "../shared/types/camera";
-import type {
-  FrontHandDetection,
-  HandDetection
-} from "../shared/types/hand";
+import type { HandDetection } from "../shared/types/hand";
 
 interface FrameTimingLike {
   readonly captureTime?: number;
@@ -39,35 +40,6 @@ interface FrontAimGameRuntime {
   start(): void;
   destroy(): void;
 }
-
-const getFilterConfig = () => ({
-  minCutoff: gameConfig.input.handFilterMinCutoff,
-  beta: gameConfig.input.handFilterBeta,
-  dCutoff: gameConfig.input.handFilterDCutoff
-});
-
-const handPresenceConfidenceFor = (detection: HandDetection): number => {
-  const scores = detection.rawFrame.handedness?.map((hand) => hand.score) ?? [];
-
-  return scores.length === 0 ? 1 : Math.max(...scores);
-};
-
-const toFrontDetection = (
-  detection: HandDetection,
-  deviceId: string,
-  streamId: string,
-  timestamp: FrameTimestamp
-): FrontHandDetection => ({
-  laneRole: "frontAim",
-  deviceId,
-  streamId,
-  timestamp,
-  rawFrame: detection.rawFrame,
-  filteredFrame: detection.filteredFrame,
-  handPresenceConfidence: handPresenceConfidenceFor(detection),
-  // TODO(M9): Compute real tracking quality once live capture telemetry is wired for trial hardening.
-  trackingQuality: "good"
-});
 
 const readyStateForCurrentData = (): number =>
   (globalThis as { HTMLMediaElement?: { HAVE_CURRENT_DATA?: number } })
@@ -100,10 +72,11 @@ const syncCanvasSize = (canvas: HTMLCanvasElement): void => {
 
 const viewportSizeFor = (
   canvas: HTMLCanvasElement
-): { width: number; height: number } => ({
-  width: positiveDimension(canvas.width) ?? 1,
-  height: positiveDimension(canvas.height) ?? 1
-});
+): { width: number; height: number } =>
+  resolveFrontAimViewportSize({
+    widthCandidates: [canvas.width],
+    heightCandidates: [canvas.height]
+  });
 
 const defaultCreateImageBitmap = (
   source: HTMLVideoElement
@@ -178,7 +151,11 @@ export const createFrontAimGameRuntime = ({
     const frontDetection =
       detection === undefined
         ? undefined
-        : toFrontDetection(detection, deviceId, stream.stream.id, timestamp);
+        : toFrontDetection(detection, {
+            deviceId,
+            streamId: stream.stream.id,
+            timestamp
+          });
     const result = mapper.update({
       detection: frontDetection,
       viewportSize: viewportSizeFor(canvas),
@@ -256,7 +233,9 @@ export const createFrontAimGameRuntime = ({
         return;
       }
 
-      const openedTracker = await createTracker({ getFilterConfig });
+      const openedTracker = await createTracker({
+        getFilterConfig: getFrontAimFilterConfig
+      });
 
       if (isStopped()) {
         stopStream();

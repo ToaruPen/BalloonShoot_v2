@@ -77,9 +77,12 @@ describe("renderFrontAimPanel", () => {
     expect(html).not.toContain(rawLostReason);
   });
 
-  it("does not render raw device ids", () => {
+  it("renders raw aim telemetry fields that the panel actually emits", () => {
     const html = renderFrontAimPanel(createAimFrame(), createTelemetry());
 
-    expect(html).not.toContain("front-device");
+    expect(html).toMatch(
+      /<span>source frame<\/span>\s*<strong>640 x 480<\/strong>/
+    );
+    expect(html).toMatch(/<span>last lost<\/span>\s*<strong>none<\/strong>/);
   });
 });
