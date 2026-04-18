@@ -1,16 +1,27 @@
 import { escapeHTML } from "../../shared/browser/escapeHTML";
 import {
   SIDE_TRIGGER_CALIBRATION_SLIDER_METADATA,
+  type SideTriggerCalibrationKey,
   type SideTriggerCalibration
 } from "../side-trigger";
 
+const assertNever = (value: never): never => {
+  throw new Error(`Unhandled side trigger calibration key: ${String(value)}`);
+};
+
 const valueFor = (
   calibration: SideTriggerCalibration,
-  key: (typeof SIDE_TRIGGER_CALIBRATION_SLIDER_METADATA)[number]["key"]
-): number =>
-  key === "openPoseDistance"
-    ? calibration.openPose.normalizedThumbDistance
-    : calibration.pulledPose.normalizedThumbDistance;
+  key: SideTriggerCalibrationKey
+): number => {
+  switch (key) {
+    case "openPoseDistance":
+      return calibration.openPose.normalizedThumbDistance;
+    case "pulledPoseDistance":
+      return calibration.pulledPose.normalizedThumbDistance;
+    default:
+      return assertNever(key);
+  }
+};
 
 export const renderSideTriggerCalibrationControls = (
   calibration: SideTriggerCalibration
@@ -36,7 +47,7 @@ export const renderSideTriggerCalibrationControls = (
   }).join("");
 
   return `
-    <section class="wb-tuning-panel wb-side-trigger-calibration-panel">
+    <section id="wb-side-trigger-calibration-panel" class="wb-tuning-panel wb-side-trigger-calibration-panel">
       <h3>side trigger calibration</h3>
       <p>診断ワークベンチ専用の session-only calibration です。</p>
       <div class="wb-tuning-grid">${controls}</div>

@@ -13,7 +13,7 @@ import {
   defaultFrontAimCalibration,
   frontAimCalibrationStatusFor,
   updateFrontAimCalibrationValue
-} from "../../../../src/features/front-aim/frontAimCalibration";
+} from "../../../../src/features/front-aim";
 
 describe("front aim calibration", () => {
   it("builds default calibration from named constants", () => {

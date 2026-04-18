@@ -542,15 +542,7 @@ M8 開始前に post-M7 main が次を満たすことを確認する。
 
 ## 4. Quality gate sequence
 
-1. During Red/Green loops, run focused Vitest files for the changed lane or workbench component.
-2. After front and side calibration math lands, run:
-   - `npm run test -- tests/unit/features/front-aim tests/unit/features/side-trigger`
-3. After diagnostic workbench UI and event wiring lands, run:
-   - `npm run test -- tests/unit/features/diagnostic-workbench tests/integration`
-4. Before marking M8 implementation complete, run:
-   - `npm run check`
-5. Because both `diagnostic.html` behavior and game-page cleanliness are part of M8 verification, run:
-   - `npm run test:e2e`
+Use the canonical command sequence in section 12, "Quality gates and final verification".
 
 ## 5. Boundaries reminder
 

@@ -10,9 +10,16 @@ describe("renderSideTriggerCalibrationControls", () => {
 
     expect(html).toContain("診断ワークベンチ専用の session-only calibration");
     expect(html).toContain("DEFAULT_SIDE_TRIGGER_OPEN_POSE_DISTANCE");
+    expect(html).toContain("DEFAULT_SIDE_TRIGGER_PULLED_POSE_DISTANCE");
     expect(html).toContain('data-side-trigger-calibration="openPoseDistance"');
     expect(html).toContain(
+      'data-side-trigger-calibration="pulledPoseDistance"'
+    );
+    expect(html).toContain(
       'id="wb-side-trigger-calibration-value-openPoseDistance"'
+    );
+    expect(html).toContain(
+      'id="wb-side-trigger-calibration-value-pulledPoseDistance"'
     );
     expect(html).toContain('data-wb-action="resetSideTriggerCalibration"');
   });

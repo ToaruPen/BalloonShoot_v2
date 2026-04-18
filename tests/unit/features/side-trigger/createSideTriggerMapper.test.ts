@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createSideTriggerMapper } from "../../../../src/features/side-trigger/createSideTriggerMapper";
-import { defaultSideTriggerCalibration } from "../../../../src/features/side-trigger/sideTriggerCalibration";
-import { defaultSideTriggerTuning } from "../../../../src/features/side-trigger/sideTriggerConfig";
+import {
+  createSideTriggerMapper,
+  defaultSideTriggerCalibration,
+  defaultSideTriggerTuning
+} from "../../../../src/features/side-trigger";
 import {
   createSideDetection,
   openWorldLandmarks,
@@ -122,7 +124,9 @@ describe("createSideTriggerMapper", () => {
     const mapper = createSideTriggerMapper();
 
     const result = mapper.update({
-      detection: createSideDetection({ worldLandmarks: pulledWorldLandmarks() }),
+      detection: createSideDetection({
+        worldLandmarks: pulledWorldLandmarks()
+      }),
       calibration: {
         openPose: { normalizedThumbDistance: 1.4 },
         pulledPose: { normalizedThumbDistance: 0.25 }

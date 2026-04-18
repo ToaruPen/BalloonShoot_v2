@@ -2,6 +2,7 @@ import type {
   FrontAimCalibrationSnapshot,
   FrontAimCalibrationStatus
 } from "../../shared/types/aim";
+import { coerceSliderNumericValue } from "../../shared/helpers/sliderNumeric";
 import {
   DEFAULT_FRONT_AIM_CENTER_X,
   DEFAULT_FRONT_AIM_CENTER_Y,
@@ -103,16 +104,10 @@ export const FRONT_AIM_CALIBRATION_SLIDER_METADATA: readonly FrontAimCalibration
     }
   ];
 
-const clamp = (value: number, min: number, max: number): number =>
-  Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
-
-const roundSliderValue = (value: number): number =>
-  Number.parseFloat(value.toFixed(4));
-
 export const coerceFrontAimCalibrationValue = (
   metadata: FrontAimCalibrationSliderMetadata,
   value: number
-): number => roundSliderValue(clamp(value, metadata.min, metadata.max));
+): number => coerceSliderNumericValue(metadata, value);
 
 export const updateFrontAimCalibrationValue = (
   calibration: FrontAimCalibration,
@@ -123,9 +118,15 @@ export const updateFrontAimCalibrationValue = (
 
   switch (metadata.key) {
     case "centerX":
-      return { ...calibration, center: { ...calibration.center, x: nextValue } };
+      return {
+        ...calibration,
+        center: { ...calibration.center, x: nextValue }
+      };
     case "centerY":
-      return { ...calibration, center: { ...calibration.center, y: nextValue } };
+      return {
+        ...calibration,
+        center: { ...calibration.center, y: nextValue }
+      };
     case "cornerLeftX":
       return {
         ...calibration,

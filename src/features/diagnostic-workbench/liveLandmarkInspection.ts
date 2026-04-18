@@ -51,8 +51,10 @@ import type {
 import { handPresenceConfidenceFor } from "../../shared/helpers/handConfidence";
 import type { WorkbenchState } from "./DiagnosticWorkbench";
 import { createLandmarkOverlayModel } from "./landmarkOverlay";
+import { renderFrontAimCalibrationControls } from "./renderFrontAimCalibrationControls";
 import { renderFrontAimPanel } from "./renderFrontAimPanel";
 import { renderFusionPanel } from "./renderFusionPanel";
+import { renderSideTriggerCalibrationControls } from "./renderSideTriggerCalibrationControls";
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
 import type { WorkbenchInspectionState } from "./renderWorkbench";
@@ -76,7 +78,10 @@ interface LiveLandmarkInspection {
   sync(state: WorkbenchState): void;
   setFrontAimCalibration(key: FrontAimCalibrationKey, value: number): void;
   resetFrontAimCalibration(): void;
-  setSideTriggerCalibration(key: SideTriggerCalibrationKey, value: number): void;
+  setSideTriggerCalibration(
+    key: SideTriggerCalibrationKey,
+    value: number
+  ): void;
   resetSideTriggerCalibration(): void;
   setSideTriggerTuning(key: SideTriggerTuningKey, value: number): void;
   resetSideTriggerTuning(): void;
@@ -243,12 +248,25 @@ const frontCalibrationValueFor = (
   }
 };
 
+const sideCalibrationValueFor = (
+  calibration: SideTriggerCalibration,
+  key: SideTriggerCalibrationKey
+): number => {
+  switch (key) {
+    case "openPoseDistance":
+      return calibration.openPose.normalizedThumbDistance;
+    case "pulledPoseDistance":
+      return calibration.pulledPose.normalizedThumbDistance;
+  }
+};
+
 export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   let inspectionState = createInitialInspectionState();
   let activeTracking: ActiveTracking | undefined;
   let frontAimMapper = createFrontAimMapper();
   let sideTriggerMapper: SideTriggerMapper = createSideTriggerMapper();
   let inputFusionMapper: InputFusionMapper = createInputFusionMapper();
+  let syncedScreen: WorkbenchState["screen"] | undefined;
 
   const setInspection = (patch: Partial<WorkbenchInspectionState>): void => {
     inspectionState = { ...inspectionState, ...patch };
@@ -315,6 +333,16 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       renderFusionPanel(
         inspectionState.fusionFrame,
         inspectionState.fusionTelemetry
+      )
+    );
+    updateOuterHTML(
+      "wb-front-aim-calibration-panel",
+      renderFrontAimCalibrationControls(inspectionState.frontAimCalibration)
+    );
+    updateOuterHTML(
+      "wb-side-trigger-calibration-panel",
+      renderSideTriggerCalibrationControls(
+        inspectionState.sideTriggerCalibration
       )
     );
   };
@@ -585,10 +613,23 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     };
   };
 
-  const resetTrackingState = (): void => {
-    const { fusionTuning, sideTriggerTuning } = inspectionState;
+  const resetTrackingState = (
+    options: { readonly resetCalibration?: boolean } = {}
+  ): void => {
+    const {
+      frontAimCalibration,
+      fusionTuning,
+      sideTriggerCalibration,
+      sideTriggerTuning
+    } = inspectionState;
+    const calibrationPatch =
+      options.resetCalibration === true
+        ? {}
+        : { frontAimCalibration, sideTriggerCalibration };
+
     inspectionState = {
       ...createInitialInspectionState(),
+      ...calibrationPatch,
       sideTriggerTuning,
       fusionTuning
     };
@@ -604,13 +645,19 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   };
 
   const sync = (state: WorkbenchState): void => {
+    const previousScreen = syncedScreen;
+    syncedScreen = state.screen;
+
     if (
       state.screen !== "previewing" ||
       state.frontStream === undefined ||
       state.sideStream === undefined
     ) {
       stopActiveTracking();
-      resetTrackingState();
+      resetTrackingState({
+        resetCalibration:
+          previousScreen === "previewing" && state.screen === "deviceSelection"
+      });
       return;
     }
 
@@ -707,11 +754,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       setInspection({ sideTriggerCalibration });
       updateText(
         `wb-side-trigger-calibration-value-${key}`,
-        String(
-          key === "openPoseDistance"
-            ? sideTriggerCalibration.openPose.normalizedThumbDistance
-            : sideTriggerCalibration.pulledPose.normalizedThumbDistance
-        )
+        String(sideCalibrationValueFor(sideTriggerCalibration, key))
       );
     },
     resetSideTriggerCalibration() {
@@ -758,7 +801,8 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     updateDom,
     destroy() {
       stopActiveTracking();
-      resetTrackingState();
+      resetTrackingState({ resetCalibration: true });
+      syncedScreen = undefined;
     }
   };
 };

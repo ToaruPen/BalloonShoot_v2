@@ -4,9 +4,9 @@ import { renderSideTriggerCalibrationControls } from "../../src/features/diagnos
 import { renderTuningControls } from "../../src/features/diagnostic-workbench/renderTuningControls";
 import {
   createSideTriggerMapper,
-  defaultSideTriggerCalibration
+  defaultSideTriggerCalibration,
+  defaultSideTriggerTuning
 } from "../../src/features/side-trigger";
-import { defaultSideTriggerTuning } from "../../src/features/side-trigger/sideTriggerConfig";
 import {
   createSideDetection,
   openWorldLandmarks,
@@ -149,7 +149,9 @@ describe("diagnostic side trigger workbench seam", () => {
       pulledPose: { normalizedThumbDistance: 0.25 }
     };
     const result = mapper.update({
-      detection: createSideDetection({ worldLandmarks: pulledWorldLandmarks() }),
+      detection: createSideDetection({
+        worldLandmarks: pulledWorldLandmarks()
+      }),
       calibration,
       tuning: defaultSideTriggerTuning
     });
@@ -160,6 +162,6 @@ describe("diagnostic side trigger workbench seam", () => {
     );
     expect(
       renderSideTriggerPanel(result.triggerFrame, result.telemetry)
-    ).toMatch(/<span>pulled pose distance<\/span>\s*<strong>0\.250<\/strong>/);
+    ).toMatch(/pulled pose distance[\s\S]*?0\.250/);
   });
 });

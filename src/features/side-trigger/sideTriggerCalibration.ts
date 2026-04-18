@@ -2,6 +2,7 @@ import type {
   SideTriggerCalibrationSnapshot,
   SideTriggerCalibrationStatus
 } from "../../shared/types/trigger";
+import { coerceSliderNumericValue } from "../../shared/helpers/sliderNumeric";
 import {
   DEFAULT_SIDE_TRIGGER_OPEN_POSE_DISTANCE,
   DEFAULT_SIDE_TRIGGER_PULLED_POSE_DISTANCE,
@@ -55,16 +56,10 @@ export const SIDE_TRIGGER_CALIBRATION_SLIDER_METADATA: readonly SideTriggerCalib
     }
   ];
 
-const clamp = (value: number, min: number, max: number): number =>
-  Math.min(max, Math.max(min, Number.isFinite(value) ? value : min));
-
-const roundSliderValue = (value: number): number =>
-  Number.parseFloat(value.toFixed(4));
-
 export const coerceSideTriggerCalibrationValue = (
   metadata: SideTriggerCalibrationSliderMetadata,
   value: number
-): number => roundSliderValue(clamp(value, metadata.min, metadata.max));
+): number => coerceSliderNumericValue(metadata, value);
 
 export const updateSideTriggerCalibrationValue = (
   calibration: SideTriggerCalibration,

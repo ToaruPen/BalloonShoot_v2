@@ -10,13 +10,13 @@ import {
   defaultSideTriggerCalibration,
   sideTriggerCalibrationStatusFor,
   updateSideTriggerCalibrationValue
-} from "../../../../src/features/side-trigger/sideTriggerCalibration";
+} from "../../../../src/features/side-trigger";
 
 describe("side trigger calibration", () => {
   it("builds default calibration from named constants", () => {
-    expect(
-      defaultSideTriggerCalibration.openPose.normalizedThumbDistance
-    ).toBe(DEFAULT_SIDE_TRIGGER_OPEN_POSE_DISTANCE);
+    expect(defaultSideTriggerCalibration.openPose.normalizedThumbDistance).toBe(
+      DEFAULT_SIDE_TRIGGER_OPEN_POSE_DISTANCE
+    );
     expect(
       defaultSideTriggerCalibration.pulledPose.normalizedThumbDistance
     ).toBe(DEFAULT_SIDE_TRIGGER_PULLED_POSE_DISTANCE);

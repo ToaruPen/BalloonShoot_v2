@@ -1,12 +1,17 @@
 import { escapeHTML } from "../../shared/browser/escapeHTML";
 import {
   FRONT_AIM_CALIBRATION_SLIDER_METADATA,
+  type FrontAimCalibrationKey,
   type FrontAimCalibration
 } from "../front-aim";
 
+const assertNever = (value: never): never => {
+  throw new Error(`Unhandled front aim calibration key: ${String(value)}`);
+};
+
 const valueFor = (
   calibration: FrontAimCalibration,
-  key: (typeof FRONT_AIM_CALIBRATION_SLIDER_METADATA)[number]["key"]
+  key: FrontAimCalibrationKey
 ): number => {
   switch (key) {
     case "centerX":
@@ -21,6 +26,8 @@ const valueFor = (
       return calibration.cornerBounds.topY;
     case "cornerBottomY":
       return calibration.cornerBounds.bottomY;
+    default:
+      return assertNever(key);
   }
 };
 
@@ -48,7 +55,7 @@ export const renderFrontAimCalibrationControls = (
   }).join("");
 
   return `
-    <section class="wb-tuning-panel wb-front-aim-calibration-panel">
+    <section id="wb-front-aim-calibration-panel" class="wb-tuning-panel wb-front-aim-calibration-panel">
       <h3>front aim calibration</h3>
       <p>診断ワークベンチ専用の session-only calibration です。</p>
       <div class="wb-tuning-grid">${controls}</div>
