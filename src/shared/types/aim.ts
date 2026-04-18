@@ -37,13 +37,28 @@ export interface AimInputFrame {
   readonly sourceFrameSize: AimFrameSize;
 }
 
-export interface FrontAimTelemetry {
-  readonly aimAvailability: AimAvailability;
+export interface FrontAimTelemetryAvailable {
+  readonly aimAvailability: "available";
+  readonly aimSmoothingState: AimSmoothingState;
+  readonly frontHandDetected: true;
+  readonly frontTrackingConfidence: number;
+  readonly aimPointViewport: AimPoint2D;
+  readonly aimPointNormalized: AimPoint2D;
+  readonly sourceFrameSize: AimFrameSize;
+  readonly lastLostReason: undefined;
+}
+
+export interface FrontAimTelemetryUnavailable {
+  readonly aimAvailability: Exclude<AimAvailability, "available">;
   readonly aimSmoothingState: AimSmoothingState;
   readonly frontHandDetected: boolean;
   readonly frontTrackingConfidence: number | undefined;
-  readonly aimPointViewport: AimPoint2D | undefined;
-  readonly aimPointNormalized: AimPoint2D | undefined;
-  readonly sourceFrameSize: AimFrameSize | undefined;
+  readonly aimPointViewport: undefined;
+  readonly aimPointNormalized: undefined;
+  readonly sourceFrameSize: undefined;
   readonly lastLostReason: FrontAimLastLostReason | undefined;
 }
+
+export type FrontAimTelemetry =
+  | FrontAimTelemetryAvailable
+  | FrontAimTelemetryUnavailable;

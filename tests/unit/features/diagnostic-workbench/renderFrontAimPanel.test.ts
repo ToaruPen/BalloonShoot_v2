@@ -18,9 +18,7 @@ const createAimFrame = (): AimInputFrame => ({
   sourceFrameSize: { width: 640, height: 480 }
 });
 
-const createTelemetry = (
-  patch: Partial<FrontAimTelemetry> = {}
-): FrontAimTelemetry => ({
+const createTelemetry = (): FrontAimTelemetry => ({
   aimAvailability: "available",
   aimSmoothingState: "tracking",
   frontHandDetected: true,
@@ -28,8 +26,7 @@ const createTelemetry = (
   aimPointViewport: { x: 123.4567, y: 78.9 },
   aimPointNormalized: { x: 0.192901, y: 0.164375 },
   sourceFrameSize: { width: 640, height: 480 },
-  lastLostReason: undefined,
-  ...patch
+  lastLostReason: undefined
 });
 
 describe("renderFrontAimPanel", () => {
@@ -64,16 +61,20 @@ describe("renderFrontAimPanel", () => {
   });
 
   it("escapes all text values", () => {
+    const rawLostReason = `<lost & "quoted" 'reason'>`;
     const html = renderFrontAimPanel(undefined, {
-      ...createTelemetry({
-        aimAvailability: "unavailable",
-        lastLostReason: "handNotDetected"
-      }),
+      aimAvailability: "unavailable",
+      frontHandDetected: false,
+      frontTrackingConfidence: undefined,
+      aimPointViewport: undefined,
+      aimPointNormalized: undefined,
+      sourceFrameSize: undefined,
+      lastLostReason: rawLostReason as FrontAimTelemetry["lastLostReason"],
       aimSmoothingState: "recoveringAfterLoss"
     });
 
-    expect(html).not.toContain("<script>");
-    expect(html).toContain("handNotDetected");
+    expect(html).toContain("&lt;lost &amp; &quot;quoted&quot; &#39;reason&#39;&gt;");
+    expect(html).not.toContain(rawLostReason);
   });
 
   it("does not render raw device ids", () => {

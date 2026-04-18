@@ -5,9 +5,13 @@ import type { DevicePinnedStream } from "../../../../src/features/camera/createD
 import { enumerateVideoDevices } from "../../../../src/features/camera/enumerateVideoDevices";
 import { createDiagnosticWorkbench } from "../../../../src/features/diagnostic-workbench/DiagnosticWorkbench";
 import type { DiagnosticWorkbench } from "../../../../src/features/diagnostic-workbench/DiagnosticWorkbench";
-import { createLiveLandmarkInspection } from "../../../../src/features/diagnostic-workbench/liveLandmarkInspection";
+import {
+  createLiveLandmarkInspection,
+  videoViewportSize
+} from "../../../../src/features/diagnostic-workbench/liveLandmarkInspection";
 import { renderWorkbenchHTML } from "../../../../src/features/diagnostic-workbench/renderWorkbench";
 import type {
+  FrontHandDetection,
   HandDetection,
   HandLandmarkSet
 } from "../../../../src/shared/types/hand";
@@ -467,6 +471,40 @@ describe("createLiveLandmarkInspection", () => {
     });
     expect(liveInspection.getState().frontDetection).toBeUndefined();
     expect(liveInspection.getState().frontAimFrame).toBeUndefined();
+  });
+
+  it("falls back to a 1x1 viewport when video and fallback dimensions are zero", () => {
+    const video = {
+      clientWidth: 0,
+      videoWidth: 0,
+      clientHeight: 0,
+      videoHeight: 0
+    } as HTMLVideoElement;
+    const zeroFrame = {
+      ...createHandFrame(),
+      width: 0,
+      height: 0
+    };
+    const detection: FrontHandDetection = {
+      laneRole: "frontAim",
+      deviceId: "front-id",
+      streamId: "front-stream",
+      timestamp: {
+        frameTimestampMs: 1000,
+        timestampSource: "performanceNowAtCallback",
+        presentedFrames: 1,
+        receivedAtPerformanceMs: 1000
+      },
+      rawFrame: zeroFrame,
+      filteredFrame: zeroFrame,
+      handPresenceConfidence: 0.9,
+      trackingQuality: "good"
+    };
+
+    expect(videoViewportSize(video, detection)).toEqual({
+      width: 1,
+      height: 1
+    });
   });
 
   it("maps live front detections into aim frames and telemetry", async () => {

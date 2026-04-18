@@ -7,7 +7,7 @@ import type {
 } from "../../shared/types/aim";
 
 interface UnavailableTelemetryPatch {
-  readonly aimAvailability?: AimAvailability;
+  readonly aimAvailability?: Exclude<AimAvailability, "available">;
   readonly aimSmoothingState?: AimSmoothingState;
   readonly frontHandDetected?: boolean;
   readonly frontTrackingConfidence?: number;
@@ -18,24 +18,30 @@ export const telemetryFromAimFrame = (
   aimFrame: AimInputFrame | undefined,
   patch: UnavailableTelemetryPatch = {}
 ): FrontAimTelemetry => {
-  if (aimFrame !== undefined) {
+  if (aimFrame?.aimAvailability === "available") {
     return {
       aimAvailability: aimFrame.aimAvailability,
       aimSmoothingState: aimFrame.aimSmoothingState,
-      frontHandDetected: aimFrame.frontHandDetected,
+      frontHandDetected: true,
       frontTrackingConfidence: aimFrame.frontTrackingConfidence,
       aimPointViewport: aimFrame.aimPointViewport,
       aimPointNormalized: aimFrame.aimPointNormalized,
       sourceFrameSize: aimFrame.sourceFrameSize,
-      lastLostReason: patch.lastLostReason
+      lastLostReason: undefined
     };
   }
 
   return {
-    aimAvailability: patch.aimAvailability ?? "unavailable",
-    aimSmoothingState: patch.aimSmoothingState ?? "recoveringAfterLoss",
-    frontHandDetected: patch.frontHandDetected ?? false,
-    frontTrackingConfidence: patch.frontTrackingConfidence,
+    aimAvailability:
+      aimFrame?.aimAvailability ?? patch.aimAvailability ?? "unavailable",
+    aimSmoothingState:
+      aimFrame?.aimSmoothingState ??
+      patch.aimSmoothingState ??
+      "recoveringAfterLoss",
+    frontHandDetected:
+      aimFrame?.frontHandDetected ?? patch.frontHandDetected ?? false,
+    frontTrackingConfidence:
+      aimFrame?.frontTrackingConfidence ?? patch.frontTrackingConfidence,
     aimPointViewport: undefined,
     aimPointNormalized: undefined,
     sourceFrameSize: undefined,

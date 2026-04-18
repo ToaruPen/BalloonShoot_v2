@@ -34,26 +34,42 @@ describe("front aim shared type contract", () => {
     const frame: AimInputFrame = {
       laneRole: "frontAim",
       timestamp: testTimestamp(),
-      aimAvailability: "estimatedFromRecentFrame",
+      aimAvailability: "available",
       aimPointViewport: { x: 512, y: 256 },
       aimPointNormalized: { x: 0.8, y: 0.4 },
-      aimSmoothingState: "recoveringAfterLoss",
-      frontHandDetected: false,
+      aimSmoothingState: "tracking",
+      frontHandDetected: true,
       frontTrackingConfidence: 0.8,
       sourceFrameSize: { width: 640, height: 480 }
     };
     const telemetry: FrontAimTelemetry = {
-      aimAvailability: frame.aimAvailability,
-      aimSmoothingState: frame.aimSmoothingState,
-      frontHandDetected: frame.frontHandDetected,
+      aimAvailability: "available",
+      aimSmoothingState: "tracking",
+      frontHandDetected: true,
       frontTrackingConfidence: frame.frontTrackingConfidence,
       aimPointViewport: frame.aimPointViewport,
       aimPointNormalized: frame.aimPointNormalized,
       sourceFrameSize: frame.sourceFrameSize,
-      lastLostReason: "handNotDetected"
+      lastLostReason: undefined
     };
 
-    expect(telemetry.aimPointViewport?.x).toBe(512);
-    expect(telemetry.lastLostReason).toBe("handNotDetected");
+    expect(telemetry.aimPointViewport.x).toBe(512);
+    expect(telemetry.lastLostReason).toBeUndefined();
+  });
+
+  it("rejects available telemetry without mapped aim coordinates", () => {
+    // @ts-expect-error available telemetry must carry mapped coordinates.
+    const telemetry: FrontAimTelemetry = {
+      aimAvailability: "available",
+      aimSmoothingState: "tracking",
+      frontHandDetected: true,
+      frontTrackingConfidence: 0.9,
+      aimPointViewport: undefined,
+      aimPointNormalized: undefined,
+      sourceFrameSize: undefined,
+      lastLostReason: undefined
+    };
+
+    expect(telemetry.aimAvailability).toBe("available");
   });
 });

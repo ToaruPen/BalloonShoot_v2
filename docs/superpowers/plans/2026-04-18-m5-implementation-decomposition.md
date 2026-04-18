@@ -17,7 +17,7 @@ Before starting M5, verify all of the following on post-M4 `main`.
      - side trigger threshold sliders only on `diagnostic.html`
    - `index.html` and `src/main.ts` must not import `src/features/diagnostic-workbench/`.
 
-2. Required M3/M4 contracts must exist.
+1. Required M3/M4 contracts must exist.
    - `src/shared/types/camera.ts`
      - `FrameTimestamp`
      - `LaneHealthStatus`
@@ -34,19 +34,19 @@ Before starting M5, verify all of the following on post-M4 `main`.
      - side trigger fields in `WorkbenchInspectionState`
    - M5 must add `AimInputFrame` only when it is immediately consumed by front-aim mapper, diagnostic workbench, game wiring, or tests. Do not pre-export unused types because `knip` is enforced.
 
-3. Baseline quality gates must pass before coding.
+1. Baseline quality gates must pass before coding.
    - `npm run check`
    - `npm run test:e2e`
    - If M4 only ran the split commands, re-run the combined gate because `npm run check` includes `knip`.
 
-4. Re-check concurrent M4 branch state.
+1. Re-check concurrent M4 branch state.
    - During this research pass, `origin/claude/m4-followup` was not present in local refs and GitHub branch search returned no branch.
    - The M5 delegate should still run after normal network access is available:
      - `git fetch --prune origin`
      - `git log --oneline origin/claude/m4-followup -- src` if the branch appears
    - If that branch exists, inspect it before editing `renderWorkbench.ts`, `liveLandmarkInspection.ts`, `diagnostic-main.ts`, or diagnostic tests.
 
-5. Confirm current game page state before replacing it.
+1. Confirm current game page state before replacing it.
    - Current `src/main.ts` is only `import "./styles/app.css";`.
    - Current `index.html` is a placeholder with a diagnostic link.
    - M5 must transform this into a production-clean v2 game page shell, not into another diagnostic surface.
@@ -508,52 +508,52 @@ Before starting M5, verify all of the following on post-M4 `main`.
    - Probe: before coding, run `rg -n "WorkbenchInspectionState|TriggerInputFrame|SideTriggerTelemetry|createLiveLandmarkInspection" src tests`.
    - Decision: adapt M5 to the post-M4 shape; do not restore M3-era fields by accident.
 
-2. **Projection mismatch from mirrored video**
+1. **Projection mismatch from mirrored video**
    - Risk: the camera feed is mirrored but aim projection is not, so the crosshair moves opposite the visible hand.
    - Probe: Step 2 unit tests for `mirrorX`, then manual game-page center/left/right hand movement.
    - Decision: make `mirrorX` an explicit projection option; game page uses the same value as its video CSS.
 
-3. **Projection mismatch from `object-fit: cover` cropping**
+1. **Projection mismatch from `object-fit: cover` cropping**
    - Risk: normalized landmark coordinates map to the source frame, while the visible video is cropped by CSS cover.
    - Probe: Step 2 aspect-ratio tests with 640x480 source into wide and tall viewports.
    - Decision: keep projection in a pure utility that models cover offsets before clamping.
 
-4. **Game page accidentally becomes a diagnostic page**
+1. **Game page accidentally becomes a diagnostic page**
    - Risk: crosshair work pulls landmark overlays or tuning controls into `/`.
    - Probe: Step 8 import-boundary test and E2E absence assertions.
    - Decision: reject any game-page import from `diagnostic-workbench`.
 
-5. **MediaPipe lifecycle leaks on the new game runtime**
+1. **MediaPipe lifecycle leaks on the new game runtime**
    - Risk: M3 cleanup tests protect only diagnostic tracking, not the new game tracker.
    - Probe: Step 7 integration tests for cleanup after destroy, pending tracker startup, and in-flight detect.
    - Decision: M5 cannot be accepted until game runtime cleanup tests pass.
 
-6. **Async stale writes after stop/destroy**
+1. **Async stale writes after stop/destroy**
    - Risk: pending detection writes crosshair after navigation, reselect, or destroy.
    - Probe: Step 7 deferred-promise tests mirroring M3’s stale detection tests.
    - Decision: add generation/stopped guards around tracker creation, bitmap creation, detect, mapper update, and draw.
 
-7. **Stale video/canvas element after re-render**
+1. **Stale video/canvas element after re-render**
    - Risk: front runtime keeps using a removed video or canvas element.
    - Probe: Step 7 test that re-renders the game page with fresh elements and verifies old callbacks are canceled.
    - Decision: key active runtime by stream id plus element identity, as M3 does for workbench tracking.
 
-8. **`knip` flags unused exported aim contracts**
+1. **`knip` flags unused exported aim contracts**
    - Risk: `AimInputFrame` or telemetry types are exported before production code consumes them.
    - Probe: run `npm run knip` after Steps 1 and 3.
    - Decision: keep types local until they cross a real boundary; tests alone should not be the only consumer for long-lived exports.
 
-9. **Front tracking quality remains placeholder**
+1. **Front tracking quality remains placeholder**
    - Risk: M3 currently hard-codes `trackingQuality: "good"` in diagnostic conversion.
    - Probe: Step 3 low-confidence tests and manual hand-loss probe.
    - Decision: M5 may compute aim availability from `handPresenceConfidence` and mapper state even if `trackingQuality` remains coarse; do not change detection schema unless necessary.
 
-10. **M4 merge conflict in workbench files**
+1. **M4 merge conflict in workbench files**
    - Risk: both M4 and M5 modify `renderWorkbench.ts`, `liveLandmarkInspection.ts`, `diagnostic-main.ts`, and diagnostic tests.
    - Probe: rebase M5 branch onto post-M4 main before touching those files; inspect M4 diff first.
    - Decision: append front aim state to M4’s side trigger state rather than replacing whole objects.
 
-11. **User expectation mismatch around shooting**
+1. **User expectation mismatch around shooting**
    - Risk: game page crosshair looks playable, but side-triggered shots are intentionally not wired until M6+.
    - Probe: Step 6 copy and tests should label the M5 game page as aim-only without diagnostic wording.
    - Decision: do not add temporary keyboard/mouse shooting unless a later issue explicitly asks for it.
@@ -564,28 +564,28 @@ Before starting M5, verify all of the following on post-M4 `main`.
    - `npm run check`
    - `npm run test:e2e`
 
-2. **After Steps 1-3**
+1. **After Steps 1-3**
    - `npx vitest run tests/unit/features/front-aim`
    - `npm run typecheck`
    - `npm run knip`
 
-3. **After Steps 4-5**
+1. **After Steps 4-5**
    - `npx vitest run tests/unit/features/diagnostic-workbench/renderFrontAimPanel.test.ts tests/unit/features/diagnostic-workbench/renderWorkbench.test.ts tests/unit/features/diagnostic-workbench/liveLandmarkInspection.test.ts`
    - `npm run check`
    - `npm run test:e2e`
 
-4. **After Steps 6-7**
+1. **After Steps 6-7**
    - `npx vitest run tests/unit/app/frontAimGamePage.test.ts tests/integration/gameFrontAimRuntime.test.ts tests/unit/features/rendering/drawGameFrame.test.ts`
    - `npm run lint`
    - `npm run typecheck`
    - `npm run test:e2e`
 
-5. **After Step 8 and before PR**
+1. **After Step 8 and before PR**
    - `npx vitest run tests/integration/importBoundaries.test.ts`
    - `npm run check`
    - `npm run test:e2e`
 
-6. **Final acceptance**
+1. **Final acceptance**
    - `npm run check`
    - `npm run test:e2e`
    - Manual live-camera probe on `/diagnostic.html` and `/`

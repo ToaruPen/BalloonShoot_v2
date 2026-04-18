@@ -14,7 +14,7 @@ describe("mapFrontHandToAimInput", () => {
       aimSmoothingState: "tracking"
     });
 
-    expect(frame.timestamp).toBe(timestamp);
+    expect(frame.timestamp).toEqual(timestamp);
     expect(frame.laneRole).toBe("frontAim");
     expect(frame.aimAvailability).toBe("available");
     expect(frame.aimSmoothingState).toBe("tracking");

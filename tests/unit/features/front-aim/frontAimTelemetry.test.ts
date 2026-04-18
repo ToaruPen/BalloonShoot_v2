@@ -36,4 +36,13 @@ describe("telemetryFromAimFrame", () => {
     expect(telemetry.aimPointViewport).toBeUndefined();
     expect(telemetry.frontTrackingConfidence).toBeUndefined();
   });
+
+  it("does not allow an unavailable telemetry patch to claim availability", () => {
+    expect(() => {
+      telemetryFromAimFrame(undefined, {
+        // @ts-expect-error unavailable telemetry cannot be marked available.
+        aimAvailability: "available"
+      });
+    }).not.toThrow();
+  });
 });

@@ -95,10 +95,10 @@ const updateOuterHTML = (id: string, value: string): void => {
   }
 };
 
-const positiveDimension = (value: number): number | undefined =>
-  value > 0 ? value : undefined;
+const positiveDimension = (value: number | undefined): number | undefined =>
+  value !== undefined && value > 0 ? value : undefined;
 
-const videoViewportSize = (
+export const videoViewportSize = (
   video: HTMLVideoElement,
   detection: FrontHandDetection | undefined
 ): { width: number; height: number } => {
@@ -106,12 +106,12 @@ const videoViewportSize = (
   const width =
     positiveDimension(video.clientWidth) ??
     positiveDimension(video.videoWidth) ??
-    fallbackFrame?.width ??
+    positiveDimension(fallbackFrame?.width) ??
     1;
   const height =
     positiveDimension(video.clientHeight) ??
     positiveDimension(video.videoHeight) ??
-    fallbackFrame?.height ??
+    positiveDimension(fallbackFrame?.height) ??
     1;
 
   return { width, height };

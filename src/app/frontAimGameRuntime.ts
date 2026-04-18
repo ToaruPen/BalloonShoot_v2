@@ -65,6 +65,7 @@ const toFrontDetection = (
   rawFrame: detection.rawFrame,
   filteredFrame: detection.filteredFrame,
   handPresenceConfidence: handPresenceConfidenceFor(detection),
+  // TODO(M9): Compute real tracking quality once live capture telemetry is wired for trial hardening.
   trackingQuality: "good"
 });
 
@@ -276,7 +277,6 @@ export const createFrontAimGameRuntime = ({
       cancelScheduledFrame();
       stopStream();
       void tracker?.cleanup();
-      void startPromise;
     }
   };
 };
