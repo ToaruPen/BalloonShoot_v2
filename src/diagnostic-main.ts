@@ -263,7 +263,12 @@ root.addEventListener("input", (e: Event) => {
 });
 workbench.subscribe(render);
 recorder.subscribe(render);
-window.addEventListener("beforeunload", () => {
+// Use pagehide so recorder.destroy() can flush asynchronously on real unload.
+window.addEventListener("pagehide", (event) => {
+  if (event.persisted) {
+    return;
+  }
+
   deviceChangeObserver.stop();
   if (
     recordingTimerId !== undefined &&

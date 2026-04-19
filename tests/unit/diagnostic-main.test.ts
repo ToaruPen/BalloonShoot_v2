@@ -245,7 +245,9 @@ describe("diagnostic main input handling", () => {
       }
     });
     vi.stubGlobal("window", {
-      addEventListener: vi.fn(),
+      addEventListener: vi.fn((type: string, listener: EventListener) => {
+        listeners.set(`window:${type}`, listener);
+      }),
       setInterval: vi.fn((callback: () => void) => {
         intervalState.current = callback;
         return 1;
@@ -455,5 +457,42 @@ describe("diagnostic main input handling", () => {
     expect(activeElement).toBe(sliderBeforeTick);
     expect(sliderBeforeTick.value).toBe("0.8");
     expect(timerElement?.textContent).toBe("00:02");
+  });
+
+  it("uses pagehide for async recorder cleanup", () => {
+    recorderMock.getState.mockReturnValue({
+      status: "recording",
+      elapsedMs: 0
+    });
+    recorderListenerState.current?.({ status: "recording", elapsedMs: 0 });
+    const pagehideListener = listeners.get("window:pagehide");
+
+    if (pagehideListener === undefined) {
+      throw new Error("pagehide listener was not registered");
+    }
+
+    pagehideListener({ persisted: false } as PageTransitionEvent);
+
+    expect(listeners.has("window:beforeunload")).toBe(false);
+    expect(deviceChangeObserverStop).toHaveBeenCalledOnce();
+    expect(window.clearInterval).toHaveBeenCalledWith(1);
+    expect(recorderMock.destroy).toHaveBeenCalledOnce();
+    expect(liveInspectionMock.destroy).toHaveBeenCalledOnce();
+    expect(workbenchMock.destroy).toHaveBeenCalledOnce();
+  });
+
+  it("keeps recorder state intact for BFCache pagehide", () => {
+    const pagehideListener = listeners.get("window:pagehide");
+
+    if (pagehideListener === undefined) {
+      throw new Error("pagehide listener was not registered");
+    }
+
+    pagehideListener({ persisted: true } as PageTransitionEvent);
+
+    expect(deviceChangeObserverStop).not.toHaveBeenCalled();
+    expect(recorderMock.destroy).not.toHaveBeenCalled();
+    expect(liveInspectionMock.destroy).not.toHaveBeenCalled();
+    expect(workbenchMock.destroy).not.toHaveBeenCalled();
   });
 });

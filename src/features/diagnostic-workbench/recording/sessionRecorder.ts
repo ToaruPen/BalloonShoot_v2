@@ -155,7 +155,11 @@ export const createSessionRecorder = ({
 
   const emit = (): void => {
     for (const listener of listeners) {
-      listener(state);
+      try {
+        listener(state);
+      } catch (error: unknown) {
+        console.error("[diagnostic recording] state listener threw", error);
+      }
     }
   };
 
@@ -248,10 +252,11 @@ export const createSessionRecorder = ({
     },
 
     async start(options) {
-      if (state.status !== "idle") {
+      if (state.status !== "idle" && state.status !== "error") {
         return;
       }
 
+      resetSession();
       setState({ status: "starting" });
 
       try {

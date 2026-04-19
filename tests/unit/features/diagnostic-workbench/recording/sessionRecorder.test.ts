@@ -232,15 +232,97 @@ describe("createSessionRecorder", () => {
     expect(recorder.getState().status).toBe("recording");
   });
 
-  it("rotates telemetry JSON files to the newest ten after stop", async () => {
+  it("retries recording after a directory picker error", async () => {
+    const directory = new FakeFileSystemDirectoryHandle();
+    const requestDirectoryHandle = vi
+      .fn<() => Promise<FileSystemDirectoryHandle>>()
+      .mockRejectedValueOnce(new Error("picker cancelled"))
+      .mockResolvedValueOnce(
+        directory as unknown as FileSystemDirectoryHandle
+      );
+    const createVideoRecorder = vi.fn(() => ({
+      start: vi.fn(),
+      stop: vi.fn()
+    }));
+    const recorder = createSessionRecorder({
+      requestDirectoryHandle,
+      now: () => new Date("2026-04-19T08:30:15.000Z"),
+      createVideoRecorder
+    });
+    const startOptions = {
+      frontStream: { id: "front-stream" } as MediaStream,
+      sideStream: { id: "side-stream" } as MediaStream,
+      subscribeFrame: () => vi.fn()
+    };
+
+    await recorder.start(startOptions);
+    expect(recorder.getState()).toEqual({
+      status: "error",
+      message: "picker cancelled"
+    });
+
+    const retry = recorder.start(startOptions);
+    expect(recorder.getState()).toEqual({ status: "starting" });
+    await retry;
+
+    expect(requestDirectoryHandle).toHaveBeenCalledTimes(2);
+    expect(createVideoRecorder).toHaveBeenCalledTimes(2);
+    expect(recorder.getState().status).toBe("recording");
+  });
+
+  it("isolates state listener exceptions from later listeners and callers", async () => {
+    const directory = new FakeFileSystemDirectoryHandle();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const recorder = createSessionRecorder({
+      requestDirectoryHandle: vi.fn(() =>
+        Promise.resolve(directory as unknown as FileSystemDirectoryHandle)
+      ),
+      now: () => new Date("2026-04-19T08:30:15.000Z"),
+      createVideoRecorder: vi.fn(() => ({
+        start: vi.fn(),
+        stop: vi.fn()
+      }))
+    });
+    const receivedStates: string[] = [];
+    recorder.subscribe(() => {
+      throw new Error("listener failed");
+    });
+    recorder.subscribe((state) => {
+      receivedStates.push(state.status);
+    });
+
+    try {
+      await expect(
+        recorder.start({
+          frontStream: { id: "front-stream" } as MediaStream,
+          sideStream: { id: "side-stream" } as MediaStream,
+          subscribeFrame: () => vi.fn()
+        })
+      ).resolves.toBeUndefined();
+
+      expect(receivedStates).toContain("starting");
+      expect(receivedStates).toContain("recording");
+      expect(consoleError).toHaveBeenCalledWith(
+        "[diagnostic recording] state listener threw",
+        expect.any(Error)
+      );
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it("rotates only app telemetry JSON files to the newest ten after stop", async () => {
     const directory = new FakeFileSystemDirectoryHandle();
 
-    for (let index = 0; index < 11; index += 1) {
+    for (let index = 0; index < 10; index += 1) {
       await directory.getFileHandle(
         `telemetry-2026-04-19T08-30-${String(index).padStart(2, "0")}-000Z.json`,
         { create: true }
       );
     }
+    await directory.getFileHandle("telemetry-notes.json", { create: true });
 
     const recorder = createSessionRecorder({
       requestDirectoryHandle: vi.fn(() =>
@@ -261,9 +343,9 @@ describe("createSessionRecorder", () => {
     await recorder.stop();
 
     expect(directory.deletedNames).toEqual([
-      "telemetry-2026-04-19T08-30-01-000Z.json",
       "telemetry-2026-04-19T08-30-00-000Z.json"
     ]);
+    expect(directory.files.has("telemetry-notes.json")).toBe(true);
   });
 
   it("uses millisecond precision in telemetry file names", async () => {

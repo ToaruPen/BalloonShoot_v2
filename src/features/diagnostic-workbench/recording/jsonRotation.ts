@@ -1,4 +1,5 @@
-const TELEMETRY_JSON_PATTERN = /^telemetry-.*\.json$/;
+const TELEMETRY_JSON_PATTERN =
+  /^telemetry-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.json$/;
 
 export const telemetryJsonFilesToDelete = (
   names: readonly string[],

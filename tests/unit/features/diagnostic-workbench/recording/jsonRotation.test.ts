@@ -27,4 +27,42 @@ describe("telemetryJsonFilesToDelete", () => {
       )
     ).toEqual([]);
   });
+
+  it("ignores user-created telemetry-looking JSON files", () => {
+    expect(
+      telemetryJsonFilesToDelete(
+        [
+          "telemetry-notes.json",
+          "telemetry-export.json",
+          "my-telemetry.json",
+          "telemetry-2026-04-19T08-30-15-432Z.json"
+        ],
+        0
+      )
+    ).toEqual(["telemetry-2026-04-19T08-30-15-432Z.json"]);
+  });
+
+  it("ignores timestamp names without millisecond precision", () => {
+    expect(
+      telemetryJsonFilesToDelete(
+        [
+          "telemetry-2026-04-19T08-30-15Z.json",
+          "telemetry-2026-04-19T08-30-15-432Z.json"
+        ],
+        0
+      )
+    ).toEqual(["telemetry-2026-04-19T08-30-15-432Z.json"]);
+  });
+
+  it("deletes only the oldest valid telemetry file from mixed entries", () => {
+    const validNames = Array.from(
+      { length: 10 },
+      (_, index) =>
+        `telemetry-2026-04-19T08-30-${String(index).padStart(2, "0")}-000Z.json`
+    );
+
+    expect(
+      telemetryJsonFilesToDelete([...validNames, "telemetry-notes.json"], 9)
+    ).toEqual(["telemetry-2026-04-19T08-30-00-000Z.json"]);
+  });
 });
