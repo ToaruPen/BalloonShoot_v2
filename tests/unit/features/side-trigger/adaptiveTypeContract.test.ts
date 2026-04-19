@@ -11,7 +11,7 @@ import type { SideTriggerMapper } from "../../../../src/features/side-trigger";
 
 describe("adaptive side-trigger public type contract", () => {
   it("keeps adaptive mapper compatible with the base mapper", () => {
-    expectTypeOf<AdaptiveSideTriggerMapper>().toMatchTypeOf<SideTriggerMapper>();
+    expectTypeOf<AdaptiveSideTriggerMapper>().toExtend<SideTriggerMapper>();
   });
 
   it("exports telemetry and reducer support types intentionally", () => {
@@ -21,14 +21,14 @@ describe("adaptive side-trigger public type contract", () => {
     expectTypeOf<AdaptiveResetReason>().toEqualTypeOf<
       "sourceChanged" | "handLoss" | "geometryJump"
     >();
-    expectTypeOf<AdaptiveSampleEntry>().toMatchTypeOf<{
+    expectTypeOf<AdaptiveSampleEntry>().toExtend<{
       readonly timestampMs: number;
       readonly normalizedThumbDistance: number;
     }>();
-    expectTypeOf<SideTriggerRawMetricFallback>().toMatchTypeOf<{
+    expectTypeOf<SideTriggerRawMetricFallback>().toExtend<{
       readonly timestampMs?: number;
     }>();
-    expectTypeOf<GeometryJumpDetectionResult>().toMatchTypeOf<{
+    expectTypeOf<GeometryJumpDetectionResult>().toExtend<{
       readonly isJump: boolean;
       readonly nextEma: {
         readonly wristToIndexMcp: number;
