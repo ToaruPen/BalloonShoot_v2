@@ -1,7 +1,8 @@
 import type { SideTriggerCalibration } from "./sideTriggerCalibration";
 import {
   INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE,
-  INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE
+  INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE,
+  MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN
 } from "./sideTriggerConstants";
 import { detectGeometryJumpAndUpdateEma } from "./sideTriggerHandGeometrySignature";
 import type {
@@ -27,10 +28,7 @@ export type AdaptiveCalibrationStatus =
   | "warmingUp"
   | "adaptive";
 
-export type AdaptiveResetReason =
-  | "sourceChanged"
-  | "handLoss"
-  | "geometryJump";
+export type AdaptiveResetReason = "sourceChanged" | "handLoss" | "geometryJump";
 
 export interface AdaptiveSampleEntry {
   readonly timestampMs: number;
@@ -74,7 +72,7 @@ export const DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG: AdaptiveSideTrigg
     geometryEmaAlpha: 0.1,
     pulledLowerBound: 0,
     openUpperBound: 1.2,
-    pulledOpenMinSpan: 0.4,
+    pulledOpenMinSpan: MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN,
     initialPulled: INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE,
     initialOpen: INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE
   };
@@ -263,6 +261,9 @@ const clampObservedEndpoints = (
   };
 };
 
+const isObservedSpanCollapsed = (rawPulled: number, rawOpen: number): boolean =>
+  rawOpen - rawPulled < MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN;
+
 const statusFor = (
   sampleCount: number,
   config: AdaptiveSideTriggerCalibrationConfig
@@ -292,6 +293,17 @@ const stateWithSamples = (
       observedPulledP10,
       observedOpenP90,
       calibration: calibrationFor(config.initialPulled, config.initialOpen)
+    };
+  }
+
+  if (isObservedSpanCollapsed(observedPulledP10, observedOpenP90)) {
+    return {
+      ...state,
+      status,
+      sampleCount: samples.length,
+      samples,
+      observedPulledP10,
+      observedOpenP90
     };
   }
 
