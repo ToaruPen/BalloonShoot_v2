@@ -266,6 +266,68 @@ describe("diagnostic main input handling", () => {
     expect(typeof options.subscribeFrame).toBe("function");
   });
 
+  it("does not start diagnostic recording outside previewing", () => {
+    const clickListener = listeners.get("click");
+
+    if (clickListener === undefined) {
+      throw new Error("diagnostic click listener was not registered");
+    }
+
+    workbenchMock.getState.mockReturnValue({
+      screen: "permission",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: undefined,
+      sideStream: undefined,
+      error: undefined
+    });
+
+    const actionEl = new FakeHTMLElement({
+      wbAction: "startRecording"
+    });
+    const target = new FakeHTMLElement({}, actionEl);
+
+    clickListener({
+      target
+    } as unknown as MouseEvent);
+
+    expect(recorderMock.start).not.toHaveBeenCalled();
+  });
+
+  it("does not start diagnostic recording without a front stream", () => {
+    const clickListener = listeners.get("click");
+
+    if (clickListener === undefined) {
+      throw new Error("diagnostic click listener was not registered");
+    }
+
+    workbenchMock.getState.mockReturnValue({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: undefined,
+      sideStream: {
+        stream: { id: "side-stream" } as MediaStream,
+        deviceId: "side",
+        stop: vi.fn()
+      },
+      error: undefined
+    });
+
+    const actionEl = new FakeHTMLElement({
+      wbAction: "startRecording"
+    });
+    const target = new FakeHTMLElement({}, actionEl);
+
+    clickListener({
+      target
+    } as unknown as MouseEvent);
+
+    expect(recorderMock.start).not.toHaveBeenCalled();
+  });
+
   it("stops diagnostic recording from the recording controls", async () => {
     const clickListener = listeners.get("click");
 

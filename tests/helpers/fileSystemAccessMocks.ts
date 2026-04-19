@@ -20,19 +20,25 @@ class FakeFileSystemWritableFileStream {
 export class FakeFileSystemFileHandle {
   readonly kind = "file";
   readonly name: string;
-  readonly writable = new FakeFileSystemWritableFileStream();
+  readonly writableStreams: FakeFileSystemWritableFileStream[] = [];
 
   constructor(name: string) {
     this.name = name;
   }
 
+  get latestWritable(): FakeFileSystemWritableFileStream | undefined {
+    return this.writableStreams[this.writableStreams.length - 1];
+  }
+
   createWritable(): Promise<FakeFileSystemWritableFileStream> {
-    return Promise.resolve(this.writable);
+    const writable = new FakeFileSystemWritableFileStream();
+    this.writableStreams.push(writable);
+    return Promise.resolve(writable);
   }
 
   text(): Promise<string> {
     return Promise.resolve(
-      this.writable.writes
+      (this.latestWritable?.writes ?? [])
         .map((chunk) => (typeof chunk === "string" ? chunk : ""))
         .join("")
     );

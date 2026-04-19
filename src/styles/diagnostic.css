@@ -268,6 +268,26 @@ h4 {
   overflow-wrap: anywhere;
 }
 
+.wb-recording-stop {
+  border-color: #c0392b;
+  background: #c0392b;
+  color: #fff;
+  padding: 0.65rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.wb-recording-stop:hover {
+  border-color: #922b21;
+  background: #922b21;
+}
+
+.wb-recording-stop:focus-visible {
+  outline: 3px solid #ffb4a8;
+  outline-offset: 2px;
+}
+
 .wb-controls {
   margin-top: 1rem;
 }

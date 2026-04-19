@@ -4,8 +4,10 @@ import { FakeFileSystemFileHandle } from "../../../../helpers/fileSystemAccessMo
 
 class FakeMediaRecorder {
   ondataavailable: ((event: BlobEvent) => void) | null = null;
+  onstop: (() => void) | null = null;
   state: RecordingState = "inactive";
   readonly stream: MediaStream;
+  private queuedStopBlob: Blob | undefined;
 
   constructor(stream: MediaStream) {
     this.stream = stream;
@@ -17,10 +19,19 @@ class FakeMediaRecorder {
 
   stop(): void {
     this.state = "inactive";
+    if (this.queuedStopBlob !== undefined) {
+      this.emitBlob(this.queuedStopBlob);
+      this.queuedStopBlob = undefined;
+    }
+    this.onstop?.();
   }
 
   emitBlob(blob: Blob): void {
     this.ondataavailable?.({ data: blob } as BlobEvent);
+  }
+
+  queueStopBlob(blob: Blob): void {
+    this.queuedStopBlob = blob;
   }
 }
 
@@ -44,8 +55,31 @@ describe("createStreamRecorder", () => {
     recorderInstances[0]?.emitBlob(chunk);
     await recorder.stop();
 
-    expect(fileHandle.writable.writes).toEqual([chunk]);
-    expect(fileHandle.writable.closed).toBe(true);
+    expect(fileHandle.latestWritable?.writes).toEqual([chunk]);
+    expect(fileHandle.latestWritable?.closed).toBe(true);
+  });
+
+  it("preserves the final MediaRecorder chunk emitted during stop", async () => {
+    const recorderInstances: FakeMediaRecorder[] = [];
+    const fileHandle = new FakeFileSystemFileHandle("front.webm");
+    const stream = { id: "front-stream" } as MediaStream;
+    const recorder = createStreamRecorder({
+      stream,
+      fileHandle: fileHandle as unknown as FileSystemFileHandle,
+      mediaRecorderFactory: (input) => {
+        const fake = new FakeMediaRecorder(input);
+        recorderInstances.push(fake);
+        return fake as unknown as MediaRecorder;
+      }
+    });
+
+    await recorder.start();
+    const finalChunk = new Blob(["final-video"]);
+    recorderInstances[0]?.queueStopBlob(finalChunk);
+    await recorder.stop();
+
+    expect(fileHandle.latestWritable?.writes).toEqual([finalChunk]);
+    expect(fileHandle.latestWritable?.closed).toBe(true);
   });
 
   it("discards chunks that arrive after stop closes the writable stream", async () => {
@@ -65,8 +99,30 @@ describe("createStreamRecorder", () => {
     await recorder.stop();
     recorderInstances[0]?.emitBlob(new Blob(["late"]));
 
-    expect(fileHandle.writable.writes).toEqual([]);
-    expect(fileHandle.writable.closed).toBe(true);
+    expect(fileHandle.latestWritable?.writes).toEqual([]);
+    expect(fileHandle.latestWritable?.closed).toBe(true);
+  });
+
+  it("closes the writable stream when MediaRecorder start fails", async () => {
+    const fileHandle = new FakeFileSystemFileHandle("failed.webm");
+    const recorder = createStreamRecorder({
+      stream: { id: "failed-stream" } as MediaStream,
+      fileHandle: fileHandle as unknown as FileSystemFileHandle,
+      mediaRecorderFactory: (input) => {
+        const fake = new FakeMediaRecorder(input);
+        fake.start = () => {
+          throw new Error("MediaRecorder start failed");
+        };
+        return fake as unknown as MediaRecorder;
+      }
+    });
+
+    await expect(recorder.start()).rejects.toThrow(
+      "MediaRecorder start failed"
+    );
+
+    expect(fileHandle.writableStreams).toHaveLength(1);
+    expect(fileHandle.latestWritable?.closed).toBe(true);
   });
 
   it("does not request a MediaRecorder mime type when none is supported", async () => {

@@ -4,29 +4,11 @@ import type {
   FrameTimestamp,
   LaneHealthStatus
 } from "../../shared/types/camera";
-import type {
-  FusedGameInputFrame,
-  FusionTelemetry
-} from "../../shared/types/fusion";
-import type { AimInputFrame, FrontAimTelemetry } from "../../shared/types/aim";
-import type {
-  FrontHandDetection,
-  SideHandDetection
-} from "../../shared/types/hand";
-import type {
-  SideTriggerTelemetry,
-  TriggerInputFrame
-} from "../../shared/types/trigger";
-import { defaultFusionTuning, type FusionTuning } from "../input-fusion";
-import {
-  defaultFrontAimCalibration,
-  type FrontAimCalibration
-} from "../front-aim";
+import { defaultFusionTuning } from "../input-fusion";
+import { defaultFrontAimCalibration } from "../front-aim";
 import {
   defaultSideTriggerCalibration,
-  defaultSideTriggerTuning,
-  type SideTriggerCalibration,
-  type SideTriggerTuning
+  defaultSideTriggerTuning
 } from "../side-trigger";
 import { formatFrameTimestamp } from "./timestampFormat";
 import { renderFrontAimCalibrationControls } from "./renderFrontAimCalibrationControls";
@@ -39,25 +21,7 @@ import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
 import { renderTuningControls } from "./renderTuningControls";
 import { renderRecordingControls } from "./renderRecordingControls";
 import type { RecordingState } from "./recording/sessionRecorder";
-
-export interface WorkbenchInspectionState {
-  readonly frontDetection: FrontHandDetection | undefined;
-  readonly sideDetection: SideHandDetection | undefined;
-  readonly frontFrameTimestamp?: FrameTimestamp;
-  readonly sideFrameTimestamp?: FrameTimestamp;
-  readonly frontLaneHealth: LaneHealthStatus;
-  readonly sideLaneHealth: LaneHealthStatus;
-  readonly frontAimFrame: AimInputFrame | undefined;
-  readonly frontAimTelemetry: FrontAimTelemetry | undefined;
-  readonly frontAimCalibration: FrontAimCalibration;
-  readonly sideTriggerFrame: TriggerInputFrame | undefined;
-  readonly sideTriggerTelemetry: SideTriggerTelemetry | undefined;
-  readonly sideTriggerCalibration: SideTriggerCalibration;
-  readonly sideTriggerTuning: SideTriggerTuning;
-  readonly fusionFrame: FusedGameInputFrame | undefined;
-  readonly fusionTelemetry: FusionTelemetry | undefined;
-  readonly fusionTuning: FusionTuning;
-}
+import type { WorkbenchInspectionState } from "./workbenchInspectionState";
 
 const renderPermissionScreen = (): string => `
   <div class="wb-screen">

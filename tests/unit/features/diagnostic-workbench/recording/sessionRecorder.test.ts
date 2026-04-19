@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createSessionRecorder,
   type DiagnosticFrameSubscription
@@ -94,6 +94,46 @@ const createFrame = (frameTimestampMs: number): TelemetryFrame => ({
 });
 
 describe("createSessionRecorder", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("calls showDirectoryPicker with the window receiver", async () => {
+    const directory = new FakeFileSystemDirectoryHandle();
+    const windowLike = {
+      showDirectoryPicker: vi.fn(function (
+        this: unknown,
+        options: { readonly mode: "readwrite" }
+      ) {
+        if (this !== windowLike) {
+          throw new TypeError("Illegal invocation");
+        }
+
+        expect(options).toEqual({ mode: "readwrite" });
+        return Promise.resolve(
+          directory as unknown as FileSystemDirectoryHandle
+        );
+      })
+    };
+    vi.stubGlobal("window", windowLike);
+    const recorder = createSessionRecorder({
+      now: () => new Date("2026-04-19T08:30:15.000Z"),
+      createVideoRecorder: vi.fn(() => ({
+        start: vi.fn(),
+        stop: vi.fn()
+      }))
+    });
+
+    await recorder.start({
+      frontStream: { id: "front-stream" } as MediaStream,
+      sideStream: { id: "side-stream" } as MediaStream,
+      subscribeFrame: () => vi.fn()
+    });
+
+    expect(windowLike.showDirectoryPicker).toHaveBeenCalledOnce();
+    expect(recorder.getState().status).toBe("recording");
+  });
+
   it("records telemetry frames to JSON and starts front and side videos", async () => {
     const directory = new FakeFileSystemDirectoryHandle();
     let frameCallback: ((frame: TelemetryFrame) => void) | undefined;
@@ -124,7 +164,9 @@ describe("createSessionRecorder", () => {
     await recorder.stop();
     frameCallback?.(createFrame(200));
 
-    const jsonFile = directory.files.get("telemetry-2026-04-19T08-30-15Z.json");
+    const jsonFile = directory.files.get(
+      "telemetry-2026-04-19T08-30-15-000Z.json"
+    );
     if (jsonFile === undefined) {
       throw new Error("Telemetry JSON file was not written");
     }
@@ -153,7 +195,7 @@ describe("createSessionRecorder", () => {
 
     for (let index = 0; index < 11; index += 1) {
       await directory.getFileHandle(
-        `telemetry-2026-04-19T08-30-${String(index).padStart(2, "0")}Z.json`,
+        `telemetry-2026-04-19T08-30-${String(index).padStart(2, "0")}-000Z.json`,
         { create: true }
       );
     }
@@ -177,9 +219,82 @@ describe("createSessionRecorder", () => {
     await recorder.stop();
 
     expect(directory.deletedNames).toEqual([
-      "telemetry-2026-04-19T08-30-01Z.json",
-      "telemetry-2026-04-19T08-30-00Z.json"
+      "telemetry-2026-04-19T08-30-01-000Z.json",
+      "telemetry-2026-04-19T08-30-00-000Z.json"
     ]);
+  });
+
+  it("uses millisecond precision in telemetry file names", async () => {
+    const directory = new FakeFileSystemDirectoryHandle();
+    const now = vi
+      .fn<() => Date>()
+      .mockReturnValueOnce(new Date("2026-04-19T08:30:15.123Z"))
+      .mockReturnValueOnce(new Date("2026-04-19T08:30:15.123Z"))
+      .mockReturnValueOnce(new Date("2026-04-19T08:30:15.456Z"))
+      .mockReturnValueOnce(new Date("2026-04-19T08:30:15.456Z"));
+    const recorder = createSessionRecorder({
+      requestDirectoryHandle: vi.fn(() =>
+        Promise.resolve(directory as unknown as FileSystemDirectoryHandle)
+      ),
+      now,
+      createVideoRecorder: vi.fn(() => ({
+        start: vi.fn(),
+        stop: vi.fn()
+      }))
+    });
+    const startOptions = {
+      frontStream: { id: "front-stream" } as MediaStream,
+      sideStream: { id: "side-stream" } as MediaStream,
+      subscribeFrame: () => vi.fn()
+    };
+
+    await recorder.start(startOptions);
+    await recorder.stop();
+    await recorder.start(startOptions);
+    await recorder.stop();
+
+    expect(directory.files.has("telemetry-2026-04-19T08-30-15-123Z.json")).toBe(
+      true
+    );
+    expect(directory.files.has("telemetry-2026-04-19T08-30-15-456Z.json")).toBe(
+      true
+    );
+  });
+
+  it("stops any video recorder that started when the paired recorder fails", async () => {
+    const directory = new FakeFileSystemDirectoryHandle();
+    const startedRecorderStop = vi.fn(() => Promise.resolve());
+    const failedRecorderStop = vi.fn(() => Promise.resolve());
+    const createVideoRecorder = vi
+      .fn()
+      .mockReturnValueOnce({
+        start: vi.fn(() => Promise.resolve()),
+        stop: startedRecorderStop
+      })
+      .mockReturnValueOnce({
+        start: vi.fn(() => Promise.reject(new Error("side start failed"))),
+        stop: failedRecorderStop
+      });
+    const recorder = createSessionRecorder({
+      requestDirectoryHandle: vi.fn(() =>
+        Promise.resolve(directory as unknown as FileSystemDirectoryHandle)
+      ),
+      now: () => new Date("2026-04-19T08:30:15.000Z"),
+      createVideoRecorder
+    });
+
+    await recorder.start({
+      frontStream: { id: "front-stream" } as MediaStream,
+      sideStream: { id: "side-stream" } as MediaStream,
+      subscribeFrame: () => vi.fn()
+    });
+
+    expect(startedRecorderStop).toHaveBeenCalledOnce();
+    expect(failedRecorderStop).not.toHaveBeenCalled();
+    expect(recorder.getState()).toEqual({
+      status: "error",
+      message: "side start failed"
+    });
   });
 
   it("prompts again when the reused directory permission is denied", async () => {

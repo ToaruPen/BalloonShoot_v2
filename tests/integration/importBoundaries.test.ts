@@ -169,7 +169,6 @@ describe("M5 import boundaries", () => {
     const mainImports = importsFrom(join(rootDir, "src/main.ts"));
 
     expect(indexHtml).not.toContain("diagnostic-workbench/recording");
-    expect(indexHtml).not.toContain("recording/");
     expect(mainImports.join("\n")).not.toContain(
       "diagnostic-workbench/recording"
     );

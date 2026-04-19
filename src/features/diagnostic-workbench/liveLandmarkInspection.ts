@@ -58,15 +58,13 @@ import { renderFusionPanel } from "./renderFusionPanel";
 import { renderSideTriggerCalibrationControls } from "./renderSideTriggerCalibrationControls";
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
-import {
-  formatLaneHealthLabel,
-  type WorkbenchInspectionState
-} from "./renderWorkbench";
+import { formatLaneHealthLabel } from "./renderWorkbench";
 import {
   assembleTelemetryFrame,
   type TelemetryFrame
 } from "./recording/telemetryFrame";
 import { formatFrameTimestamp } from "./timestampFormat";
+import type { WorkbenchInspectionState } from "./workbenchInspectionState";
 
 interface FrameTimingLike {
   readonly captureTime?: number;

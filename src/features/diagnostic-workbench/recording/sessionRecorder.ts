@@ -64,20 +64,17 @@ type PermissionedDirectoryHandle = FileSystemDirectoryHandle & {
 };
 
 const requestDirectoryPicker = (): Promise<FileSystemDirectoryHandle> => {
-  const picker = (window as DirectoryPickerWindow).showDirectoryPicker;
+  const w = window as DirectoryPickerWindow;
 
-  if (typeof picker !== "function") {
+  if (typeof w.showDirectoryPicker !== "function") {
     throw new Error("File System Access API is unavailable in this browser");
   }
 
-  return picker({ mode: "readwrite" });
+  return w.showDirectoryPicker({ mode: "readwrite" });
 };
 
 const isoTimestampForFilename = (date: Date): string =>
-  date
-    .toISOString()
-    .replace(/\.\d{3}Z$/, "Z")
-    .replaceAll(":", "-");
+  date.toISOString().replace(".", "-").replaceAll(":", "-");
 
 const createTelemetryFileName = (date: Date): string =>
   `telemetry-${isoTimestampForFilename(date)}.json`;
@@ -179,6 +176,23 @@ export const createSessionRecorder = ({
     await Promise.all([frontRecorder?.stop(), sideRecorder?.stop()]);
   };
 
+  const stopStartedRecorders = async (
+    recorders: readonly StreamRecorder[],
+    startResults: readonly PromiseSettledResult<void>[]
+  ): Promise<void> => {
+    const stopPromises = startResults.flatMap((result, index) => {
+      const recorder = recorders[index];
+
+      if (result.status !== "fulfilled" || recorder === undefined) {
+        return [];
+      }
+
+      return [recorder.stop().catch(() => undefined)];
+    });
+
+    await Promise.all(stopPromises);
+  };
+
   const flushTelemetry = async (
     directory: FileSystemDirectoryHandle,
     startedAt: Date,
@@ -256,7 +270,20 @@ export const createSessionRecorder = ({
           stream: options.sideStream,
           fileHandle: sideFile
         });
-        await Promise.all([frontRecorder.start(), sideRecorder.start()]);
+        const recorders = [frontRecorder, sideRecorder] as const;
+        const startResults = await Promise.allSettled(
+          recorders.map((recorder) => recorder.start())
+        );
+        const startFailure = startResults.find(
+          (result): result is PromiseRejectedResult =>
+            result.status === "rejected"
+        );
+
+        if (startFailure !== undefined) {
+          await stopStartedRecorders(recorders, startResults);
+          throw startFailure.reason;
+        }
+
         frames = [];
         sessionStart = now();
         acceptingFrames = true;

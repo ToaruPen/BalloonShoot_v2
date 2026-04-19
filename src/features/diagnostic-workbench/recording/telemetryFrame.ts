@@ -21,7 +21,7 @@ import type {
   SideTriggerPhase,
   TriggerEdge
 } from "../../../shared/types/trigger";
-import type { WorkbenchInspectionState } from "../renderWorkbench";
+import type { WorkbenchInspectionState } from "../workbenchInspectionState";
 
 export interface TelemetryFrame {
   readonly timestamp: FrameTimestamp;

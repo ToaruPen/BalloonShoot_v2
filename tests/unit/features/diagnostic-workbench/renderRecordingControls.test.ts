@@ -21,6 +21,15 @@ describe("renderRecordingControls", () => {
     expect(html).toMatch(/<span>Status<\/span>\s*<strong>recording<\/strong>/);
   });
 
+  it("renders disabled Saving controls while capture is being flushed", () => {
+    const html = renderRecordingControls({ status: "saving" });
+
+    expect(html).toContain("<button");
+    expect(html).toContain("disabled");
+    expect(html).toContain("Saving");
+    expect(html).toMatch(/<span>Status<\/span>\s*<strong>saving<\/strong>/);
+  });
+
   it("escapes error text from file or directory names", () => {
     const html = renderRecordingControls({
       status: "error",

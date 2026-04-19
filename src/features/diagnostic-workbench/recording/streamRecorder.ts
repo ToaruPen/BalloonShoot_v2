@@ -50,6 +50,16 @@ export const createStreamRecorder = ({
   let started = false;
   let stopped = false;
 
+  const resetPartialState = (): void => {
+    writable = undefined;
+    mediaRecorder = undefined;
+    pendingWrite = Promise.resolve();
+    writeError = undefined;
+    acceptingChunks = false;
+    started = false;
+    stopped = false;
+  };
+
   const enqueueWrite = (blob: Blob): void => {
     if (!acceptingChunks || blob.size === 0 || writable === undefined) {
       return;
@@ -69,18 +79,32 @@ export const createStreamRecorder = ({
         return;
       }
 
-      writable = await fileHandle.createWritable();
-      const mimeType = selectWebmMimeType(isTypeSupported);
-      mediaRecorder = mediaRecorderFactory(
-        stream,
-        mimeType === undefined ? undefined : { mimeType }
-      );
-      mediaRecorder.ondataavailable = (event) => {
-        enqueueWrite(event.data);
-      };
-      acceptingChunks = true;
-      started = true;
-      mediaRecorder.start();
+      let nextWritable: FileSystemWritableFileStream | undefined;
+
+      try {
+        const mimeType = selectWebmMimeType(isTypeSupported);
+        mediaRecorder = mediaRecorderFactory(
+          stream,
+          mimeType === undefined ? undefined : { mimeType }
+        );
+        nextWritable = await fileHandle.createWritable();
+        writable = nextWritable;
+        mediaRecorder.ondataavailable = (event) => {
+          enqueueWrite(event.data);
+        };
+        mediaRecorder.start();
+        acceptingChunks = true;
+        started = true;
+        stopped = false;
+      } catch (error: unknown) {
+        try {
+          await nextWritable?.close();
+        } catch {
+          // Best-effort cleanup must not mask the original start failure.
+        }
+        resetPartialState();
+        throw error;
+      }
     },
 
     async stop() {
@@ -89,13 +113,27 @@ export const createStreamRecorder = ({
       }
 
       stopped = true;
-      acceptingChunks = false;
 
       if (mediaRecorder?.state === "recording") {
-        mediaRecorder.stop();
+        await new Promise<void>((resolve) => {
+          const previousOnStop = mediaRecorder?.onstop ?? null;
+          const recorder = mediaRecorder;
+
+          if (recorder === undefined) {
+            resolve();
+            return;
+          }
+
+          recorder.onstop = function (event) {
+            previousOnStop?.call(this, event);
+            resolve();
+          };
+          recorder.stop();
+        });
       }
 
       await pendingWrite;
+      acceptingChunks = false;
 
       try {
         await writable?.close();
