@@ -20,8 +20,10 @@ export interface HandLandmarkSet {
   thumbTip: Point3D;
   thumbIp: Point3D;
   middleTip: Point3D;
+  middleMcp?: Point3D;
   ringTip: Point3D;
   pinkyTip: Point3D;
+  pinkyMcp?: Point3D;
 }
 
 /**

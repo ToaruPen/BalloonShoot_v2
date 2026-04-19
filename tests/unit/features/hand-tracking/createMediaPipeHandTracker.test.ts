@@ -12,7 +12,7 @@ const BASE_LANDMARKS_FRAME_1: TestLandmark[] = [
   {},
   {},
   { x: 0.5, y: 0.6, z: 0.7 },
-  {},
+  { x: 0.55, y: 0.65, z: 0.75 },
   {},
   {},
   { x: 0.6, y: 0.7, z: 0.8 },
@@ -20,7 +20,7 @@ const BASE_LANDMARKS_FRAME_1: TestLandmark[] = [
   {},
   {},
   { x: 0.7, y: 0.8, z: 0.9 },
-  {},
+  { x: 0.75, y: 0.85, z: 0.95 },
   {},
   {},
   { x: 0.8, y: 0.9, z: 1.0 }
@@ -67,8 +67,10 @@ const EXPECTED_RAW_LANDMARKS = {
   thumbTip: { x: 0.3, y: 0.4, z: 0.5 },
   indexMcp: { x: 0.4, y: 0.5, z: 0.6 },
   indexTip: { x: 0.5, y: 0.6, z: 0.7 },
+  middleMcp: { x: 0.55, y: 0.65, z: 0.75 },
   middleTip: { x: 0.6, y: 0.7, z: 0.8 },
   ringTip: { x: 0.7, y: 0.8, z: 0.9 },
+  pinkyMcp: { x: 0.75, y: 0.85, z: 0.95 },
   pinkyTip: { x: 0.8, y: 0.9, z: 1 }
 };
 
@@ -78,8 +80,10 @@ const EXPECTED_WORLD_LANDMARKS = {
   thumbTip: { x: 0.4, y: 0.5, z: 0.6 },
   indexMcp: { x: 0.5, y: 0.6, z: 0.7 },
   indexTip: { x: 0.6, y: 0.7, z: 0.8 },
+  middleMcp: { x: 0.65, y: 0.75, z: 0.85 },
   middleTip: { x: 0.7, y: 0.8, z: 0.9 },
   ringTip: { x: 0.8, y: 0.9, z: 1 },
+  pinkyMcp: { x: 0.85, y: 0.95, z: 1.05 },
   pinkyTip: { x: 0.9, y: 1, z: 1.1 }
 };
 
@@ -123,8 +127,10 @@ const LANDMARK_NAMES = [
   "thumbTip",
   "indexMcp",
   "indexTip",
+  "middleMcp",
   "middleTip",
   "ringTip",
+  "pinkyMcp",
   "pinkyTip"
 ] as const;
 
@@ -132,6 +138,7 @@ type HandLandmarkSet = Record<
   (typeof LANDMARK_NAMES)[number],
   { x: number; y: number; z: number }
 >;
+type ActualHandLandmarkSet = Partial<HandLandmarkSet>;
 
 interface ExpectedFrame {
   width: number;
@@ -156,11 +163,16 @@ const expectCloseToPoint = (
 };
 
 const expectCloseToLandmarks = (
-  actual: HandLandmarkSet,
+  actual: ActualHandLandmarkSet,
   expected: HandLandmarkSet
 ): void => {
   for (const name of LANDMARK_NAMES) {
-    expectCloseToPoint(actual[name], expected[name]);
+    const actualPoint = actual[name];
+    expect(actualPoint).toBeDefined();
+    if (actualPoint === undefined) {
+      throw new Error(`${name} should be defined`);
+    }
+    expectCloseToPoint(actualPoint, expected[name]);
   }
 };
 
@@ -174,8 +186,8 @@ const expectHandFrameCloseTo = (
       categoryName: string;
       displayName: string;
     }[];
-    landmarks: HandLandmarkSet;
-    worldLandmarks?: HandLandmarkSet;
+    landmarks: ActualHandLandmarkSet;
+    worldLandmarks?: ActualHandLandmarkSet;
   },
   expected: ExpectedFrame
 ): void => {

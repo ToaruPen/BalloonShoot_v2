@@ -46,8 +46,10 @@ const HAND_LANDMARK_INDEX = {
   thumbTip: 4,
   indexMcp: 5,
   indexTip: 8,
+  middleMcp: 9,
   middleTip: 12,
   ringTip: 16,
+  pinkyMcp: 17,
   pinkyTip: 20
 } as const;
 
@@ -148,6 +150,15 @@ const filterHandFrame = (
       filters.image.indexTip,
       frameAtMs
     ),
+    ...(raw.landmarks.middleMcp
+      ? {
+          middleMcp: filterPoint(
+            raw.landmarks.middleMcp,
+            filters.image.middleMcp,
+            frameAtMs
+          )
+        }
+      : {}),
     middleTip: filterPoint(
       raw.landmarks.middleTip,
       filters.image.middleTip,
@@ -158,6 +169,15 @@ const filterHandFrame = (
       filters.image.ringTip,
       frameAtMs
     ),
+    ...(raw.landmarks.pinkyMcp
+      ? {
+          pinkyMcp: filterPoint(
+            raw.landmarks.pinkyMcp,
+            filters.image.pinkyMcp,
+            frameAtMs
+          )
+        }
+      : {}),
     pinkyTip: filterPoint(
       raw.landmarks.pinkyTip,
       filters.image.pinkyTip,
@@ -192,6 +212,15 @@ const filterHandFrame = (
             filters.world.indexTip,
             frameAtMs
           ),
+          ...(raw.worldLandmarks.middleMcp
+            ? {
+                middleMcp: filterPoint(
+                  raw.worldLandmarks.middleMcp,
+                  filters.world.middleMcp,
+                  frameAtMs
+                )
+              }
+            : {}),
           middleTip: filterPoint(
             raw.worldLandmarks.middleTip,
             filters.world.middleTip,
@@ -202,6 +231,15 @@ const filterHandFrame = (
             filters.world.ringTip,
             frameAtMs
           ),
+          ...(raw.worldLandmarks.pinkyMcp
+            ? {
+                pinkyMcp: filterPoint(
+                  raw.worldLandmarks.pinkyMcp,
+                  filters.world.pinkyMcp,
+                  frameAtMs
+                )
+              }
+            : {}),
           pinkyTip: filterPoint(
             raw.worldLandmarks.pinkyTip,
             filters.world.pinkyTip,
@@ -237,8 +275,10 @@ const toHandLandmarkSet = (
   const thumbTip = toPoint3D(landmarks?.[HAND_LANDMARK_INDEX.thumbTip]);
   const indexMcp = toPoint3D(landmarks?.[HAND_LANDMARK_INDEX.indexMcp]);
   const indexTip = toPoint3D(landmarks?.[HAND_LANDMARK_INDEX.indexTip]);
+  const middleMcp = toPoint3D(landmarks?.[HAND_LANDMARK_INDEX.middleMcp]);
   const middleTip = toPoint3D(landmarks?.[HAND_LANDMARK_INDEX.middleTip]);
   const ringTip = toPoint3D(landmarks?.[HAND_LANDMARK_INDEX.ringTip]);
+  const pinkyMcp = toPoint3D(landmarks?.[HAND_LANDMARK_INDEX.pinkyMcp]);
   const pinkyTip = toPoint3D(landmarks?.[HAND_LANDMARK_INDEX.pinkyTip]);
 
   if (
@@ -260,8 +300,10 @@ const toHandLandmarkSet = (
     thumbTip,
     indexMcp,
     indexTip,
+    ...(middleMcp ? { middleMcp } : {}),
     middleTip,
     ringTip,
+    ...(pinkyMcp ? { pinkyMcp } : {}),
     pinkyTip
   };
 };
