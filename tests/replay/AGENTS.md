@@ -16,12 +16,15 @@
 - Keep replays fast and deterministic. Prefer fixed arrays of lane frames over random generation.
 - Raise `testTimeout` in `vitest.replay.config.ts` only when real replays need it.
 
-## Notes on captured-but-deterministic fixtures
+## Notes on opt-in local fixtures
 
-`tests/fixtures/replay/sideTriggerAdaptive/baseline-2026-04-19.json` is a
-MediaPipe HandLandmarker landmark JSON snapshot. Unlike video files (`.mov`,
-`.webm`, etc.), it is deterministic text and should be treated like synthetic
-input for replay tests. Do not revive recorded video fixtures for this replay.
+`tests/replay/sideTriggerAdaptiveCalibration.replay.test.ts` reads an optional
+local capture from `iterations/telemetry-...json` (gitignored). The capture
+is deliberately **not committed** because of its size; the test uses
+`it.skipIf` so CI passes without it while local runs that have the capture
+exercise the regression gate. Drop the JSON at the path documented in the
+test to enable it locally. Do not revive recorded video fixtures for this
+replay.
 
 ## Future
 
