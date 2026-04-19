@@ -53,6 +53,7 @@
 **Implementation**
 
 - `HandLandmarkSet` に optional フィールドを追加：
+
   ```ts
   export interface HandLandmarkSet {
     wrist: Point3D;
@@ -67,7 +68,9 @@
     pinkyMcp?: Point3D;    // 新規 (optional, 旧 telemetry 互換)
   }
   ```
+
 - `HAND_LANDMARK_INDEX` に追加（新規 detection は常に値を持つ）：
+
   ```ts
   const HAND_LANDMARK_INDEX = {
     wrist: 0,
@@ -82,6 +85,7 @@
     pinkyTip: 20
   } as const;
   ```
+
 - `TrackedLandmarkName` / `TRACKED_LANDMARK_NAMES` / filter wiring は既存パターンを踏襲（`HAND_LANDMARK_INDEX` から自動派生している場合は変更不要）
 
 **Test plan**
@@ -535,11 +539,13 @@ export const toAdaptiveCalibrationTelemetry = (
 
 - 新パネル：spec の「観測性設計」節 (status badge, sampleCount progress, pulled/open 数値、観測 p10/p90、reset 情報、ema 3 成分) を render
 - `liveLandmarkInspection.ts:443-475` の side branch で：
+
   ```ts
   const adaptiveMetric = extractSideTriggerRawMetric(sideDetection, { timestampMs: ... });
   adaptiveState = updateSideTriggerAdaptiveCalibration(adaptiveState, adaptiveMetric, adaptiveConfig);
   inspectionState.sideTriggerAdaptiveCalibration = toAdaptiveCalibrationTelemetry(adaptiveState);
   ```
+
   bare `createSideTriggerMapper` は引き続き static slider calibration を使う（**adaptive state は影響しない**）
 - `resetTrackingState` (`liveLandmarkInspection.ts:748-770`) に `adaptiveState = createInitial...(adaptiveConfig)` を追加
 - `renderWorkbench.ts` は新パネルを既存 SideTrigger panel の下あたりに配置（具体的な DOM 配置は実装者判断、ただし spec の項目すべてを表示）
