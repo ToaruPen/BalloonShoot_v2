@@ -263,7 +263,18 @@ root.addEventListener("input", (e: Event) => {
 });
 workbench.subscribe(render);
 recorder.subscribe(render);
-// Use pagehide so recorder.destroy() can flush asynchronously on real unload.
+window.addEventListener("beforeunload", (event) => {
+  const status = recorder.getState().status;
+
+  if (status === "recording" || status === "starting" || status === "saving") {
+    event.preventDefault();
+    // Legacy browsers still use returnValue to trigger the native unload prompt.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    event.returnValue = "";
+    return "";
+  }
+});
+// Best-effort cleanup on real unload. Browsers do not wait for async flushing.
 window.addEventListener("pagehide", (event) => {
   if (event.persisted) {
     return;

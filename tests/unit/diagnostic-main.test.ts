@@ -473,12 +473,53 @@ describe("diagnostic main input handling", () => {
 
     pagehideListener({ persisted: false } as PageTransitionEvent);
 
-    expect(listeners.has("window:beforeunload")).toBe(false);
+    expect(listeners.has("window:beforeunload")).toBe(true);
     expect(deviceChangeObserverStop).toHaveBeenCalledOnce();
     expect(window.clearInterval).toHaveBeenCalledWith(1);
     expect(recorderMock.destroy).toHaveBeenCalledOnce();
     expect(liveInspectionMock.destroy).toHaveBeenCalledOnce();
     expect(workbenchMock.destroy).toHaveBeenCalledOnce();
+  });
+
+  it("warns before unload while recording is active", () => {
+    const beforeUnloadListener = listeners.get("window:beforeunload");
+
+    if (beforeUnloadListener === undefined) {
+      throw new Error("beforeunload listener was not registered");
+    }
+
+    recorderMock.getState.mockReturnValue({
+      status: "recording",
+      elapsedMs: 0
+    });
+    const event = {
+      preventDefault: vi.fn(),
+      returnValue: undefined
+    };
+
+    beforeUnloadListener(event as unknown as BeforeUnloadEvent);
+
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(event.returnValue).toBe("");
+  });
+
+  it("does not warn before unload while recorder is idle", () => {
+    const beforeUnloadListener = listeners.get("window:beforeunload");
+
+    if (beforeUnloadListener === undefined) {
+      throw new Error("beforeunload listener was not registered");
+    }
+
+    recorderMock.getState.mockReturnValue({ status: "idle" });
+    const event = {
+      preventDefault: vi.fn(),
+      returnValue: undefined
+    };
+
+    beforeUnloadListener(event as unknown as BeforeUnloadEvent);
+
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(event.returnValue).toBeUndefined();
   });
 
   it("keeps recorder state intact for BFCache pagehide", () => {
