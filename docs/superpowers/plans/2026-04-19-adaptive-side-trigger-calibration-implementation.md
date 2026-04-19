@@ -678,7 +678,7 @@ regression gate.
 
 - 1 PR で全 Task まとめても、Task 1-2 / 3-4 / 5 / 6-7 / 8-10 のように分割しても可。Codex 委譲時は 1 PR 一括が単純
 - PR 説明には設計書 (`docs/superpowers/specs/2026-04-19-adaptive-side-trigger-calibration-design.md` r4) と本プランへのリンクを含める
-- replay fixture の git size は数 MB。git LFS 不要（既存も追加済 fixture と同列）
+- replay capture (`iterations/telemetry-*.json`) はローカル gitignored 運用とし、リポジトリにはコミットしない（サイズ肥大防止、`tests/replay/sideTriggerAdaptiveCalibration.replay.test.ts` は capture 不在時 `it.skipIf` で skip）
 - Phase 2 の tuning 軸（spec 節「Phase 2 で検討するチューニング軸」）は別 spec / 別 PR
 - 本プラン外で発見された問題（design に齟齬がある等）は spec 側を更新してから実装する
 
