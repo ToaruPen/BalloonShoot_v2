@@ -66,6 +66,60 @@ const installFakeCameras = async (
   );
 };
 
+const installFakeRecording = async (page: Page): Promise<void> => {
+  await page.addInitScript(() => {
+    class FakeMediaRecorder {
+      static isTypeSupported(): boolean {
+        return true;
+      }
+
+      ondataavailable: ((event: BlobEvent) => void) | null = null;
+      onstop: ((event: Event) => void) | null = null;
+      state: RecordingState = "inactive";
+
+      start(): void {
+        this.state = "recording";
+      }
+
+      stop(): void {
+        this.state = "inactive";
+        this.onstop?.(new Event("stop"));
+      }
+    }
+
+    const createWritable = () => ({
+      write: () => Promise.resolve(),
+      close: () => Promise.resolve()
+    });
+    const directoryHandle = {
+      queryPermission: () => Promise.resolve("granted" as PermissionState),
+      requestPermission: () => Promise.resolve("granted" as PermissionState),
+      getFileHandle: (name: string) =>
+        Promise.resolve({
+          kind: "file" as const,
+          name,
+          createWritable
+        }),
+      deleteEntry: () => Promise.resolve(),
+      async *entries() {
+        await Promise.resolve();
+        for (const entry of [] as [string, FileSystemFileHandle][]) {
+          yield entry;
+        }
+      }
+    };
+
+    Object.defineProperty(window, "MediaRecorder", {
+      configurable: true,
+      value: FakeMediaRecorder
+    });
+    Object.defineProperty(window, "showDirectoryPicker", {
+      configurable: true,
+      value: () => Promise.resolve(directoryHandle)
+    });
+  });
+};
+
 test("diagnostic workbench runs permission, device selection, previews, swap, and reselect", async ({
   page
 }) => {
@@ -198,4 +252,41 @@ test("diagnostic workbench warns when only one camera is available", async ({
       "1台のカメラをフロントとサイドの両方に再利用することはできません"
     )
   ).toBeVisible();
+});
+
+test("diagnostic recording timer tick preserves focused slider edits", async ({
+  page
+}) => {
+  await page.clock.install({
+    time: new Date("2026-04-19T08:30:15.000Z")
+  });
+  await installFakeCameras(page, [
+    { deviceId: "front-device-id", label: "Front Camera" },
+    { deviceId: "side-device-id", label: "Side Camera" }
+  ]);
+  await installFakeRecording(page);
+
+  await page.goto("/diagnostic.html");
+  await page.getByRole("button", { name: "カメラ許可" }).click();
+  await page.locator("#wb-front-select").selectOption("front-device-id");
+  await page.locator("#wb-side-select").selectOption("side-device-id");
+  await page.getByRole("button", { name: "確定" }).click();
+  await page.getByRole("button", { name: "Record" }).click();
+  await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
+
+  const slider = page.locator("[data-side-trigger-tuning='pullEnterThreshold']");
+  await slider.focus();
+  await slider.evaluate((element) => {
+    (element as HTMLInputElement).value = "0.73";
+  });
+
+  await page.clock.fastForward(2_000);
+
+  await expect(page.locator("[data-recording-timer]")).toHaveText("00:02");
+  await expect(slider).toHaveValue("0.73");
+  expect(
+    await page.evaluate(() =>
+      document.activeElement?.getAttribute("data-side-trigger-tuning")
+    )
+  ).toBe("pullEnterThreshold");
 });

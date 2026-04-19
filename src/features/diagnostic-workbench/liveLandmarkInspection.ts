@@ -58,11 +58,13 @@ import { renderFusionPanel } from "./renderFusionPanel";
 import { renderSideTriggerCalibrationControls } from "./renderSideTriggerCalibrationControls";
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
+import { formatLaneHealthLabel } from "./renderWorkbench";
 import {
-  formatLaneHealthLabel,
-  type WorkbenchInspectionState
-} from "./renderWorkbench";
+  assembleTelemetryFrame,
+  type TelemetryFrame
+} from "./recording/telemetryFrame";
 import { formatFrameTimestamp } from "./timestampFormat";
+import type { WorkbenchInspectionState } from "./workbenchInspectionState";
 
 interface FrameTimingLike {
   readonly captureTime?: number;
@@ -80,6 +82,7 @@ interface LaneTrackingOptions {
 
 interface LiveLandmarkInspection {
   getState(): WorkbenchInspectionState;
+  subscribeFrame(callback: (frame: TelemetryFrame) => void): () => void;
   sync(state: WorkbenchState): void;
   setFrontAimCalibration(key: FrontAimCalibrationKey, value: number): void;
   resetFrontAimCalibration(): void;
@@ -112,6 +115,8 @@ interface LaneTracking {
 const createInitialInspectionState = (): WorkbenchInspectionState => ({
   frontDetection: undefined,
   sideDetection: undefined,
+  frontFrameTimestamp: undefined,
+  sideFrameTimestamp: undefined,
   frontLaneHealth: "notStarted",
   sideLaneHealth: "notStarted",
   frontAimFrame: undefined,
@@ -273,6 +278,7 @@ const sideCalibrationValueFor = (
 
 export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   let inspectionState = createInitialInspectionState();
+  const frameSubscribers = new Set<(frame: TelemetryFrame) => void>();
   let activeTracking: ActiveTracking | undefined;
   let frontAimMapper = createFrontAimMapper();
   let sideTriggerMapper: SideTriggerMapper = createSideTriggerMapper();
@@ -284,6 +290,33 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   const setInspection = (patch: Partial<WorkbenchInspectionState>): void => {
     inspectionState = { ...inspectionState, ...patch };
     updateDom();
+  };
+
+  const emitTelemetryFrame = (timestamp: FrameTimestamp): void => {
+    const frame = assembleTelemetryFrame(inspectionState, timestamp);
+
+    if (frame === undefined) {
+      return;
+    }
+
+    let subscriberIndex = 0;
+
+    for (const subscriber of frameSubscribers) {
+      try {
+        subscriber(frame);
+      } catch (error: unknown) {
+        console.error(
+          "Diagnostic telemetry subscriber failed",
+          {
+            subscriberIndex,
+            subscriberName: subscriber.name || "anonymous"
+          },
+          error
+        );
+      }
+
+      subscriberIndex += 1;
+    }
   };
 
   const updateDom = (): void => {
@@ -438,6 +471,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
         fusionFrame: fusionResult.fusedFrame,
         fusionTelemetry: fusionResult.telemetry
       });
+      emitTelemetryFrame(timestamp);
       return;
     }
 
@@ -466,6 +500,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       fusionFrame: fusionResult.fusedFrame,
       fusionTelemetry: fusionResult.telemetry
     });
+    emitTelemetryFrame(timestamp);
   };
 
   const runLaneDetection = async (
@@ -614,11 +649,9 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       }
 
       if (typeof video.requestVideoFrameCallback === "function") {
-        callbackId = video.requestVideoFrameCallback(
-          (_now, metadata) => {
-            void processFrame(metadata);
-          }
-        );
+        callbackId = video.requestVideoFrameCallback((_now, metadata) => {
+          void processFrame(metadata);
+        });
         return;
       }
 
@@ -845,6 +878,12 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     getState() {
       return inspectionState;
     },
+    subscribeFrame(callback) {
+      frameSubscribers.add(callback);
+      return () => {
+        frameSubscribers.delete(callback);
+      };
+    },
     sync,
     setFrontAimCalibration(key, value) {
       const metadata = FRONT_AIM_CALIBRATION_SLIDER_METADATA.find(
@@ -935,6 +974,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     updateDom,
     destroy() {
       stopActiveTracking();
+      frameSubscribers.clear();
       resetTrackingState({ resetCalibration: true });
       lastPreviewDeviceIds = undefined;
     }

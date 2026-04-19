@@ -264,6 +264,8 @@ describe("renderWorkbenchHTML", () => {
       {
         frontDetection: undefined,
         sideDetection: undefined,
+        frontFrameTimestamp: undefined,
+        sideFrameTimestamp: undefined,
         frontLaneHealth: "captureLost",
         sideLaneHealth: "tracking",
         frontAimFrame: undefined,
@@ -303,6 +305,8 @@ describe("renderWorkbenchHTML", () => {
       {
         frontDetection: createFrontDetection(),
         sideDetection: createSideDetection(),
+        frontFrameTimestamp: undefined,
+        sideFrameTimestamp: undefined,
         frontLaneHealth: "tracking",
         sideLaneHealth: "tracking",
         frontAimFrame: createAimFrame(),

@@ -164,6 +164,16 @@ describe("M5 import boundaries", () => {
     expect(imports.join("\n")).not.toContain("diagnostic-workbench");
   });
 
+  it("keeps the game page and entry out of diagnostic recording modules", () => {
+    const indexHtml = readFileSync(join(rootDir, "index.html"), "utf8");
+    const mainImports = importsFrom(join(rootDir, "src/main.ts"));
+
+    expect(indexHtml).not.toContain("diagnostic-workbench/recording");
+    expect(mainImports.join("\n")).not.toContain(
+      "diagnostic-workbench/recording"
+    );
+  });
+
   it("keeps app files out of diagnostic workbench modules", () => {
     const appFiles = listSourceFiles(join(rootDir, "src/app"));
     const forbidden = ["diagnostic-workbench"];

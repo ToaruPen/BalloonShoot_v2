@@ -4,29 +4,11 @@ import type {
   FrameTimestamp,
   LaneHealthStatus
 } from "../../shared/types/camera";
-import type {
-  FusedGameInputFrame,
-  FusionTelemetry
-} from "../../shared/types/fusion";
-import type { AimInputFrame, FrontAimTelemetry } from "../../shared/types/aim";
-import type {
-  FrontHandDetection,
-  SideHandDetection
-} from "../../shared/types/hand";
-import type {
-  SideTriggerTelemetry,
-  TriggerInputFrame
-} from "../../shared/types/trigger";
-import { defaultFusionTuning, type FusionTuning } from "../input-fusion";
-import {
-  defaultFrontAimCalibration,
-  type FrontAimCalibration
-} from "../front-aim";
+import { defaultFusionTuning } from "../input-fusion";
+import { defaultFrontAimCalibration } from "../front-aim";
 import {
   defaultSideTriggerCalibration,
-  defaultSideTriggerTuning,
-  type SideTriggerCalibration,
-  type SideTriggerTuning
+  defaultSideTriggerTuning
 } from "../side-trigger";
 import { formatFrameTimestamp } from "./timestampFormat";
 import { renderFrontAimCalibrationControls } from "./renderFrontAimCalibrationControls";
@@ -37,25 +19,9 @@ import { renderSideTriggerCalibrationControls } from "./renderSideTriggerCalibra
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
 import { renderTuningControls } from "./renderTuningControls";
-
-export interface WorkbenchInspectionState {
-  readonly frontDetection: FrontHandDetection | undefined;
-  readonly sideDetection: SideHandDetection | undefined;
-  readonly frontFrameTimestamp?: FrameTimestamp;
-  readonly sideFrameTimestamp?: FrameTimestamp;
-  readonly frontLaneHealth: LaneHealthStatus;
-  readonly sideLaneHealth: LaneHealthStatus;
-  readonly frontAimFrame: AimInputFrame | undefined;
-  readonly frontAimTelemetry: FrontAimTelemetry | undefined;
-  readonly frontAimCalibration: FrontAimCalibration;
-  readonly sideTriggerFrame: TriggerInputFrame | undefined;
-  readonly sideTriggerTelemetry: SideTriggerTelemetry | undefined;
-  readonly sideTriggerCalibration: SideTriggerCalibration;
-  readonly sideTriggerTuning: SideTriggerTuning;
-  readonly fusionFrame: FusedGameInputFrame | undefined;
-  readonly fusionTelemetry: FusionTelemetry | undefined;
-  readonly fusionTuning: FusionTuning;
-}
+import { renderRecordingControls } from "./renderRecordingControls";
+import type { RecordingState } from "./recording/sessionRecorder";
+import type { WorkbenchInspectionState } from "./workbenchInspectionState";
 
 const renderPermissionScreen = (): string => `
   <div class="wb-screen">
@@ -149,6 +115,8 @@ const renderDeviceSelection = (state: WorkbenchState): string => `
 const defaultInspectionState: WorkbenchInspectionState = {
   frontDetection: undefined,
   sideDetection: undefined,
+  frontFrameTimestamp: undefined,
+  sideFrameTimestamp: undefined,
   frontLaneHealth: "notStarted",
   sideLaneHealth: "notStarted",
   frontAimFrame: undefined,
@@ -162,6 +130,8 @@ const defaultInspectionState: WorkbenchInspectionState = {
   fusionTelemetry: undefined,
   fusionTuning: defaultFusionTuning
 };
+
+const defaultRecordingState: RecordingState = { status: "idle" };
 
 const renderInspectionPane = (
   lanePrefix: "front" | "side",
@@ -224,11 +194,13 @@ const renderInspectionLane = (
 
 const renderPreviewing = (
   state: WorkbenchState,
-  inspection: WorkbenchInspectionState
+  inspection: WorkbenchInspectionState,
+  recording: RecordingState
 ): string => `
   <div class="wb-previewing">
     <h2>ライブプレビュー</h2>
     ${renderInlineError(state.error)}
+    ${renderRecordingControls(recording)}
     <div class="wb-preview-grid">
       ${renderInspectionLane(
         "front",
@@ -268,7 +240,8 @@ const renderPreviewing = (
 
 export const renderWorkbenchHTML = (
   state: WorkbenchState,
-  inspection: WorkbenchInspectionState = defaultInspectionState
+  inspection: WorkbenchInspectionState = defaultInspectionState,
+  recording: RecordingState = defaultRecordingState
 ): string => {
   switch (state.screen) {
     case "permission":
@@ -286,6 +259,6 @@ export const renderWorkbenchHTML = (
     case "deviceSelection":
       return renderDeviceSelection(state);
     case "previewing":
-      return renderPreviewing(state, inspection);
+      return renderPreviewing(state, inspection, recording);
   }
 };

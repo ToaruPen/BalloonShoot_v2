@@ -77,7 +77,13 @@ export interface DiagnosticWorkbench {
   destroy(): void;
 }
 
-export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
+interface DiagnosticWorkbenchOptions {
+  readonly stopActiveRecording?: () => void | Promise<void>;
+}
+
+export const createDiagnosticWorkbench = (
+  options: DiagnosticWorkbenchOptions = {}
+): DiagnosticWorkbench => {
   let state: WorkbenchState = {
     screen: "permission",
     devices: [],
@@ -128,6 +134,12 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
 
   const stopCurrentStreams = (): void => {
     stopStreams(state.frontStream, state.sideStream);
+  };
+
+  const stopRecordingIfPreviewing = (): void => {
+    if (state.screen === "previewing") {
+      void options.stopActiveRecording?.();
+    }
   };
 
   const labelFor = (
@@ -337,6 +349,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       const frontLabel = labelFor(state.devices, frontId) ?? "Camera";
       const sideLabel = labelFor(state.devices, sideId) ?? "Camera";
 
+      stopRecordingIfPreviewing();
       stopStreams(previousFrontStream, previousSideStream);
 
       update({
@@ -503,6 +516,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       pendingDeviceRefreshAfterPermission = false;
       const myGeneration = requestGeneration;
 
+      stopRecordingIfPreviewing();
       stopCurrentStreams();
       update({
         screen: "permission",
@@ -617,6 +631,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       permissionEnumerationGeneration = undefined;
       pendingDeviceRefreshAfterPermission = false;
       const nextScreen = screenForDevices(state.devices);
+      stopRecordingIfPreviewing();
       stopCurrentStreams();
       update({
         screen: nextScreen,
@@ -638,6 +653,7 @@ export const createDiagnosticWorkbench = (): DiagnosticWorkbench => {
       permissionGranted = false;
       permissionEnumerationGeneration = undefined;
       pendingDeviceRefreshAfterPermission = false;
+      stopRecordingIfPreviewing();
       stopCurrentStreams();
       listeners.clear();
     }
