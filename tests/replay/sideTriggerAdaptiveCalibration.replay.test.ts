@@ -62,10 +62,12 @@ const noHandEvidence = (): SideTriggerEvidence => ({
 const detectionFor = (
   frame: ReplayFrame
 ): SideHandDetection | undefined => {
-  if (
-    frame.side?.landmarks === undefined ||
-    frame.side.worldLandmarks === undefined
-  ) {
+  // Image-space landmarks are required to construct a HandFrame; if they
+  // are missing the lane really has no hand. worldLandmarks may legitimately
+  // be absent on some frames (case 8d in the spec) and must be forwarded as
+  // undefined rather than collapsed into a no-hand frame, otherwise the
+  // hand-loss timer fires too aggressively.
+  if (frame.side?.landmarks === undefined) {
     return undefined;
   }
 
@@ -73,7 +75,9 @@ const detectionFor = (
     width: 640,
     height: 480,
     landmarks: frame.side.landmarks,
-    worldLandmarks: frame.side.worldLandmarks
+    ...(frame.side.worldLandmarks === undefined
+      ? {}
+      : { worldLandmarks: frame.side.worldLandmarks })
   };
 
   return {

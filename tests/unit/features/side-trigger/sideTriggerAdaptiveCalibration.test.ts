@@ -302,6 +302,79 @@ describe("adaptive side-trigger calibration reducer", () => {
     expect(noHand.lastObservedHandTimestampMs).toBe(1016);
   });
 
+  it("triggers hand-loss reset across the 8c/8d/8e quality-gate cases", () => {
+    const config = DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG;
+    const seedAt = (timestampMs: number) =>
+      updateSideTriggerAdaptiveCalibration(
+        createInitialAdaptiveSideTriggerCalibrationState(config),
+        metric({ timestampMs, normalizedThumbDistance: 0.4 }),
+        config
+      );
+    const expired = (current: number) => current + config.handLossResetMs + 1;
+
+    const seeded = seedAt(1000);
+
+    const occludedExpired = updateSideTriggerAdaptiveCalibration(
+      seeded,
+      metric({
+        timestampMs: expired(1000),
+        sideViewQuality: "tooOccluded"
+      }),
+      config
+    );
+    expect(occludedExpired.lastResetReason).toBe("handLoss");
+
+    const noThumbExpired = updateSideTriggerAdaptiveCalibration(
+      seeded,
+      metric({
+        timestampMs: expired(1000),
+        normalizedThumbDistance: undefined,
+        geometrySignature: undefined
+      }),
+      config
+    );
+    expect(noThumbExpired.lastResetReason).toBe("handLoss");
+
+    const noHandExpired = updateSideTriggerAdaptiveCalibration(
+      seeded,
+      metric({
+        sourceKey: undefined,
+        timestampMs: expired(1000),
+        handDetected: false,
+        sideViewQuality: "lost",
+        normalizedThumbDistance: undefined,
+        geometrySignature: undefined
+      }),
+      config
+    );
+    expect(noHandExpired.lastResetReason).toBe("handLoss");
+  });
+
+  it("respects windowSamples when sliding the ring buffer", () => {
+    const config: AdaptiveSideTriggerCalibrationConfig = {
+      ...DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
+      windowSamples: 1,
+      warmupSamples: 1
+    };
+    const after10 = feed(
+      Array.from({ length: 10 }, (_, index) => 0.3 + index * 0.05),
+      config
+    );
+    expect(after10.samples).toHaveLength(1);
+    expect(after10.samples[0]?.normalizedThumbDistance).toBeCloseTo(0.75);
+
+    const wideConfig: AdaptiveSideTriggerCalibrationConfig = {
+      ...DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
+      windowSamples: 5,
+      warmupSamples: 1
+    };
+    const after10Wide = feed(
+      Array.from({ length: 10 }, (_, index) => 0.3 + index * 0.05),
+      wideConfig
+    );
+    expect(after10Wide.samples).toHaveLength(5);
+  });
+
   it("keeps output within bounds and deterministic for the same metric sequence", () => {
     const values = [0.9, 0.1, 0.8, 0.2, 0.7, 0.3, 0.6, 0.4];
     const first = feed(values);

@@ -7,8 +7,11 @@ import type {
 import { defaultFusionTuning } from "../input-fusion";
 import { defaultFrontAimCalibration } from "../front-aim";
 import {
+  DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
+  createInitialAdaptiveSideTriggerCalibrationState,
   defaultSideTriggerCalibration,
-  defaultSideTriggerTuning
+  defaultSideTriggerTuning,
+  toAdaptiveCalibrationTelemetry
 } from "../side-trigger";
 import { formatFrameTimestamp } from "./timestampFormat";
 import { renderFrontAimCalibrationControls } from "./renderFrontAimCalibrationControls";
@@ -125,6 +128,11 @@ const defaultInspectionState: WorkbenchInspectionState = {
   frontAimCalibration: defaultFrontAimCalibration,
   sideTriggerFrame: undefined,
   sideTriggerTelemetry: undefined,
+  sideTriggerAdaptiveCalibration: toAdaptiveCalibrationTelemetry(
+    createInitialAdaptiveSideTriggerCalibrationState(
+      DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG
+    )
+  ),
   sideTriggerCalibration: defaultSideTriggerCalibration,
   sideTriggerTuning: defaultSideTriggerTuning,
   fusionFrame: undefined,

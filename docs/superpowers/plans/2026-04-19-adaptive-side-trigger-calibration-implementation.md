@@ -30,7 +30,7 @@
   - `src/app/balloonGameRuntime.ts:719-723` — `retry()` で `sideTriggerMapper.reset()` を呼ぶ
   - `src/features/diagnostic-workbench/recording/telemetryFrame.ts:26-55` — `TelemetryFrameSchemaVersion = 1`
   - `src/features/diagnostic-workbench/workbenchInspectionState.ts:35-37` — 既存 `sideTriggerTelemetry`, `sideTriggerCalibration` フィールド
-- 既存 telemetry capture：`iterations/telemetry-2026-04-19T01-18-36-449Z.json` がローカルに存在する（gitignored）。Task 10 で `tests/fixtures/` に複製する
+- 既存 telemetry capture：`iterations/telemetry-2026-04-19T01-18-36-449Z.json` がローカルに存在する（gitignored）。Task 10 では fixture を git に置かず、この gitignored capture を直接読み、不在時は test を skip する
 - ブランチ命名：`claude/adaptive-side-trigger-calibration` を作成して作業
 
 ---
@@ -627,7 +627,7 @@ const sideTriggerMapper = createAdaptiveSideTriggerMapper();
 
 `tests/replay/AGENTS.md` に以下のような節を追加：
 
-```
+```markdown
 ## Notes on opt-in local fixtures
 
 `tests/replay/sideTriggerAdaptiveCalibration.replay.test.ts` reads an optional

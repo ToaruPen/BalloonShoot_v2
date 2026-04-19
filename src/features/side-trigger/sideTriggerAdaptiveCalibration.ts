@@ -397,12 +397,12 @@ export const updateSideTriggerAdaptiveCalibration = (
     metric.timestampMs !== undefined;
   const samples = shouldPushSample
     ? [
-        ...state.samples.slice(-(config.windowSamples - 1)),
+        ...state.samples,
         {
           timestampMs: metric.timestampMs,
           normalizedThumbDistance: metric.normalizedThumbDistance
         }
-      ]
+      ].slice(-config.windowSamples)
     : state.samples;
   const geometrySignatureEma =
     shouldPushSample && metric.geometrySignature !== undefined
