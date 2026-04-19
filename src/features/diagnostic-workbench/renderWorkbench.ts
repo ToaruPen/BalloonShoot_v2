@@ -7,8 +7,11 @@ import type {
 import { defaultFusionTuning } from "../input-fusion";
 import { defaultFrontAimCalibration } from "../front-aim";
 import {
+  DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
+  createInitialAdaptiveSideTriggerCalibrationState,
   defaultSideTriggerCalibration,
-  defaultSideTriggerTuning
+  defaultSideTriggerTuning,
+  toAdaptiveCalibrationTelemetry
 } from "../side-trigger";
 import { formatFrameTimestamp } from "./timestampFormat";
 import { renderFrontAimCalibrationControls } from "./renderFrontAimCalibrationControls";
@@ -16,6 +19,7 @@ import { renderFrontAimPanel } from "./renderFrontAimPanel";
 import { renderFusionPanel } from "./renderFusionPanel";
 import { renderFusionTuningControls } from "./renderFusionTuningControls";
 import { renderSideTriggerCalibrationControls } from "./renderSideTriggerCalibrationControls";
+import { renderSideTriggerAdaptiveCalibrationPanel } from "./renderSideTriggerAdaptiveCalibrationPanel";
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
 import { renderTuningControls } from "./renderTuningControls";
@@ -124,6 +128,11 @@ const defaultInspectionState: WorkbenchInspectionState = {
   frontAimCalibration: defaultFrontAimCalibration,
   sideTriggerFrame: undefined,
   sideTriggerTelemetry: undefined,
+  sideTriggerAdaptiveCalibration: toAdaptiveCalibrationTelemetry(
+    createInitialAdaptiveSideTriggerCalibrationState(
+      DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG
+    )
+  ),
   sideTriggerCalibration: defaultSideTriggerCalibration,
   sideTriggerTuning: defaultSideTriggerTuning,
   fusionFrame: undefined,
@@ -223,6 +232,9 @@ const renderPreviewing = (
         ${renderSideTriggerPanel(
           inspection.sideTriggerFrame,
           inspection.sideTriggerTelemetry
+        )}
+        ${renderSideTriggerAdaptiveCalibrationPanel(
+          inspection.sideTriggerAdaptiveCalibration
         )}`
       )}
     </div>

@@ -25,7 +25,7 @@ import {
   type InputFusionMapper
 } from "../features/input-fusion";
 import {
-  createSideTriggerMapper,
+  createAdaptiveSideTriggerMapper,
   defaultSideTriggerCalibration,
   defaultSideTriggerTuning,
   getSideTriggerFilterConfig,
@@ -221,7 +221,8 @@ export const createBalloonGameRuntime = ({
   let frontLaneHealth: LaneHealthStatus = "notStarted";
   let sideLaneHealth: LaneHealthStatus = "notStarted";
   const frontAimMapper = createFrontAimMapper();
-  const sideTriggerMapper: SideTriggerMapper = createSideTriggerMapper();
+  const sideTriggerMapper: SideTriggerMapper =
+    createAdaptiveSideTriggerMapper();
   const inputFusionMapper: InputFusionMapper = createInputFusionMapper();
   const streams: DevicePinnedStream[] = [];
   const trackers: MediaPipeHandTracker[] = [];

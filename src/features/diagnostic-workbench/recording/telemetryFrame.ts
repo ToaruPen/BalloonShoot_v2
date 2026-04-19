@@ -1,6 +1,9 @@
 import type { FrontAimCalibration } from "../../front-aim";
 import type { SideTriggerEvidence } from "../../side-trigger/sideTriggerEvidence";
-import type { SideTriggerCalibration } from "../../side-trigger";
+import type {
+  SideTriggerAdaptiveCalibrationTelemetry,
+  SideTriggerCalibration
+} from "../../side-trigger";
 import type {
   FrontAimTelemetry,
   FrontAimTelemetryUnavailable
@@ -44,6 +47,9 @@ export interface TelemetryFrame {
     readonly triggerEdge: TriggerEdge | undefined;
     readonly laneHealth: LaneHealthStatus;
   };
+  readonly sideTriggerAdaptiveCalibration?:
+    | SideTriggerAdaptiveCalibrationTelemetry
+    | undefined;
   readonly fusion: FusedGameInputFrame;
 }
 
@@ -140,6 +146,7 @@ export const assembleTelemetryFrame = (
       triggerEdge: triggerEdgeFromInspection(state),
       laneHealth: state.sideLaneHealth
     },
+    sideTriggerAdaptiveCalibration: state.sideTriggerAdaptiveCalibration,
     fusion: state.fusionFrame
   };
 };

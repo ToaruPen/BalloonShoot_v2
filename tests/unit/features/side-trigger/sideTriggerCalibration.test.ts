@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SIDE_TRIGGER_OPEN_POSE_DISTANCE,
   DEFAULT_SIDE_TRIGGER_PULLED_POSE_DISTANCE,
+  INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE,
+  INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE,
   MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN
 } from "../../../../src/features/side-trigger/sideTriggerConstants";
 import {
@@ -20,6 +22,14 @@ describe("side trigger calibration", () => {
     expect(
       defaultSideTriggerCalibration.pulledPose.normalizedThumbDistance
     ).toBe(DEFAULT_SIDE_TRIGGER_PULLED_POSE_DISTANCE);
+  });
+
+  it("keeps adaptive initial distances separate from default anchors", () => {
+    expect(INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE).toBe(0.2);
+    expect(INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE).toBe(1.2);
+    expect(defaultSideTriggerCalibration.pulledPose.normalizedThumbDistance).toBe(
+      DEFAULT_SIDE_TRIGGER_PULLED_POSE_DISTANCE
+    );
   });
 
   it("exposes one slider metadata entry per calibration field", () => {

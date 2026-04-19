@@ -26,17 +26,23 @@ import {
 } from "../input-fusion";
 import {
   SIDE_TRIGGER_CALIBRATION_SLIDER_METADATA,
+  DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
   coerceSideTriggerTuningValue,
+  createInitialAdaptiveSideTriggerCalibrationState,
   createSideTriggerMapper,
   defaultSideTriggerCalibration,
   defaultSideTriggerTuning,
+  extractSideTriggerRawMetric,
   getSideTriggerFilterConfig,
   sideTriggerSliderMetadata,
+  toAdaptiveCalibrationTelemetry,
+  type AdaptiveSideTriggerCalibrationState,
   type SideTriggerCalibration,
   type SideTriggerCalibrationKey,
   type SideTriggerMapper,
   type SideTriggerTuning,
   type SideTriggerTuningKey,
+  updateSideTriggerAdaptiveCalibration,
   updateSideTriggerCalibrationValue
 } from "../side-trigger";
 import type {
@@ -56,6 +62,7 @@ import { renderFrontAimCalibrationControls } from "./renderFrontAimCalibrationCo
 import { renderFrontAimPanel } from "./renderFrontAimPanel";
 import { renderFusionPanel } from "./renderFusionPanel";
 import { renderSideTriggerCalibrationControls } from "./renderSideTriggerCalibrationControls";
+import { renderSideTriggerAdaptiveCalibrationPanel } from "./renderSideTriggerAdaptiveCalibrationPanel";
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
 import { formatLaneHealthLabel } from "./renderWorkbench";
@@ -123,6 +130,11 @@ const createInitialInspectionState = (): WorkbenchInspectionState => ({
   frontAimTelemetry: undefined,
   sideTriggerFrame: undefined,
   sideTriggerTelemetry: undefined,
+  sideTriggerAdaptiveCalibration: toAdaptiveCalibrationTelemetry(
+    createInitialAdaptiveSideTriggerCalibrationState(
+      DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG
+    )
+  ),
   frontAimCalibration: defaultFrontAimCalibration,
   sideTriggerCalibration: defaultSideTriggerCalibration,
   sideTriggerTuning: defaultSideTriggerTuning,
@@ -282,6 +294,10 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
   let activeTracking: ActiveTracking | undefined;
   let frontAimMapper = createFrontAimMapper();
   let sideTriggerMapper: SideTriggerMapper = createSideTriggerMapper();
+  let sideTriggerAdaptiveState: AdaptiveSideTriggerCalibrationState =
+    createInitialAdaptiveSideTriggerCalibrationState(
+      DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG
+    );
   let inputFusionMapper: InputFusionMapper = createInputFusionMapper();
   let lastPreviewDeviceIds:
     | { readonly frontDeviceId: string; readonly sideDeviceId: string }
@@ -381,6 +397,12 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       )
     );
     updateOuterHTML(
+      "wb-side-trigger-adaptive-panel",
+      renderSideTriggerAdaptiveCalibrationPanel(
+        inspectionState.sideTriggerAdaptiveCalibration
+      )
+    );
+    updateOuterHTML(
       "wb-fusion-panel",
       renderFusionPanel(
         inspectionState.fusionFrame,
@@ -448,8 +470,16 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     context: FrameCalibrationContext
   ): void => {
     if (role === "sideTrigger") {
+      const sideDetection = detection as SideHandDetection | undefined;
+      sideTriggerAdaptiveState = updateSideTriggerAdaptiveCalibration(
+        sideTriggerAdaptiveState,
+        extractSideTriggerRawMetric(sideDetection, {
+          timestampMs: timestamp.frameTimestampMs
+        }),
+        DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG
+      );
       const sideResult = sideTriggerMapper.update({
-        detection: detection as SideHandDetection | undefined,
+        detection: sideDetection,
         timestamp,
         calibration: context.sideTriggerCalibration,
         tuning: context.sideTriggerTuning
@@ -465,9 +495,12 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
               currentFusionContext(context)
             );
       setInspection({
-        sideDetection: detection as SideHandDetection | undefined,
+        sideDetection,
         sideTriggerFrame: sideResult.triggerFrame,
         sideTriggerTelemetry: sideResult.telemetry,
+        sideTriggerAdaptiveCalibration: toAdaptiveCalibrationTelemetry(
+          sideTriggerAdaptiveState
+        ),
         fusionFrame: fusionResult.fusedFrame,
         fusionTelemetry: fusionResult.telemetry
       });
@@ -767,6 +800,9 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
     };
     frontAimMapper = createFrontAimMapper();
     sideTriggerMapper = createSideTriggerMapper();
+    sideTriggerAdaptiveState = createInitialAdaptiveSideTriggerCalibrationState(
+      DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG
+    );
     inputFusionMapper = createInputFusionMapper();
     updateDom();
   };
