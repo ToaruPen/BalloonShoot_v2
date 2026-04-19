@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Side-camera trigger を子どもや成人を含む幅広いユーザの可動域に自動追従させる runtime adaptive calibration を導入し、現地テストで未発火だった問題を解消する（Phase 1: replay gate `≥ 16` commits）。
+**Goal:** Side-camera trigger を子どもや成人を含む幅広いユーザの可動域に自動追従させる runtime adaptive calibration を導入し、現地テストで未発火だった問題を解消する（Phase 1 r8: replay gate `≥ 19` commits）。
 
-**Architecture:** 既存 `createSideTriggerMapper` は無変更のまま、純粋 reducer + wrapper mapper を新設して calibration を side-channel observer から供給する。`pulled` と `open` の両方を sliding-window configured percentile（default p20/p80）で適応し、release 評価との結合問題を回避する。
+**Architecture:** 既存 `createSideTriggerMapper` は無変更のまま、純粋 reducer + wrapper mapper を新設して calibration を side-channel observer から供給する。`pulled` と `open` の両方を sliding-window configured percentile（default p20/p80）で適応し、thumb closure metric は default `thumbTip-middleMcp`、`middleMcp` 欠損時 `thumbTip-indexMcp` fallback とする。
 
 **Tech Stack:** TypeScript 6 + Vite + Vitest + MediaPipe HandLandmarker。pure functional FSM、ESLint boundaries、knip。
 
-**Source of truth:** `docs/superpowers/specs/2026-04-19-adaptive-side-trigger-calibration-design.md`（改訂 r7）を最終仕様とする。本プランと spec が衝突した場合は spec を優先し、本プランを後追い更新する。
+**Source of truth:** `docs/superpowers/specs/2026-04-19-adaptive-side-trigger-calibration-design.md`（改訂 r8）を最終仕様とする。本プランと spec が衝突した場合は spec を優先し、本プランを後追い更新する。
 
 ---
 
@@ -30,8 +30,8 @@
   - `src/app/balloonGameRuntime.ts:719-723` — `retry()` で `sideTriggerMapper.reset()` を呼ぶ
   - `src/features/diagnostic-workbench/recording/telemetryFrame.ts:26-55` — `TelemetryFrameSchemaVersion = 1`
   - `src/features/diagnostic-workbench/workbenchInspectionState.ts:35-37` — 既存 `sideTriggerTelemetry`, `sideTriggerCalibration` フィールド
-- 既存 telemetry capture：`iterations/telemetry-2026-04-19T01-18-36-449Z.json` がローカルに存在する（gitignored）。Task 10 では fixture を git に置かず、この gitignored capture を直接読み、不在時は test を skip する
-- ブランチ命名：`claude/adaptive-side-trigger-calibration` を作成して作業
+- 既存 telemetry capture：`iterations/telemetry-2026-04-19T05-00-33-702Z.json` がローカルに存在する（gitignored）。Task 10 では fixture を git に置かず、この gitignored capture を直接読み、不在時は test を skip する
+- ブランチ命名：`codex/adaptive-thumb-closure-middlemcp` を作成して作業
 
 ---
 
@@ -195,16 +195,18 @@ export const extractSideTriggerRawMetric = (
 };
 ```
 
-ロジックの詳細は spec の Case A-D に従う。`dist` 関数（Euclidean 3D）は `src/shared/math/` から既存があれば使用、なければ helper としてファイル内 private に置く。`normalizedThumbDistance = dist(thumbTip, indexMcp) / max(0.0001, dist(wrist, indexMcp))`。
+ロジックの詳細は spec の Case A-D に従う。thumb closure metric は shared helper（例: `sideTriggerThumbDistance.ts`）へ切り出し、`extractSideTriggerRawMetric` と `extractSideTriggerEvidence` の両方から同じ関数を呼ぶ。`dist` 関数（Euclidean 3D）は `src/shared/math/` から既存があれば使用、なければ helper 側 private に置く。`normalizedThumbDistance = dist(thumbTip, middleMcp ?? indexMcp) / max(0.0001, dist(wrist, indexMcp))`。正規化軸は従来どおり `wrist-indexMcp` とし、`middleMcp` 欠損時は legacy `thumbTip-indexMcp` metric に fallback する。
 
 **Test plan** (`sideTriggerRawMetric.test.ts`)
 
 - Case A: `detection === undefined`、`fallback.timestampMs` あり → metric.timestampMs = fallback、handDetected=false、sideViewQuality="lost"、他 undefined
 - Case A 変種：`fallback` 未指定 → timestampMs = undefined
 - Case B: detection あり、worldLandmarks 不在 → normalizedThumbDistance/geometrySignature undefined、sourceKey/timestampMs/handDetected/sideViewQuality 設定済
-- Case C: detection あり、worldLandmarks あり、`middleMcp`/`pinkyMcp` 欠損 → normalizedThumbDistance 計算成功、geometrySignature undefined
-- Case D: 全 landmarks 揃っている → normalizedThumbDistance + geometrySignature 全成分計算
-- 数値テスト：thumbTip / indexMcp の既知座標で `normalizedThumbDistance` が手計算値と一致
+- Case C: detection あり、worldLandmarks あり、`middleMcp`/`pinkyMcp` 欠損 → legacy fallback で normalizedThumbDistance 計算成功、geometrySignature undefined
+- Case D: 全 landmarks 揃っている → `thumbTip-middleMcp` normalizedThumbDistance + geometrySignature 全成分計算
+- 数値テスト：thumbTip / middleMcp の既知座標で `normalizedThumbDistance` が手計算値と一致
+- fallback テスト：`middleMcp` 欠損時は thumbTip / indexMcp の既知座標で `normalizedThumbDistance` が手計算値と一致
+- 差分テスト：middleMcp と indexMcp が大きく異なる座標では middle metric と fallback metric が異なる
 - 数値テスト：geometry signature 各成分が手計算 Euclidean 距離と一致
 - ゼロ除算防御：wrist == indexMcp の縮退時に分母が `0.0001` で clamp される
 
@@ -655,12 +657,12 @@ const sideTriggerMapper = createAdaptiveSideTriggerMapper();
 
 **Implementation**
 
-- replay test は `iterations/telemetry-2026-04-19T01-18-36-449Z.json`（gitignored）を直接読む
+- replay test は `iterations/telemetry-2026-04-19T05-00-33-702Z.json`（gitignored）を直接読む
 - ファイル不在時は `it.skipIf(fixture === undefined)` で **graceful skip**。CI ではこれが skip される（capture を持たないため）
 - fixture を読み込んだ場合、各 frame の `side` detection を `extractSideTriggerRawMetric` → `updateSideTriggerAdaptiveCalibration` → `extractSideTriggerEvidence` → 既存 `updateSideTriggerState` (FSM) の pipeline に流す
 - 比較対象として **同じ fixture を static calibration (`defaultSideTriggerCalibration`) で流した baseline** も同テスト内で計算
-- 期待値を `expect(adaptiveCommits).toBeGreaterThanOrEqual(16)` でゲート
-- warning target (`>= 19`) は `console.warn` で報告（fail させない）。長期目標は spec 末尾の Phase 2 軸を参照
+- 期待値を `expect(adaptiveCommits).toBeGreaterThanOrEqual(19)` でゲート
+- warning target (`>= 22`) は `console.warn` で報告（fail させない）。長期目標は spec 末尾の Phase 2 軸を参照
 - baseline static は `expect(staticCommits).toBeLessThan(adaptiveCommits)` で「adaptive のほうが必ず多い」性質を assert（回帰保護）
 - **fixture は git にコミットしない**：200k 行超の landmark JSON を git に載せると repo が肥大するため
 
@@ -678,7 +680,7 @@ regression gate.
 
 **Test plan**
 
-- ローカル（fixture あり）：replay test 自体が pass する（adaptive >= 16）、baseline static < adaptive
+- ローカル（fixture あり）：replay test 自体が pass する（adaptive >= 19）、baseline static < adaptive
 - CI（fixture 不在）：skip され green
 - `npm run test:replay` でローカル成功
 - `npm run check` 全体成功（lint, typecheck, test, test:replay, knip すべて）
@@ -699,18 +701,18 @@ regression gate.
 
 - [ ] Task 1-10 のすべてのコミットが main にマージ可能
 - [ ] `npm run check` がローカルで pass（lint / typecheck / test / test:replay / knip）
-- [ ] `npm run test:replay` の adaptive baseline が `>= 16 commits` を満たす
+- [ ] `npm run test:replay` の adaptive baseline が `>= 19 commits` を満たす
 - [ ] `npm run test:replay` の adaptive baseline が static baseline より strictly more commits
 - [ ] 診断画面 (`diagnostic.html`) を起動し、observe-only パネルが live update する
 - [ ] ゲーム画面 (`index.html`) を起動し、現地テストの telemetry 取得時と同じ動作（再現可能）で 1 発以上発射される
-- [ ] PR 説明に：simulation 結果（新 capture p20/p80 で 19/20、false positive 0/0/0、旧 25g と最古約 22g の cross-check）、typical endpoints を canonical 端点に揃える理由、FSM 閾値を温存した理由、hold guard 設計、Phase 2 で扱う tuning 軸、replay fixture の出所説明
+- [ ] PR 説明に：thumb-axis 診断結果（palmar 5 / opposition 4 / both 11）、C-middle simulation 結果（新 20g 19/19、旧 25g 23/22、最古約 22g 20/20、false positive 0）、新 capture 据え置き / 旧 capture 改善の honest 評価、FSM 閾値・percentile・hold guard を温存した理由、重複 metric 実装の統合、replay fixture の出所説明
 
 ---
 
 ## 4. PR 提出時の留意
 
 - 1 PR で全 Task まとめても、Task 1-2 / 3-4 / 5 / 6-7 / 8-10 のように分割しても可。Codex 委譲時は 1 PR 一括が単純
-- PR 説明には設計書 (`docs/superpowers/specs/2026-04-19-adaptive-side-trigger-calibration-design.md` r7) と本プランへのリンクを含める
+- PR 説明には設計書 (`docs/superpowers/specs/2026-04-19-adaptive-side-trigger-calibration-design.md` r8) と本プランへのリンクを含める
 - replay capture (`iterations/telemetry-*.json`) はローカル gitignored 運用とし、リポジトリにはコミットしない（サイズ肥大防止、`tests/replay/sideTriggerAdaptiveCalibration.replay.test.ts` は capture 不在時 `it.skipIf` で skip）
 - Phase 2 の tuning 軸（spec 節「Phase 2 で検討するチューニング軸」）は別 spec / 別 PR
 - 本プラン外で発見された問題（design に齟齬がある等）は spec 側を更新してから実装する
