@@ -727,5 +727,5 @@ regression gate.
   - **mitigation:** 仕様通り（spec 節「アーキテクチャ：Pure Reducer + Wrapper Mapper」）。CPU コストは ring buffer push + sort O(N log N) で N=90 なので無視できる
 - **risk:** replay test の fixture (数 MB JSON) が CI の test 実行を遅くする
   - **mitigation:** vitest.replay.config.ts の testTimeout は既定 5s。実測で超えるなら timeout 延長を検討（spec の `tests/replay/AGENTS.md` 言及どおり）
-- **risk:** Phase 1 ゲート ≥16 を実装が下回る（今回の simulation は Codex 環境で行ったため、TypeScript 実装で再現性が完全保証されているわけではない）
+- **risk:** Phase 1 ゲート ≥19 を実装が下回る（今回の simulation は Codex 環境で行ったため、TypeScript 実装で再現性が完全保証されているわけではない）
   - **mitigation:** Task 5 完了直後（Task 6 以降に進む前）に、replay test を一度回して数値を確認。下回る場合は実装の percentile config 経路を先に疑い、FSM 閾値・dwell・cooldown は今回の PR では変更しない

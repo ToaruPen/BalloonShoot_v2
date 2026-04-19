@@ -157,19 +157,23 @@ const simulate = (
   return { commits, releases };
 };
 
-const countWorldLandmarkMiddleMcpPresence = (frames: readonly ReplayFrame[]) =>
-  frames.reduce(
-    (counts, frame) => {
-      if (frame.side?.worldLandmarks === undefined) {
-        return counts;
-      }
-
-      return frame.side.worldLandmarks.middleMcp === undefined
-        ? { ...counts, fallbackFrames: counts.fallbackFrames + 1 }
-        : { ...counts, middleMcpFrames: counts.middleMcpFrames + 1 };
-    },
-    { fallbackFrames: 0, middleMcpFrames: 0 }
-  );
+const countWorldLandmarkMiddleMcpPresence = (
+  frames: readonly ReplayFrame[]
+): { fallbackFrames: number; middleMcpFrames: number } => {
+  let fallbackFrames = 0;
+  let middleMcpFrames = 0;
+  for (const frame of frames) {
+    if (frame.side?.worldLandmarks === undefined) {
+      continue;
+    }
+    if (frame.side.worldLandmarks.middleMcp === undefined) {
+      fallbackFrames += 1;
+    } else {
+      middleMcpFrames += 1;
+    }
+  }
+  return { fallbackFrames, middleMcpFrames };
+};
 
 describe("adaptive side-trigger calibration captured replay", () => {
   it.skipIf(fixture === undefined)(
@@ -187,6 +191,7 @@ describe("adaptive side-trigger calibration captured replay", () => {
       console.info(
         `side-trigger adaptive replay: static=${String(staticResult.commits)}, adaptive=${String(adaptiveResult.commits)}, releases=${String(adaptiveResult.releases)}, middleMcpFrames=${String(middleMcpPresence.middleMcpFrames)}, fallbackFrames=${String(middleMcpPresence.fallbackFrames)}`
       );
+      expect(middleMcpPresence.middleMcpFrames).toBeGreaterThan(0);
       expect(adaptiveResult.commits).toBeGreaterThanOrEqual(19);
       expect(adaptiveResult.commits).toBeGreaterThan(staticResult.commits);
       if (adaptiveResult.commits < 22) {
