@@ -4,8 +4,7 @@ import type {
   SideHandDetection,
   SideViewQuality
 } from "../../shared/types/hand";
-
-const MIN_REFERENCE_LENGTH = 0.0001;
+import { computeNormalizedThumbDistance } from "./sideTriggerThumbDistance";
 
 export interface SideTriggerHandGeometrySignature {
   readonly wristToIndexMcp: number;
@@ -28,18 +27,6 @@ export interface SideTriggerRawMetricFallback {
 
 const distance = (a: Point3D, b: Point3D): number =>
   Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
-
-const normalizedThumbDistanceFor = (
-  worldLandmarks: HandLandmarkSet
-): number => {
-  const referenceLength = Math.max(
-    MIN_REFERENCE_LENGTH,
-    distance(worldLandmarks.wrist, worldLandmarks.indexMcp)
-  );
-
-  return distance(worldLandmarks.thumbTip, worldLandmarks.indexMcp) /
-    referenceLength;
-};
 
 const geometrySignatureFor = (
   worldLandmarks: HandLandmarkSet
@@ -86,7 +73,7 @@ export const extractSideTriggerRawMetric = (
     normalizedThumbDistance:
       worldLandmarks === undefined
         ? undefined
-        : normalizedThumbDistanceFor(worldLandmarks),
+        : computeNormalizedThumbDistance(worldLandmarks),
     geometrySignature:
       worldLandmarks === undefined
         ? undefined

@@ -54,7 +54,7 @@ describe("extractSideTriggerRawMetric", () => {
     expect(metric.geometrySignature).toBeUndefined();
   });
 
-  it("computes thumb distance while leaving geometry undefined for legacy landmarks", () => {
+  it("falls back to indexMcp thumb distance while leaving geometry undefined for legacy landmarks", () => {
     const worldLandmarks = metricWorldLandmarks();
     const { middleMcp: _middleMcp, pinkyMcp: _pinkyMcp, ...legacyLandmarks } =
       worldLandmarks;
@@ -68,7 +68,7 @@ describe("extractSideTriggerRawMetric", () => {
     expect(metric.geometrySignature).toBeUndefined();
   });
 
-  it("computes normalized thumb distance and geometry signature", () => {
+  it("uses middleMcp as the thumb closure reference when available", () => {
     const metric = extractSideTriggerRawMetric(
       createSideDetection({
         worldLandmarks: metricWorldLandmarks(),
@@ -78,12 +78,30 @@ describe("extractSideTriggerRawMetric", () => {
 
     expect(metric.sourceKey).toBe("side-device:side-stream");
     expect(metric.timestampMs).toBe(3456);
-    expect(metric.normalizedThumbDistance).toBeCloseTo(1);
+    expect(metric.normalizedThumbDistance).toBeCloseTo(Math.sqrt(52) / 5);
     expect(metric.geometrySignature).toEqual({
       wristToIndexMcp: 5,
       wristToMiddleMcp: 12,
       indexMcpToPinkyMcp: Math.hypot(0, 3, 11)
     });
+  });
+
+  it("produces a different metric when middleMcp and indexMcp are far apart", () => {
+    const worldLandmarks = metricWorldLandmarks();
+    const { middleMcp: _middleMcp, pinkyMcp: _pinkyMcp, ...legacyLandmarks } =
+      worldLandmarks;
+    const middleMetric = extractSideTriggerRawMetric(
+      createSideDetection({ worldLandmarks })
+    );
+    const fallbackMetric = extractSideTriggerRawMetric(
+      createSideDetection({ worldLandmarks: legacyLandmarks })
+    );
+
+    expect(middleMetric.normalizedThumbDistance).toBeCloseTo(Math.sqrt(52) / 5);
+    expect(fallbackMetric.normalizedThumbDistance).toBeCloseTo(1);
+    expect(middleMetric.normalizedThumbDistance).not.toBeCloseTo(
+      fallbackMetric.normalizedThumbDistance ?? Number.NaN
+    );
   });
 
   it("guards normalized distance against zero reference length", () => {
@@ -93,6 +111,7 @@ describe("extractSideTriggerRawMetric", () => {
           ...metricWorldLandmarks(),
           wrist: point(0, 0, 0),
           indexMcp: point(0, 0, 0),
+          middleMcp: point(0, 0, 0),
           thumbTip: point(0.01, 0, 0)
         }
       })

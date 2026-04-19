@@ -1,11 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { defaultSideTriggerCalibration } from "../../../../src/features/side-trigger";
 import { extractSideTriggerEvidence } from "../../../../src/features/side-trigger/sideTriggerEvidence";
+import type { HandLandmarkSet, Point3D } from "../../../../src/shared/types/hand";
 import {
   createSideDetection,
   openWorldLandmarks,
   pulledWorldLandmarks
 } from "./testFactory";
+
+const point = (x: number, y: number, z = 0): Point3D => ({ x, y, z });
+
+const middleClosureWorldLandmarks = (): HandLandmarkSet => ({
+  wrist: point(0, 0, 0),
+  indexMcp: point(1, 0, 0),
+  indexTip: point(1, 0.5, 0),
+  thumbIp: point(0.25, 0, 0),
+  thumbTip: point(0.2, 0, 0),
+  middleMcp: point(0, 0, 0),
+  middleTip: point(0, 0.5, 0),
+  ringTip: point(0, 0.4, 0),
+  pinkyTip: point(0, 0.3, 0)
+});
 
 describe("extractSideTriggerEvidence", () => {
   it("uses world landmarks to score open trigger posture as release evidence", () => {
@@ -79,6 +94,19 @@ describe("extractSideTriggerEvidence", () => {
       {
         openPose: { normalizedThumbDistance: 1.4 },
         pulledPose: { normalizedThumbDistance: 0.25 }
+      }
+    );
+
+    expect(evidence.pullEvidenceScalar).toBeGreaterThan(0.95);
+    expect(evidence.releaseEvidenceScalar).toBeLessThan(0.1);
+  });
+
+  it("uses middleMcp thumb closure for runtime evidence when available", () => {
+    const evidence = extractSideTriggerEvidence(
+      createSideDetection({ worldLandmarks: middleClosureWorldLandmarks() }),
+      {
+        openPose: { normalizedThumbDistance: 0.8 },
+        pulledPose: { normalizedThumbDistance: 0.2 }
       }
     );
 
