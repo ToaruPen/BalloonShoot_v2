@@ -246,8 +246,8 @@ provisional → warmingUp → adaptive
 
 定数：
 
-- `INITIAL_PULLED = 0.20` (`INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE`)
-- `INITIAL_OPEN = 1.20` (`INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE`)
+- `INITIAL_PULLED = 0.2` (`INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE`)
+- `INITIAL_OPEN = 1.2` (`INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE`)
 - `warmupSamples = 30`（≈ 1 秒）
 
 #### 線形補間の式
@@ -555,8 +555,8 @@ export interface AdaptiveSideTriggerCalibrationConfig {
   readonly pulledLowerBound: number; // default 0
   readonly openUpperBound: number; // default 1.2
   readonly pulledOpenMinSpan: number; // default 0.05
-  readonly initialPulled: number; // default INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE = 0.20
-  readonly initialOpen: number; // default INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE = 1.20
+  readonly initialPulled: number; // default INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE = 0.2
+  readonly initialOpen: number; // default INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE = 1.2
 }
 
 export type AdaptiveCalibrationStatus =
