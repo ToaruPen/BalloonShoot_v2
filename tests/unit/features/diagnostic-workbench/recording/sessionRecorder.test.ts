@@ -232,6 +232,38 @@ describe("createSessionRecorder", () => {
     expect(recorder.getState().status).toBe("recording");
   });
 
+  it("cancels a pending start when stop is called during directory selection", async () => {
+    const directory = new FakeFileSystemDirectoryHandle();
+    const directoryPicker = createDeferred<FileSystemDirectoryHandle>();
+    const requestDirectoryHandle = vi.fn(() => directoryPicker.promise);
+    const createVideoRecorder = vi.fn(() => ({
+      start: vi.fn(),
+      stop: vi.fn()
+    }));
+    const recorder = createSessionRecorder({
+      requestDirectoryHandle,
+      now: () => new Date("2026-04-19T08:30:15.000Z"),
+      createVideoRecorder
+    });
+
+    const startPromise = recorder.start({
+      frontStream: { id: "front-stream" } as MediaStream,
+      sideStream: { id: "side-stream" } as MediaStream,
+      subscribeFrame: () => vi.fn()
+    });
+
+    expect(recorder.getState()).toEqual({ status: "starting" });
+    await recorder.stop();
+    expect(recorder.getState()).toEqual({ status: "idle" });
+
+    directoryPicker.resolve(directory as unknown as FileSystemDirectoryHandle);
+    await startPromise;
+
+    expect(createVideoRecorder).not.toHaveBeenCalled();
+    expect(directory.files.size).toBe(0);
+    expect(recorder.getState()).toEqual({ status: "idle" });
+  });
+
   it("retries recording after a directory picker error", async () => {
     const directory = new FakeFileSystemDirectoryHandle();
     const requestDirectoryHandle = vi

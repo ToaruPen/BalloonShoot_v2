@@ -47,6 +47,12 @@ interface SessionRecorderOptions {
 
 const JSON_ROTATION_CAPACITY = 10;
 
+class StartCancelledError extends Error {
+  constructor() {
+    super("Session recording start was cancelled");
+  }
+}
+
 interface DirectoryPickerWindow extends Window {
   showDirectoryPicker?: (options: {
     readonly mode: "readwrite";
@@ -152,6 +158,7 @@ export const createSessionRecorder = ({
   let sideRecorder: StreamRecorder | undefined;
   let unsubscribeFrame: (() => void) | undefined;
   let acceptingFrames = false;
+  let startGeneration = 0;
 
   const emit = (): void => {
     for (const listener of listeners) {
@@ -196,6 +203,36 @@ export const createSessionRecorder = ({
     });
 
     await Promise.all(stopPromises);
+  };
+
+  const isStartCancelled = (generation: number): boolean =>
+    generation !== startGeneration;
+
+  const resetCancelledStart = (): void => {
+    if (state.status === "idle") {
+      resetSession();
+    }
+  };
+
+  const throwIfStartCancelled = (generation: number): void => {
+    if (isStartCancelled(generation)) {
+      resetCancelledStart();
+      throw new StartCancelledError();
+    }
+  };
+
+  const stopStartedRecordersIfCancelled = async (
+    generation: number,
+    recorders: readonly StreamRecorder[],
+    startResults: readonly PromiseSettledResult<void>[]
+  ): Promise<void> => {
+    if (!isStartCancelled(generation)) {
+      return;
+    }
+
+    await stopStartedRecorders(recorders, startResults);
+    resetCancelledStart();
+    throw new StartCancelledError();
   };
 
   const flushTelemetry = async (
@@ -256,6 +293,7 @@ export const createSessionRecorder = ({
         return;
       }
 
+      const myGeneration = ++startGeneration;
       resetSession();
       setState({ status: "starting" });
 
@@ -264,12 +302,18 @@ export const createSessionRecorder = ({
           directoryHandle,
           requestDirectoryHandle
         );
+        throwIfStartCancelled(myGeneration);
+
         const frontFile = await directoryHandle.getFileHandle("front.webm", {
           create: true
         });
+        throwIfStartCancelled(myGeneration);
+
         const sideFile = await directoryHandle.getFileHandle("side.webm", {
           create: true
         });
+        throwIfStartCancelled(myGeneration);
+
         frontRecorder = createVideoRecorder({
           stream: options.frontStream,
           fileHandle: frontFile
@@ -282,6 +326,12 @@ export const createSessionRecorder = ({
         const startResults = await Promise.allSettled(
           recorders.map((recorder) => recorder.start())
         );
+        await stopStartedRecordersIfCancelled(
+          myGeneration,
+          recorders,
+          startResults
+        );
+
         const startFailure = startResults.find(
           (result): result is PromiseRejectedResult =>
             result.status === "rejected"
@@ -300,8 +350,17 @@ export const createSessionRecorder = ({
             frames.push(frame);
           }
         });
+
         setState({ status: "recording", elapsedMs: 0 });
       } catch (error: unknown) {
+        if (
+          error instanceof StartCancelledError ||
+          isStartCancelled(myGeneration)
+        ) {
+          resetCancelledStart();
+          return;
+        }
+
         resetSession();
         setState({
           status: "error",
@@ -311,6 +370,14 @@ export const createSessionRecorder = ({
     },
 
     async stop() {
+      startGeneration += 1;
+
+      if (state.status === "starting") {
+        resetSession();
+        setState({ status: "idle" });
+        return;
+      }
+
       if (state.status !== "recording") {
         return;
       }

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createStreamRecorder } from "../../../../../src/features/diagnostic-workbench/recording/streamRecorder";
 import { FakeFileSystemFileHandle } from "../../../../helpers/fileSystemAccessMocks";
 
@@ -7,18 +7,30 @@ class FakeMediaRecorder {
   onstop: (() => void) | null = null;
   state: RecordingState = "inactive";
   readonly stream: MediaStream;
+  readonly startTimeslices: number[] = [];
+  private intervalId: ReturnType<typeof setInterval> | undefined;
   private queuedStopBlob: Blob | undefined;
 
   constructor(stream: MediaStream) {
     this.stream = stream;
   }
 
-  start(): void {
+  start(timeslice?: number): void {
     this.state = "recording";
+    if (timeslice !== undefined) {
+      this.startTimeslices.push(timeslice);
+      this.intervalId = setInterval(() => {
+        this.emitBlob(new Blob(["periodic-video"]));
+      }, timeslice);
+    }
   }
 
   stop(): void {
     this.state = "inactive";
+    if (this.intervalId !== undefined) {
+      clearInterval(this.intervalId);
+      this.intervalId = undefined;
+    }
     if (this.queuedStopBlob !== undefined) {
       this.emitBlob(this.queuedStopBlob);
       this.queuedStopBlob = undefined;
@@ -36,6 +48,10 @@ class FakeMediaRecorder {
 }
 
 describe("createStreamRecorder", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("writes blob chunks to the file handle and closes on stop", async () => {
     const recorderInstances: FakeMediaRecorder[] = [];
     const fileHandle = new FakeFileSystemFileHandle("front.webm");
@@ -80,6 +96,29 @@ describe("createStreamRecorder", () => {
 
     expect(fileHandle.latestWritable?.writes).toEqual([finalChunk]);
     expect(fileHandle.latestWritable?.closed).toBe(true);
+  });
+
+  it("streams periodic chunks to the writable before stop", async () => {
+    vi.useFakeTimers();
+    const recorderInstances: FakeMediaRecorder[] = [];
+    const fileHandle = new FakeFileSystemFileHandle("front.webm");
+    const recorder = createStreamRecorder({
+      stream: { id: "front-stream" } as MediaStream,
+      fileHandle: fileHandle as unknown as FileSystemFileHandle,
+      mediaRecorderFactory: (input) => {
+        const fake = new FakeMediaRecorder(input);
+        recorderInstances.push(fake);
+        return fake as unknown as MediaRecorder;
+      }
+    });
+
+    await recorder.start();
+    await vi.advanceTimersByTimeAsync(3000);
+
+    expect(recorderInstances[0]?.startTimeslices).toEqual([1000]);
+    expect(fileHandle.latestWritable?.writes.length).toBeGreaterThanOrEqual(3);
+
+    await recorder.stop();
   });
 
   it("discards chunks that arrive after stop closes the writable stream", async () => {

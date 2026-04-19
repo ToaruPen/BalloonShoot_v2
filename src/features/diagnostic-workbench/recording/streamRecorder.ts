@@ -20,6 +20,7 @@ const WEBM_MIME_TYPE_CANDIDATES = [
   "video/webm;codecs=vp8",
   "video/webm"
 ] as const;
+const MEDIA_RECORDER_TIMESLICE_MS = 1000;
 
 const defaultMediaRecorderFactory: MediaRecorderFactory = (stream, options) =>
   new MediaRecorder(stream, options);
@@ -92,8 +93,9 @@ export const createStreamRecorder = ({
         mediaRecorder.ondataavailable = (event) => {
           enqueueWrite(event.data);
         };
-        mediaRecorder.start();
         acceptingChunks = true;
+        // 1s timeslice: bound memory, flush incrementally, preserve crash recovery.
+        mediaRecorder.start(MEDIA_RECORDER_TIMESLICE_MS);
         started = true;
         stopped = false;
       } catch (error: unknown) {
