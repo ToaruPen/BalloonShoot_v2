@@ -5,7 +5,10 @@ import {
 } from "../../../../../src/features/diagnostic-workbench/recording/sessionRecorder";
 import type { TelemetryFrame } from "../../../../../src/features/diagnostic-workbench/recording/telemetryFrame";
 import { defaultFrontAimCalibration } from "../../../../../src/features/front-aim";
-import { defaultSideTriggerCalibration } from "../../../../../src/features/side-trigger";
+import {
+  defaultSideTriggerCalibration,
+  type SideTriggerAdaptiveCalibrationTelemetry
+} from "../../../../../src/features/side-trigger";
 import { FakeFileSystemDirectoryHandle } from "../../../../helpers/fileSystemAccessMocks";
 
 const timestamp = {
@@ -92,6 +95,19 @@ const createFrame = (frameTimestampMs: number): TelemetryFrame => ({
     fusionRejectReason: "none"
   }
 });
+
+const adaptiveSnapshot: SideTriggerAdaptiveCalibrationTelemetry = {
+  status: "adaptive",
+  sampleCount: 30,
+  windowSize: 90,
+  observedPulledP10: 0.25,
+  observedOpenP90: 1,
+  pulledCalibrated: 0.25,
+  openCalibrated: 1,
+  lastResetReason: undefined,
+  lastResetTimestampMs: undefined,
+  geometrySignatureEma: undefined
+};
 
 const createDeferred = <T>() => {
   let resolve!: (value: T) => void;
@@ -199,6 +215,18 @@ describe("createSessionRecorder", () => {
     expect(payload.frames).toHaveLength(1);
     expect(payload.frames[0]?.fusion.shotFired).toBe(true);
     expect(payload.frames[0]?.side.triggerEdge).toBe("shotCommitted");
+  });
+
+  it("round-trips optional adaptive calibration telemetry without changing schema", () => {
+    const frame: TelemetryFrame = {
+      ...createFrame(100),
+      sideTriggerAdaptiveCalibration: adaptiveSnapshot
+    };
+    const parsed = JSON.parse(JSON.stringify(frame)) as TelemetryFrame;
+    const legacy = JSON.parse(JSON.stringify(createFrame(100))) as TelemetryFrame;
+
+    expect(parsed.sideTriggerAdaptiveCalibration).toEqual(adaptiveSnapshot);
+    expect(legacy.sideTriggerAdaptiveCalibration).toBeUndefined();
   });
 
   it("serializes rapid start calls while the directory picker is pending", async () => {

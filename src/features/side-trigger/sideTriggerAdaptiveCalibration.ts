@@ -52,6 +52,19 @@ export interface AdaptiveSideTriggerCalibrationState {
   readonly currentSourceKey: string | undefined;
 }
 
+export interface SideTriggerAdaptiveCalibrationTelemetry {
+  readonly status: AdaptiveCalibrationStatus;
+  readonly sampleCount: number;
+  readonly windowSize: number;
+  readonly observedPulledP10: number | undefined;
+  readonly observedOpenP90: number | undefined;
+  readonly pulledCalibrated: number;
+  readonly openCalibrated: number;
+  readonly lastResetReason: AdaptiveResetReason | undefined;
+  readonly lastResetTimestampMs: number | undefined;
+  readonly geometrySignatureEma: SideTriggerHandGeometrySignature | undefined;
+}
+
 export const DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG: AdaptiveSideTriggerCalibrationConfig =
   {
     windowSamples: 90,
@@ -414,3 +427,18 @@ export const updateSideTriggerAdaptiveCalibration = (
     config
   );
 };
+
+export const toAdaptiveCalibrationTelemetry = (
+  state: AdaptiveSideTriggerCalibrationState
+): SideTriggerAdaptiveCalibrationTelemetry => ({
+  status: state.status,
+  sampleCount: state.sampleCount,
+  windowSize: state.windowSamples,
+  observedPulledP10: state.observedPulledP10,
+  observedOpenP90: state.observedOpenP90,
+  pulledCalibrated: state.calibration.pulledPose.normalizedThumbDistance,
+  openCalibrated: state.calibration.openPose.normalizedThumbDistance,
+  lastResetReason: state.lastResetReason,
+  lastResetTimestampMs: state.lastResetTimestampMs,
+  geometrySignatureEma: state.geometrySignatureEma
+});

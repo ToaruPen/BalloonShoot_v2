@@ -3,6 +3,7 @@ import {
   DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
   assertAdaptiveCalibrationConfig,
   createInitialAdaptiveSideTriggerCalibrationState,
+  toAdaptiveCalibrationTelemetry,
   updateSideTriggerAdaptiveCalibration,
   type AdaptiveSideTriggerCalibrationConfig,
   type AdaptiveSideTriggerCalibrationState,
@@ -283,6 +284,30 @@ describe("adaptive side-trigger calibration reducer", () => {
         DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG.pulledOpenMinSpan +
         EPSILON
     );
+  });
+
+  it("projects reducer state into telemetry snapshots", () => {
+    const state = updateSideTriggerAdaptiveCalibration(
+      createInitialAdaptiveSideTriggerCalibrationState(
+        DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG
+      ),
+      metric({ normalizedThumbDistance: 0.4 }),
+      DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG
+    );
+
+    expect(toAdaptiveCalibrationTelemetry(state)).toEqual({
+      status: state.status,
+      sampleCount: state.sampleCount,
+      windowSize: state.windowSamples,
+      observedPulledP10: state.observedPulledP10,
+      observedOpenP90: state.observedOpenP90,
+      pulledCalibrated:
+        state.calibration.pulledPose.normalizedThumbDistance,
+      openCalibrated: state.calibration.openPose.normalizedThumbDistance,
+      lastResetReason: state.lastResetReason,
+      lastResetTimestampMs: state.lastResetTimestampMs,
+      geometrySignatureEma: state.geometrySignatureEma
+    });
   });
 
   it.each([

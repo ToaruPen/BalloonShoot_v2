@@ -34,6 +34,7 @@ export {
   DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
   assertAdaptiveCalibrationConfig,
   createInitialAdaptiveSideTriggerCalibrationState,
+  toAdaptiveCalibrationTelemetry,
   updateSideTriggerAdaptiveCalibration
 } from "./sideTriggerAdaptiveCalibration";
 export type {
@@ -41,7 +42,8 @@ export type {
   AdaptiveResetReason,
   AdaptiveSampleEntry,
   AdaptiveSideTriggerCalibrationConfig,
-  AdaptiveSideTriggerCalibrationState
+  AdaptiveSideTriggerCalibrationState,
+  SideTriggerAdaptiveCalibrationTelemetry
 } from "./sideTriggerAdaptiveCalibration";
 export { toSideDetection } from "./sideTriggerDetectionConversion";
 export { getSideTriggerFilterConfig } from "./sideTriggerFilterConfig";
