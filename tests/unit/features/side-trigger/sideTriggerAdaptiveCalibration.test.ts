@@ -66,6 +66,15 @@ describe("adaptive side-trigger calibration reducer", () => {
     ).toBe(MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN);
   });
 
+  it("uses p20/p80 as default calibration percentiles", () => {
+    expect(
+      DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG.pulledPercentile
+    ).toBe(0.2);
+    expect(
+      DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG.openPercentile
+    ).toBe(0.8);
+  });
+
   it("transitions from provisional to warmingUp to adaptive by sample count", () => {
     const config = DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG;
     const initial = createInitialAdaptiveSideTriggerCalibrationState(config);
@@ -83,43 +92,88 @@ describe("adaptive side-trigger calibration reducer", () => {
       warmupSamples: 30
     };
     const state = feed(
-      [0.3, 0.4, ...Array.from({ length: 11 }, () => 0.6), 0.8, 0.9],
+      [
+        ...Array.from({ length: 3 }, () => 0.3),
+        ...Array.from({ length: 8 }, () => 0.6),
+        ...Array.from({ length: 4 }, () => 0.8)
+      ],
       config
     );
 
-    expect(pulled(state)).toBeCloseTo(0.3);
+    expect(pulled(state)).toBeCloseTo(0.25);
     expect(open(state)).toBeCloseTo(1);
   });
 
-  it("uses nearest-rank p10/p90 for 10 samples", () => {
+  it("uses nearest-rank p20/p80 for 10 samples by default", () => {
     const state = feed([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]);
 
-    expect(state.observedPulledP10).toBe(0.1);
-    expect(state.observedOpenP90).toBe(0.9);
+    expect(state.observedPulledP10).toBe(0.2);
+    expect(state.observedOpenP90).toBe(0.8);
   });
 
-  it("uses the 9th and 81st sorted samples for a 90-sample window", () => {
+  it("uses the 18th and 72nd sorted samples for a 90-sample window by default", () => {
     const values = Array.from({ length: 90 }, (_, index) => (index + 1) / 100);
     const state = feed(values);
 
-    expect(state.observedPulledP10).toBe(0.09);
-    expect(state.observedOpenP90).toBe(0.81);
+    expect(state.observedPulledP10).toBe(0.18);
+    expect(state.observedOpenP90).toBe(0.72);
+  });
+
+  it("uses configured nearest-rank percentiles when provided", () => {
+    const config: AdaptiveSideTriggerCalibrationConfig = {
+      ...DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
+      windowSamples: 10,
+      warmupSamples: 1,
+      pulledPercentile: 0.3,
+      openPercentile: 0.7
+    };
+    const state = feed(
+      [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+      config
+    );
+
+    expect(state.observedPulledP10).toBe(0.3);
+    expect(state.observedOpenP90).toBe(0.7);
+    expect(pulled(state)).toBeCloseTo(0.3);
+    expect(open(state)).toBeCloseTo(0.7);
+  });
+
+  it("allows asymmetric configured percentiles (sum is not required to be 1)", () => {
+    const config: AdaptiveSideTriggerCalibrationConfig = {
+      ...DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
+      windowSamples: 10,
+      warmupSamples: 1,
+      pulledPercentile: 0.2,
+      openPercentile: 0.85
+    };
+
+    expect(() => { assertAdaptiveCalibrationConfig(config); }).not.toThrow();
+
+    const state = feed(
+      [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+      config
+    );
+
+    expect(state.observedPulledP10).toBe(0.2);
+    expect(state.observedOpenP90).toBe(0.9);
+    expect(pulled(state)).toBeCloseTo(0.2);
+    expect(open(state)).toBeCloseTo(0.9);
   });
 
   it("clamps observed endpoints to bounds without widening valid observed spans", () => {
     const lowerClamped = feed([
-      ...Array.from({ length: 3 }, () => -0.2),
-      ...Array.from({ length: 26 }, () => 0.1),
+      ...Array.from({ length: 6 }, () => -0.2),
+      ...Array.from({ length: 23 }, () => 0.1),
       0.2
     ]);
     const upperClamped = feed([
-      ...Array.from({ length: 26 }, () => 1),
-      ...Array.from({ length: 4 }, () => 2)
+      ...Array.from({ length: 23 }, () => 1),
+      ...Array.from({ length: 7 }, () => 2)
     ]);
     const observed = feed([
-      ...Array.from({ length: 3 }, () => 0.31),
-      ...Array.from({ length: 23 }, () => 0.34),
-      ...Array.from({ length: 4 }, () => 0.37)
+      ...Array.from({ length: 6 }, () => 0.31),
+      ...Array.from({ length: 17 }, () => 0.34),
+      ...Array.from({ length: 7 }, () => 0.37)
     ]);
 
     expect(pulled(lowerClamped)).toBe(0);
@@ -130,7 +184,7 @@ describe("adaptive side-trigger calibration reducer", () => {
     expect(open(observed)).toBeCloseTo(0.37);
   });
 
-  it("keeps p10 and p90 as calibration endpoints when observed span is at least 0.05", () => {
+  it("keeps configured percentiles as calibration endpoints when observed span is at least 0.05", () => {
     const config: AdaptiveSideTriggerCalibrationConfig = {
       ...DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
       windowSamples: 10,
@@ -138,14 +192,14 @@ describe("adaptive side-trigger calibration reducer", () => {
       pulledOpenMinSpan: 0.05
     };
     const state = feed(
-      [0.31, 0.32, 0.33, 0.34, 0.35, 0.35, 0.35, 0.36, 0.37, 0.38],
+      [0.31, 0.32, 0.33, 0.34, 0.35, 0.36, 0.37, 0.38, 0.39, 0.4],
       config
     );
 
-    expect(state.observedPulledP10).toBe(0.31);
-    expect(state.observedOpenP90).toBe(0.37);
-    expect(pulled(state)).toBeCloseTo(0.31);
-    expect(open(state)).toBeCloseTo(0.37);
+    expect(state.observedPulledP10).toBe(0.32);
+    expect(state.observedOpenP90).toBe(0.38);
+    expect(pulled(state)).toBeCloseTo(0.32);
+    expect(open(state)).toBeCloseTo(0.38);
   });
 
   it("holds only calibration when observed span collapses below 0.05", () => {
@@ -505,6 +559,9 @@ describe("adaptive side-trigger calibration reducer", () => {
     ["geometryEmaAlpha upper", { geometryEmaAlpha: 1.1 }],
     ["pulledLowerBound", { pulledLowerBound: -0.1 }],
     ["openUpperBound", { openUpperBound: 0 }],
+    ["pulledPercentile lower", { pulledPercentile: 0 }],
+    ["openPercentile upper", { openPercentile: 1 }],
+    ["percentile ordering", { pulledPercentile: 0.8, openPercentile: 0.8 }],
     ["pulledOpenMinSpan positive", { pulledOpenMinSpan: 0 }],
     ["pulledOpenMinSpan fits bounds", { pulledOpenMinSpan: 2 }],
     ["initialPulled bounds", { initialPulled: -0.1 }],
