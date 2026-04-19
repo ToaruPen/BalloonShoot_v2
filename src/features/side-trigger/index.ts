@@ -26,5 +26,7 @@ export type {
   SideTriggerRawMetric,
   SideTriggerRawMetricFallback
 } from "./sideTriggerRawMetric";
+export { detectGeometryJumpAndUpdateEma } from "./sideTriggerHandGeometrySignature";
+export type { GeometryJumpDetectionResult } from "./sideTriggerHandGeometrySignature";
 export { toSideDetection } from "./sideTriggerDetectionConversion";
 export { getSideTriggerFilterConfig } from "./sideTriggerFilterConfig";
