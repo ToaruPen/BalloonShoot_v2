@@ -59,9 +59,7 @@ const noHandEvidence = (): SideTriggerEvidence => ({
   usedWorldLandmarks: false
 });
 
-const detectionFor = (
-  frame: ReplayFrame
-): SideHandDetection | undefined => {
+const detectionFor = (frame: ReplayFrame): SideHandDetection | undefined => {
   // Image-space landmarks are required to construct a HandFrame; if they
   // are missing the lane really has no hand. worldLandmarks may legitimately
   // be absent on some frames (case 8d in the spec) and must be forwarded as
@@ -172,11 +170,11 @@ describe("adaptive side-trigger calibration captured replay", () => {
       console.info(
         `side-trigger adaptive replay: static=${String(staticResult.commits)}, adaptive=${String(adaptiveResult.commits)}, releases=${String(adaptiveResult.releases)}`
       );
-      expect(adaptiveResult.commits).toBeGreaterThanOrEqual(8);
+      expect(adaptiveResult.commits).toBeGreaterThanOrEqual(13);
       expect(adaptiveResult.commits).toBeGreaterThan(staticResult.commits);
-      if (adaptiveResult.commits < 13) {
+      if (adaptiveResult.commits < 18) {
         console.warn(
-          `adaptive replay target warning: expected >=13 long-run target commits, received ${String(adaptiveResult.commits)}`
+          `adaptive replay target warning: expected >=18 long-run target commits, received ${String(adaptiveResult.commits)}`
         );
       }
     }

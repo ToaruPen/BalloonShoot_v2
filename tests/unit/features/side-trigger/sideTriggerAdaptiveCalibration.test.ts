@@ -10,6 +10,7 @@ import {
   type SideTriggerHandGeometrySignature,
   type SideTriggerRawMetric
 } from "../../../../src/features/side-trigger";
+import { MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN } from "../../../../src/features/side-trigger/sideTriggerConstants";
 
 const EPSILON = 1e-9;
 
@@ -37,8 +38,7 @@ const metric = (
 
 const feed = (
   values: readonly number[],
-  config: AdaptiveSideTriggerCalibrationConfig =
-    DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG
+  config: AdaptiveSideTriggerCalibrationConfig = DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG
 ): AdaptiveSideTriggerCalibrationState =>
   values.reduce(
     (state, value, index) =>
@@ -60,6 +60,12 @@ const open = (state: AdaptiveSideTriggerCalibrationState): number =>
   state.calibration.openPose.normalizedThumbDistance;
 
 describe("adaptive side-trigger calibration reducer", () => {
+  it("uses the shared 0.05 minimum calibration span by default", () => {
+    expect(
+      DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG.pulledOpenMinSpan
+    ).toBe(MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN);
+  });
+
   it("transitions from provisional to warmingUp to adaptive by sample count", () => {
     const config = DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG;
     const initial = createInitialAdaptiveSideTriggerCalibrationState(config);
@@ -76,7 +82,10 @@ describe("adaptive side-trigger calibration reducer", () => {
       ...DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
       warmupSamples: 30
     };
-    const state = feed(Array.from({ length: 15 }, () => 0.6), config);
+    const state = feed(
+      [0.3, 0.4, ...Array.from({ length: 11 }, () => 0.6), 0.8, 0.9],
+      config
+    );
 
     expect(pulled(state)).toBeCloseTo(0.3);
     expect(open(state)).toBeCloseTo(1);
@@ -97,26 +106,93 @@ describe("adaptive side-trigger calibration reducer", () => {
     expect(state.observedOpenP90).toBe(0.81);
   });
 
-  it("clamps observed endpoints to bounds and expands narrow spans", () => {
-    const lowerClamped = feed(Array.from({ length: 30 }, () => -0.2));
-    const upperClamped = feed(Array.from({ length: 30 }, () => 2));
-    const expanded = feed(Array.from({ length: 30 }, () => 0.5));
-    const shiftedLower = feed(
-      Array.from({ length: 30 }, () => 0.05),
-      DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG
-    );
-    const shiftedUpper = feed(
-      Array.from({ length: 30 }, () => 1.15),
-      DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG
-    );
+  it("clamps observed endpoints to bounds without widening valid observed spans", () => {
+    const lowerClamped = feed([
+      ...Array.from({ length: 3 }, () => -0.2),
+      ...Array.from({ length: 26 }, () => 0.1),
+      0.2
+    ]);
+    const upperClamped = feed([
+      ...Array.from({ length: 26 }, () => 1),
+      ...Array.from({ length: 4 }, () => 2)
+    ]);
+    const observed = feed([
+      ...Array.from({ length: 3 }, () => 0.31),
+      ...Array.from({ length: 23 }, () => 0.34),
+      ...Array.from({ length: 4 }, () => 0.37)
+    ]);
 
     expect(pulled(lowerClamped)).toBe(0);
+    expect(open(lowerClamped)).toBeCloseTo(0.1);
+    expect(pulled(upperClamped)).toBeCloseTo(1);
     expect(open(upperClamped)).toBe(1.2);
-    expect(open(expanded) - pulled(expanded)).toBeCloseTo(0.4);
-    expect(pulled(shiftedLower)).toBe(0);
-    expect(open(shiftedLower)).toBeCloseTo(0.4);
-    expect(open(shiftedUpper)).toBe(1.2);
-    expect(pulled(shiftedUpper)).toBeCloseTo(0.8);
+    expect(pulled(observed)).toBeCloseTo(0.31);
+    expect(open(observed)).toBeCloseTo(0.37);
+  });
+
+  it("keeps p10 and p90 as calibration endpoints when observed span is at least 0.05", () => {
+    const config: AdaptiveSideTriggerCalibrationConfig = {
+      ...DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
+      windowSamples: 10,
+      warmupSamples: 1,
+      pulledOpenMinSpan: 0.05
+    };
+    const state = feed(
+      [0.31, 0.32, 0.33, 0.34, 0.35, 0.35, 0.35, 0.36, 0.37, 0.38],
+      config
+    );
+
+    expect(state.observedPulledP10).toBe(0.31);
+    expect(state.observedOpenP90).toBe(0.37);
+    expect(pulled(state)).toBeCloseTo(0.31);
+    expect(open(state)).toBeCloseTo(0.37);
+  });
+
+  it("holds only calibration when observed span collapses below 0.05", () => {
+    const config: AdaptiveSideTriggerCalibrationConfig = {
+      ...DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
+      windowSamples: 2,
+      warmupSamples: 1,
+      pulledOpenMinSpan: 0.05
+    };
+    const calibrated = feed([0.2, 0.4], config);
+
+    const held = updateSideTriggerAdaptiveCalibration(
+      calibrated,
+      metric({ timestampMs: 1032, normalizedThumbDistance: 0.41 }),
+      config
+    );
+
+    expect(held.observedPulledP10).toBe(0.4);
+    expect(held.observedOpenP90).toBe(0.41);
+    expect(held.sampleCount).toBe(2);
+    expect(held.status).toBe("adaptive");
+    expect(held.calibration).toEqual(calibrated.calibration);
+  });
+
+  it("resumes normal calibration immediately after a span-collapse hold clears", () => {
+    const config: AdaptiveSideTriggerCalibrationConfig = {
+      ...DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
+      windowSamples: 2,
+      warmupSamples: 1,
+      pulledOpenMinSpan: 0.05
+    };
+    const held = updateSideTriggerAdaptiveCalibration(
+      feed([0.2, 0.4], config),
+      metric({ timestampMs: 1032, normalizedThumbDistance: 0.41 }),
+      config
+    );
+
+    const resumed = updateSideTriggerAdaptiveCalibration(
+      held,
+      metric({ timestampMs: 1048, normalizedThumbDistance: 0.6 }),
+      config
+    );
+
+    expect(resumed.observedPulledP10).toBe(0.41);
+    expect(resumed.observedOpenP90).toBe(0.6);
+    expect(pulled(resumed)).toBeCloseTo(0.41);
+    expect(open(resumed)).toBeCloseTo(0.6);
   });
 
   it("resets on source change without treating undefined source as a change", () => {
@@ -270,7 +346,9 @@ describe("adaptive side-trigger calibration reducer", () => {
       config
     );
     expect(notGood.sampleCount).toBe(2);
-    expect(notGood.observedPulledP10).toBe(goodWithoutSignature.observedPulledP10);
+    expect(notGood.observedPulledP10).toBe(
+      goodWithoutSignature.observedPulledP10
+    );
     expect(notGood.geometrySignatureEma).toEqual(signature());
     expect(notGood.lastObservedHandTimestampMs).toBe(1032);
 
@@ -409,8 +487,7 @@ describe("adaptive side-trigger calibration reducer", () => {
       windowSize: state.windowSamples,
       observedPulledP10: state.observedPulledP10,
       observedOpenP90: state.observedOpenP90,
-      pulledCalibrated:
-        state.calibration.pulledPose.normalizedThumbDistance,
+      pulledCalibrated: state.calibration.pulledPose.normalizedThumbDistance,
       openCalibrated: state.calibration.openPose.normalizedThumbDistance,
       lastResetReason: state.lastResetReason,
       lastResetTimestampMs: state.lastResetTimestampMs,
@@ -433,7 +510,7 @@ describe("adaptive side-trigger calibration reducer", () => {
     ["initialPulled bounds", { initialPulled: -0.1 }],
     ["initialOpen bounds", { initialOpen: 2 }],
     ["initial ordering", { initialPulled: 1.2 }],
-    ["initial span", { initialOpen: 0.5 }]
+    ["initial span", { initialOpen: 0.22 }]
   ] as const)("throws for invalid config: %s", (_name, patch) => {
     expect(() => {
       assertAdaptiveCalibrationConfig({
