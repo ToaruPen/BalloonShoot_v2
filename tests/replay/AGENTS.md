@@ -16,6 +16,13 @@
 - Keep replays fast and deterministic. Prefer fixed arrays of lane frames over random generation.
 - Raise `testTimeout` in `vitest.replay.config.ts` only when real replays need it.
 
+## Notes on captured-but-deterministic fixtures
+
+`tests/fixtures/replay/sideTriggerAdaptive/baseline-2026-04-19.json` is a
+MediaPipe HandLandmarker landmark JSON snapshot. Unlike video files (`.mov`,
+`.webm`, etc.), it is deterministic text and should be treated like synthetic
+input for replay tests. Do not revive recorded video fixtures for this replay.
+
 ## Future
 
 - Synthetic frame sequences for `input-fusion` timestamp pairing / degrade modes and the `side-trigger` FSM arrive with their v2 lanes.
