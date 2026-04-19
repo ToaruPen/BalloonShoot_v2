@@ -637,7 +637,13 @@ config 受信時に上記を検査するヘルパ `assertAdaptiveCalibrationConf
 5. **`sourceKey` reset**：sourceKey 変化で provisional に戻り、sampleCount = 0、samples 配列空、`lastResetReason = "sourceChanged"`
 6. **hand-loss reset (timestamp ベース)**：最後の `handDetected=true` フレームから 1500ms 経過した最初のフレームで reset、`lastResetReason = "handLoss"`
 7. **geometry jump reset**：3 成分のいずれかで `|current - ema| / ema > 0.25` → reset、EMA は新値で再初期化、`lastResetReason = "geometryJump"`
-8. **quality gate**：`sideViewQuality = "lost"` または landmarks 欠損のフレームは ring buffer / EMA に入らない（sampleCount 不変、observed p10/p90 不変、ema 不変）。ただし `lastObservedHandTimestampMs` は handDetected=true なら更新、hand-loss timer 評価は実行
+8. **quality gate（4 ケース別）**：
+   - **8a. good 品質 + thumb距離あり + signature あり**：ring buffer push, EMA 更新, sampleCount 増, p10/p90 更新, ema 更新
+   - **8b. good 品質 + thumb距離あり + signature 欠損 (旧 telemetry)**：ring buffer push, sampleCount 増, p10/p90 更新; **EMA は更新せず ema 不変**, geometry-jump 判定は無効
+   - **8c. hand 検出あるが thumb距離取得不能 (worldLandmarks欠損 / quality `tooOccluded` etc.)**：ring buffer push なし, sampleCount 不変, p10/p90 不変, ema 不変; `lastObservedHandTimestampMs` は更新, hand-loss timer 評価あり
+   - **8d. hand 未検出**：上記すべて不変, ただし hand-loss timer は評価（前回の `lastObservedHandTimestampMs` から `handLossResetMs` 経過なら reset）
+   
+   8b はリプレイ用旧 telemetry (`tests/fixtures/replay/sideTriggerAdaptive/baseline-2026-04-19.json`) でカバーされる主要パスなので、必ずテストに含めること。
 9. **table-driven invariant tests**：
    - `output.pulled <= output.open - pulledOpenMinSpan + ε`（formula 健全性）
    - `output.pulled >= pulledLowerBound`（lower bound 保証）
@@ -766,6 +772,8 @@ Codex review (commit 0cf70fe) のシミュレーション結果に基づく：
   - ring buffer の immutable shape を `ReadonlyArray<AdaptiveSampleEntry>` で明示
   - replay test を CI 必須ゲート化、`tests/replay/` に配置
   - telemetry 後方互換性方針（optional 新フィールド、schema v1 維持）を追加
+- 2026-04-19 改訂 r3: codex review v3 (commit ab3496a) の P2 指摘を反映
+  - quality gate テスト #8 を 4 ケース (8a-8d) に分解し、特に 8b（旧 telemetry の MCPs 欠損 + thumb距離あり）が ring buffer に入ることを明示
 - 2026-04-19 改訂 r2: codex review v2 (commit 0cf70fe) と codex advisor v2 の追指摘を反映
   - `extractSideTriggerRawMetric` に `fallback?: { timestampMs }` を追加（no-hand frame で timer 評価可能化）
   - reducer の source-change ルールを明示（`metric.sourceKey === undefined` を「未知」扱い、reset しない）
