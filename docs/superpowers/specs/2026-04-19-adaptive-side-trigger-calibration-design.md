@@ -673,7 +673,7 @@ config 受信時に上記を検査するヘルパ `assertAdaptiveCalibrationConf
    - **8d. hand 検出あるが thumb距離取得不能 (worldLandmarks 欠損)**：(i) push なし, (ii) 更新せず, (iii) 不変, (iv) 不変, (v) 不変, (vi) **更新**, (vii) 評価
    - **8e. hand 未検出 (detection === undefined)**：(i)-(v) すべて不変, (vi) **更新せず**, (vii) **評価**（前回の `lastObservedHandTimestampMs` から `handLossResetMs` 経過なら reset）
 
-   8b はリプレイ用旧 telemetry (`tests/fixtures/replay/sideTriggerAdaptive/baseline-2026-04-19.json`) の主要パスなので、必ずテストに含めること。8c は `tooOccluded` / `frontLike` のフレームを push してしまう実装ミスを検出するために必須。
+   8b はリプレイ用旧 telemetry capture (`iterations/telemetry-2026-04-19T01-18-36-449Z.json`、ローカル gitignored) の主要パスなので、必ずテストに含めること。8c は `tooOccluded` / `frontLike` のフレームを push してしまう実装ミスを検出するために必須。
 
 9. **table-driven invariant tests**：
    - `output.pulled <= output.open - pulledOpenMinSpan + ε`（formula 健全性）

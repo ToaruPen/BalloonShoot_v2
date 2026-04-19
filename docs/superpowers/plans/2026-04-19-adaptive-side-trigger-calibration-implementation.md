@@ -656,8 +656,8 @@ const sideTriggerMapper = createAdaptiveSideTriggerMapper();
 - ファイル不在時は `it.skipIf(fixture === undefined)` で **graceful skip**。CI ではこれが skip される（capture を持たないため）
 - fixture を読み込んだ場合、各 frame の `side` detection を `extractSideTriggerRawMetric` → `updateSideTriggerAdaptiveCalibration` → `extractSideTriggerEvidence` → 既存 `updateSideTriggerState` (FSM) の pipeline に流す
 - 比較対象として **同じ fixture を static calibration (`defaultSideTriggerCalibration`) で流した baseline** も同テスト内で計算
-- 期待値を `expect(adaptiveCommits).toBeGreaterThanOrEqual(8)` でゲート
-- 目標 (`>= 13`) は `console.warn` で報告（fail させない）。長期目標 (`>= 18`) はコメントで明記
+- 期待値を `expect(adaptiveCommits).toBeGreaterThanOrEqual(13)` でゲート
+- warning target (`>= 18`) は `console.warn` で報告（fail させない）。長期目標は spec 末尾の Phase 2 軸を参照
 - baseline static は `expect(staticCommits).toBeLessThan(adaptiveCommits)` で「adaptive のほうが必ず多い」性質を assert（回帰保護）
 - **fixture は git にコミットしない**：200k 行超の landmark JSON を git に載せると repo が肥大するため
 
