@@ -20,5 +20,11 @@ export type {
 } from "./sideTriggerConfig";
 export { createSideTriggerMapper } from "./createSideTriggerMapper";
 export type { SideTriggerMapper } from "./createSideTriggerMapper";
+export { extractSideTriggerRawMetric } from "./sideTriggerRawMetric";
+export type {
+  SideTriggerHandGeometrySignature,
+  SideTriggerRawMetric,
+  SideTriggerRawMetricFallback
+} from "./sideTriggerRawMetric";
 export { toSideDetection } from "./sideTriggerDetectionConversion";
 export { getSideTriggerFilterConfig } from "./sideTriggerFilterConfig";
