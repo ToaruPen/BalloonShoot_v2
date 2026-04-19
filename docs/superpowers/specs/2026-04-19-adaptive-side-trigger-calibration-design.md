@@ -238,11 +238,11 @@ provisional → warmingUp → adaptive
               └── (reset trigger) ──┘
 ```
 
-| 状態          | 条件                                   | 出力 calibration                                 |
-| ------------- | -------------------------------------- | ------------------------------------------------ |
-| `provisional` | `sampleCount = 0`（直後 / reset 直後） | `{ pulled: INITIAL_PULLED, open: INITIAL_OPEN }` |
-| `warmingUp`   | `0 < sampleCount < warmupSamples`      | initial と clamped 観測値の **線形補間**         |
-| `adaptive`    | `sampleCount >= warmupSamples`         | clamped 観測値そのもの                           |
+| 状態          | 条件                                   | 出力 calibration                                                      |
+| ------------- | -------------------------------------- | --------------------------------------------------------------------- |
+| `provisional` | `sampleCount = 0`（直後 / reset 直後） | `{ pulled: INITIAL_PULLED, open: INITIAL_OPEN }`                      |
+| `warmingUp`   | `0 < sampleCount < warmupSamples`      | initial と clamped 観測値の **線形補間**（span collapse 時は hold）   |
+| `adaptive`    | `sampleCount >= warmupSamples`         | clamped 観測値そのもの（span collapse 時は前フレームの calibration を hold） |
 
 定数：
 
