@@ -10,6 +10,7 @@ coverage/
 test-results/
 playwright-report/
 recordings/
+iterations/
 
 # Benchmark fixtures — large webcam recordings kept out of git.
 # See tests/fixtures/videos/README.md for how to regenerate.
