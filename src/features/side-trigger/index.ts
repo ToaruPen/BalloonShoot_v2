@@ -28,5 +28,18 @@ export type {
 } from "./sideTriggerRawMetric";
 export { detectGeometryJumpAndUpdateEma } from "./sideTriggerHandGeometrySignature";
 export type { GeometryJumpDetectionResult } from "./sideTriggerHandGeometrySignature";
+export {
+  DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
+  assertAdaptiveCalibrationConfig,
+  createInitialAdaptiveSideTriggerCalibrationState,
+  updateSideTriggerAdaptiveCalibration
+} from "./sideTriggerAdaptiveCalibration";
+export type {
+  AdaptiveCalibrationStatus,
+  AdaptiveResetReason,
+  AdaptiveSampleEntry,
+  AdaptiveSideTriggerCalibrationConfig,
+  AdaptiveSideTriggerCalibrationState
+} from "./sideTriggerAdaptiveCalibration";
 export { toSideDetection } from "./sideTriggerDetectionConversion";
 export { getSideTriggerFilterConfig } from "./sideTriggerFilterConfig";
