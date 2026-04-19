@@ -42,7 +42,7 @@ interface ReplayFixture {
  * path below to exercise this gate locally; CI will skip the suite when the
  * fixture is absent.
  */
-const FIXTURE_PATH = "iterations/telemetry-2026-04-19T01-18-36-449Z.json";
+const FIXTURE_PATH = "iterations/telemetry-2026-04-19T05-00-33-702Z.json";
 
 const fixture: ReplayFixture | undefined = existsSync(FIXTURE_PATH)
   ? (JSON.parse(readFileSync(FIXTURE_PATH, "utf8")) as ReplayFixture)
@@ -157,6 +157,20 @@ const simulate = (
   return { commits, releases };
 };
 
+const countWorldLandmarkMiddleMcpPresence = (frames: readonly ReplayFrame[]) =>
+  frames.reduce(
+    (counts, frame) => {
+      if (frame.side?.worldLandmarks === undefined) {
+        return counts;
+      }
+
+      return frame.side.worldLandmarks.middleMcp === undefined
+        ? { ...counts, fallbackFrames: counts.fallbackFrames + 1 }
+        : { ...counts, middleMcpFrames: counts.middleMcpFrames + 1 };
+    },
+    { fallbackFrames: 0, middleMcpFrames: 0 }
+  );
+
 describe("adaptive side-trigger calibration captured replay", () => {
   it.skipIf(fixture === undefined)(
     "passes the reducer/FSM smoke gate against the captured 2026-04-19 fixture",
@@ -166,15 +180,18 @@ describe("adaptive side-trigger calibration captured replay", () => {
       }
       const staticResult = simulate("static", fixture.frames);
       const adaptiveResult = simulate("adaptive", fixture.frames);
+      const middleMcpPresence = countWorldLandmarkMiddleMcpPresence(
+        fixture.frames
+      );
 
       console.info(
-        `side-trigger adaptive replay: static=${String(staticResult.commits)}, adaptive=${String(adaptiveResult.commits)}, releases=${String(adaptiveResult.releases)}`
+        `side-trigger adaptive replay: static=${String(staticResult.commits)}, adaptive=${String(adaptiveResult.commits)}, releases=${String(adaptiveResult.releases)}, middleMcpFrames=${String(middleMcpPresence.middleMcpFrames)}, fallbackFrames=${String(middleMcpPresence.fallbackFrames)}`
       );
-      expect(adaptiveResult.commits).toBeGreaterThanOrEqual(16);
+      expect(adaptiveResult.commits).toBeGreaterThanOrEqual(19);
       expect(adaptiveResult.commits).toBeGreaterThan(staticResult.commits);
-      if (adaptiveResult.commits < 19) {
+      if (adaptiveResult.commits < 22) {
         console.warn(
-          `adaptive replay target warning: expected >=19 long-run target commits, received ${String(adaptiveResult.commits)}`
+          `adaptive replay target warning: expected >=22 long-run target commits, received ${String(adaptiveResult.commits)}`
         );
       }
     }

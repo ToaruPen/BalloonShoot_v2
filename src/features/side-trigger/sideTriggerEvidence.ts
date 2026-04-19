@@ -1,7 +1,6 @@
 import type { SideTriggerRejectReason } from "../../shared/types/trigger";
 import type {
   HandLandmarkSet,
-  Point3D,
   SideHandDetection,
   SideViewQuality
 } from "../../shared/types/hand";
@@ -11,6 +10,7 @@ import {
   DEFAULT_SIDE_TRIGGER_PULLED_POSE_DISTANCE,
   MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN
 } from "./sideTriggerConstants";
+import { computeNormalizedThumbDistance } from "./sideTriggerThumbDistance";
 
 export interface SideTriggerEvidence {
   readonly sideHandDetected: boolean;
@@ -24,18 +24,9 @@ export interface SideTriggerEvidence {
 }
 
 const MIN_HAND_CONFIDENCE = 0.35;
-const MIN_REFERENCE_LENGTH = 0.0001;
 
 const clamp01 = (value: number): number =>
   Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
-
-const distance = (a: Point3D, b: Point3D): number => {
-  const dx = a.x - b.x;
-  const dy = a.y - b.y;
-  const dz = a.z - b.z;
-
-  return Math.hypot(dx, dy, dz);
-};
 
 const sideViewRejectReason = (
   quality: SideViewQuality
@@ -49,13 +40,8 @@ const computeScalars = (
   pullEvidenceScalar: number;
   releaseEvidenceScalar: number;
 } => {
-  const referenceLength = Math.max(
-    MIN_REFERENCE_LENGTH,
-    distance(worldLandmarks.wrist, worldLandmarks.indexMcp)
-  );
   const normalizedThumbDistance =
-    distance(worldLandmarks.thumbTip, worldLandmarks.indexMcp) /
-    referenceLength;
+    computeNormalizedThumbDistance(worldLandmarks);
   const observedSpan = Math.max(
     MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN,
     calibration.openPose.normalizedThumbDistance -
