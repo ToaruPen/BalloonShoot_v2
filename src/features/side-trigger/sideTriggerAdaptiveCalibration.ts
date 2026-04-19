@@ -91,8 +91,6 @@ const calibrationFor = (
   }
 });
 
-const isFiniteNumber = (value: number): boolean => Number.isFinite(value);
-
 const assertFiniteConfig = (
   config: AdaptiveSideTriggerCalibrationConfig
 ): void => {
@@ -110,7 +108,7 @@ const assertFiniteConfig = (
   ];
 
   for (const [name, value] of values) {
-    if (!isFiniteNumber(value)) {
+    if (!Number.isFinite(value)) {
       throw new Error(`${name} must be finite.`);
     }
   }
