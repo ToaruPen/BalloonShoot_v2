@@ -266,6 +266,7 @@ const installBaseDom = (): void => {
     "#wb-front-aim-panel",
     "#wb-side-world-landmarks",
     "#wb-side-trigger-panel",
+    "#wb-side-trigger-adaptive-panel",
     "#wb-fusion-panel"
   ]) {
     elements.set(id, createFakeHTMLElement());
@@ -1414,6 +1415,39 @@ describe("createLiveLandmarkInspection", () => {
         liveInspection.getState().sideTriggerTelemetry?.calibrationStatus
       ).toBe("liveTuning");
     });
+  });
+
+  it("updates observe-only adaptive calibration without changing slider calibration", async () => {
+    const sideTracker = createFakeTracker();
+    sideTracker.detect.mockResolvedValueOnce(
+      createHandDetectionWithWorld(pulledWorldLandmarks())
+    );
+    createMediaPipeHandTrackerMock.mockResolvedValueOnce(sideTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.sideVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+
+    await vi.waitFor(() => {
+      expect(
+        liveInspection.getState().sideTriggerAdaptiveCalibration?.sampleCount
+      ).toBe(1);
+    });
+    expect(liveInspection.getState().sideTriggerCalibration).toEqual(
+      defaultSideTriggerCalibration
+    );
+    expect(
+      liveInspection.getState().sideTriggerTelemetry?.calibration
+    ).toEqual(defaultSideTriggerCalibration);
   });
 
   it("preserves calibration across same-device reselection after capture loss", () => {

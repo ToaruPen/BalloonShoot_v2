@@ -272,6 +272,22 @@ describe("renderWorkbenchHTML", () => {
         frontAimTelemetry: undefined,
         sideTriggerFrame: undefined,
         sideTriggerTelemetry: undefined,
+        sideTriggerAdaptiveCalibration: {
+          status: "adaptive",
+          sampleCount: 30,
+          windowSize: 90,
+          observedPulledP10: 0.25,
+          observedOpenP90: 1,
+          pulledCalibrated: 0.25,
+          openCalibrated: 1,
+          lastResetReason: "handLoss",
+          lastResetTimestampMs: 1240,
+          geometrySignatureEma: {
+            wristToIndexMcp: 0.1,
+            wristToMiddleMcp: 0.12,
+            indexMcpToPinkyMcp: 0.08
+          }
+        },
         frontAimCalibration: defaultFrontAimCalibration,
         sideTriggerCalibration: defaultSideTriggerCalibration,
         sideTriggerTuning: defaultSideTriggerTuning,
@@ -313,6 +329,22 @@ describe("renderWorkbenchHTML", () => {
         frontAimTelemetry: createAimTelemetry(),
         sideTriggerFrame: undefined,
         sideTriggerTelemetry: undefined,
+        sideTriggerAdaptiveCalibration: {
+          status: "adaptive",
+          sampleCount: 30,
+          windowSize: 90,
+          observedPulledP10: 0.25,
+          observedOpenP90: 1,
+          pulledCalibrated: 0.25,
+          openCalibrated: 1,
+          lastResetReason: "handLoss",
+          lastResetTimestampMs: 1240,
+          geometrySignatureEma: {
+            wristToIndexMcp: 0.1,
+            wristToMiddleMcp: 0.12,
+            indexMcpToPinkyMcp: 0.08
+          }
+        },
         frontAimCalibration: defaultFrontAimCalibration,
         sideTriggerCalibration: defaultSideTriggerCalibration,
         sideTriggerTuning: defaultSideTriggerTuning,
@@ -336,6 +368,10 @@ describe("renderWorkbenchHTML", () => {
     expect(html).toContain("viewport x");
     expect(html).toContain("サイド world landmarks");
     expect(html).toContain("サイド trigger evidence");
+    expect(html).toContain("adaptive side-trigger calibration");
+    expect(html).toContain("sample window");
+    expect(html).toContain("0.250");
+    expect(html).toContain("handLoss");
     expect(html).toContain("fusion pairing");
     expect(html).toContain("SIDE_TRIGGER_PULL_ENTER_THRESHOLD");
     expect(html).toContain("DEFAULT_FRONT_AIM_CENTER_X");

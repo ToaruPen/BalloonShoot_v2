@@ -16,6 +16,7 @@ import { renderFrontAimPanel } from "./renderFrontAimPanel";
 import { renderFusionPanel } from "./renderFusionPanel";
 import { renderFusionTuningControls } from "./renderFusionTuningControls";
 import { renderSideTriggerCalibrationControls } from "./renderSideTriggerCalibrationControls";
+import { renderSideTriggerAdaptiveCalibrationPanel } from "./renderSideTriggerAdaptiveCalibrationPanel";
 import { renderSideTriggerPanel } from "./renderSideTriggerPanel";
 import { renderSideWorldLandmarks } from "./renderWorldLandmarks";
 import { renderTuningControls } from "./renderTuningControls";
@@ -223,6 +224,9 @@ const renderPreviewing = (
         ${renderSideTriggerPanel(
           inspection.sideTriggerFrame,
           inspection.sideTriggerTelemetry
+        )}
+        ${renderSideTriggerAdaptiveCalibrationPanel(
+          inspection.sideTriggerAdaptiveCalibration
         )}`
       )}
     </div>

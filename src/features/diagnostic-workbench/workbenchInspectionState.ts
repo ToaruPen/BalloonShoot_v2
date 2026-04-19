@@ -18,6 +18,7 @@ import type {
 import type { FusionTuning } from "../input-fusion";
 import type { FrontAimCalibration } from "../front-aim";
 import type {
+  SideTriggerAdaptiveCalibrationTelemetry,
   SideTriggerCalibration,
   SideTriggerTuning
 } from "../side-trigger";
@@ -34,6 +35,7 @@ export interface WorkbenchInspectionState {
   readonly frontAimCalibration: FrontAimCalibration;
   readonly sideTriggerFrame: TriggerInputFrame | undefined;
   readonly sideTriggerTelemetry: SideTriggerTelemetry | undefined;
+  readonly sideTriggerAdaptiveCalibration?: SideTriggerAdaptiveCalibrationTelemetry;
   readonly sideTriggerCalibration: SideTriggerCalibration;
   readonly sideTriggerTuning: SideTriggerTuning;
   readonly fusionFrame: FusedGameInputFrame | undefined;

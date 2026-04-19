@@ -146,6 +146,7 @@ export const assembleTelemetryFrame = (
       triggerEdge: triggerEdgeFromInspection(state),
       laneHealth: state.sideLaneHealth
     },
+    sideTriggerAdaptiveCalibration: state.sideTriggerAdaptiveCalibration,
     fusion: state.fusionFrame
   };
 };
