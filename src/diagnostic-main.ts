@@ -7,6 +7,7 @@ import {
 import { renderWorkbenchHTML } from "./features/diagnostic-workbench/renderWorkbench";
 import { createLiveLandmarkInspection } from "./features/diagnostic-workbench/liveLandmarkInspection";
 import { createSessionRecorder } from "./features/diagnostic-workbench/recording/sessionRecorder";
+import { formatRecordingTimer } from "./features/diagnostic-workbench/renderRecordingControls";
 
 const root = document.querySelector<HTMLDivElement>("#diagnostic-app");
 
@@ -44,6 +45,19 @@ const render = (): void => {
   syncRecordingTimer();
 };
 
+const updateRecordingTimer = (): void => {
+  const timerElement = document.querySelector<HTMLElement>(
+    "[data-recording-timer]"
+  );
+  const recordingState = recorder.getState();
+
+  if (timerElement === null || recordingState.status !== "recording") {
+    return;
+  }
+
+  timerElement.textContent = formatRecordingTimer(recordingState.elapsedMs);
+};
+
 const syncRecordingTimer = (): void => {
   const isRecording = recorder.getState().status === "recording";
 
@@ -52,7 +66,7 @@ const syncRecordingTimer = (): void => {
     recordingTimerId === undefined &&
     typeof window.setInterval === "function"
   ) {
-    recordingTimerId = window.setInterval(render, 1000);
+    recordingTimerId = window.setInterval(updateRecordingTimer, 1000);
     return;
   }
 

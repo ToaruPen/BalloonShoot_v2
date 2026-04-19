@@ -17,8 +17,19 @@ describe("renderRecordingControls", () => {
     });
 
     expect(html).toContain('data-wb-action="stopRecording"');
-    expect(html).toMatch(/<span>Timer<\/span>\s*<strong>01:05<\/strong>/);
+    expect(html).toMatch(
+      /<span>Timer<\/span>\s*<strong[^>]*data-recording-timer[^>]*>01:05<\/strong>/
+    );
     expect(html).toMatch(/<span>Status<\/span>\s*<strong>recording<\/strong>/);
+  });
+
+  it("renders disabled Preparing controls while capture startup is pending", () => {
+    const html = renderRecordingControls({ status: "starting" });
+
+    expect(html).toContain("<button");
+    expect(html).toContain("disabled");
+    expect(html).toContain("Preparing");
+    expect(html).toMatch(/<span>Status<\/span>\s*<strong>starting<\/strong>/);
   });
 
   it("renders disabled Saving controls while capture is being flushed", () => {

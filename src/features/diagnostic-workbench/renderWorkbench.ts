@@ -115,6 +115,8 @@ const renderDeviceSelection = (state: WorkbenchState): string => `
 const defaultInspectionState: WorkbenchInspectionState = {
   frontDetection: undefined,
   sideDetection: undefined,
+  frontFrameTimestamp: undefined,
+  sideFrameTimestamp: undefined,
   frontLaneHealth: "notStarted",
   sideLaneHealth: "notStarted",
   frontAimFrame: undefined,

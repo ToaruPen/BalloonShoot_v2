@@ -25,8 +25,8 @@ import type {
 export interface WorkbenchInspectionState {
   readonly frontDetection: FrontHandDetection | undefined;
   readonly sideDetection: SideHandDetection | undefined;
-  readonly frontFrameTimestamp?: FrameTimestamp;
-  readonly sideFrameTimestamp?: FrameTimestamp;
+  readonly frontFrameTimestamp: FrameTimestamp | undefined;
+  readonly sideFrameTimestamp: FrameTimestamp | undefined;
   readonly frontLaneHealth: LaneHealthStatus;
   readonly sideLaneHealth: LaneHealthStatus;
   readonly frontAimFrame: AimInputFrame | undefined;

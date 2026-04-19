@@ -93,6 +93,17 @@ const createFrame = (frameTimestampMs: number): TelemetryFrame => ({
   }
 });
 
+const createDeferred = <T>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, resolve, reject };
+};
+
 describe("createSessionRecorder", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -188,6 +199,37 @@ describe("createSessionRecorder", () => {
     expect(payload.frames).toHaveLength(1);
     expect(payload.frames[0]?.fusion.shotFired).toBe(true);
     expect(payload.frames[0]?.side.triggerEdge).toBe("shotCommitted");
+  });
+
+  it("serializes rapid start calls while the directory picker is pending", async () => {
+    const directory = new FakeFileSystemDirectoryHandle();
+    const directoryPicker = createDeferred<FileSystemDirectoryHandle>();
+    const requestDirectoryHandle = vi.fn(() => directoryPicker.promise);
+    const createVideoRecorder = vi.fn(() => ({
+      start: vi.fn(),
+      stop: vi.fn()
+    }));
+    const recorder = createSessionRecorder({
+      requestDirectoryHandle,
+      now: () => new Date("2026-04-19T08:30:15.000Z"),
+      createVideoRecorder
+    });
+    const startOptions = {
+      frontStream: { id: "front-stream" } as MediaStream,
+      sideStream: { id: "side-stream" } as MediaStream,
+      subscribeFrame: () => vi.fn()
+    };
+
+    const firstStart = recorder.start(startOptions);
+    const secondStart = recorder.start(startOptions);
+
+    expect(recorder.getState()).toEqual({ status: "starting" });
+    expect(requestDirectoryHandle).toHaveBeenCalledOnce();
+    directoryPicker.resolve(directory as unknown as FileSystemDirectoryHandle);
+    await Promise.all([firstStart, secondStart]);
+
+    expect(createVideoRecorder).toHaveBeenCalledTimes(2);
+    expect(recorder.getState().status).toBe("recording");
   });
 
   it("rotates telemetry JSON files to the newest ten after stop", async () => {

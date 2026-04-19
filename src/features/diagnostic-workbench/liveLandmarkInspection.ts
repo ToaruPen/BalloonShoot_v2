@@ -115,6 +115,8 @@ interface LaneTracking {
 const createInitialInspectionState = (): WorkbenchInspectionState => ({
   frontDetection: undefined,
   sideDetection: undefined,
+  frontFrameTimestamp: undefined,
+  sideFrameTimestamp: undefined,
   frontLaneHealth: "notStarted",
   sideLaneHealth: "notStarted",
   frontAimFrame: undefined,
@@ -297,8 +299,23 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       return;
     }
 
+    let subscriberIndex = 0;
+
     for (const subscriber of frameSubscribers) {
-      subscriber(frame);
+      try {
+        subscriber(frame);
+      } catch (error: unknown) {
+        console.error(
+          "Diagnostic telemetry subscriber failed",
+          {
+            subscriberIndex,
+            subscriberName: subscriber.name || "anonymous"
+          },
+          error
+        );
+      }
+
+      subscriberIndex += 1;
     }
   };
 

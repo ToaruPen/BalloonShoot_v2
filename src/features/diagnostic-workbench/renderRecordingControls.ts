@@ -1,7 +1,7 @@
 import { escapeHTML } from "../../shared/browser/escapeHTML";
 import type { RecordingState } from "./recording/sessionRecorder";
 
-const formatTimer = (elapsedMs: number): string => {
+export const formatRecordingTimer = (elapsedMs: number): string => {
   const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -13,6 +13,8 @@ const renderAction = (state: RecordingState): string => {
   switch (state.status) {
     case "recording":
       return `<button class="wb-btn wb-recording-stop" data-wb-action="stopRecording">Stop</button>`;
+    case "starting":
+      return `<button class="wb-btn wb-btn-secondary" disabled>Preparing</button>`;
     case "saving":
       return `<button class="wb-btn wb-btn-secondary" disabled>Saving</button>`;
     case "idle":
@@ -23,7 +25,7 @@ const renderAction = (state: RecordingState): string => {
 
 const renderTimer = (state: RecordingState): string =>
   state.status === "recording"
-    ? `<div class="wb-diagnostic-value"><span>Timer</span><strong>${escapeHTML(formatTimer(state.elapsedMs))}</strong></div>`
+    ? `<div class="wb-diagnostic-value"><span>Timer</span><strong data-recording-timer>${escapeHTML(formatRecordingTimer(state.elapsedMs))}</strong></div>`
     : "";
 
 const renderError = (state: RecordingState): string =>

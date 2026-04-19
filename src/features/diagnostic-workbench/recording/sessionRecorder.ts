@@ -2,10 +2,11 @@ import { telemetryJsonFilesToDelete } from "./jsonRotation";
 import { createStreamRecorder, type StreamRecorder } from "./streamRecorder";
 import type { TelemetryFrame, TelemetrySessionJson } from "./telemetryFrame";
 
-type RecordingStatus = "idle" | "recording" | "saving" | "error";
+type RecordingStatus = "idle" | "starting" | "recording" | "saving" | "error";
 
 export type RecordingState =
   | { readonly status: Extract<RecordingStatus, "idle"> }
+  | { readonly status: Extract<RecordingStatus, "starting"> }
   | {
       readonly status: Extract<RecordingStatus, "recording">;
       readonly elapsedMs: number;
@@ -247,9 +248,11 @@ export const createSessionRecorder = ({
     },
 
     async start(options) {
-      if (state.status === "recording" || state.status === "saving") {
+      if (state.status !== "idle") {
         return;
       }
+
+      setState({ status: "starting" });
 
       try {
         directoryHandle = await ensureWritableDirectory(

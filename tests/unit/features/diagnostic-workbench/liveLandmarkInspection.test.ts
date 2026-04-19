@@ -1131,6 +1131,61 @@ describe("createLiveLandmarkInspection", () => {
     });
   });
 
+  it("keeps lane tracking and notifies later subscribers when a telemetry subscriber throws", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const frontTracker = createFakeTracker();
+    const sideTracker = createFakeTracker();
+    frontTracker.detect.mockResolvedValueOnce(createHandDetection());
+    sideTracker.detect.mockResolvedValueOnce(
+      createHandDetectionWithWorld(openWorldLandmarks())
+    );
+    createMediaPipeHandTrackerMock
+      .mockResolvedValueOnce(frontTracker)
+      .mockResolvedValueOnce(sideTracker);
+    const liveInspection = createLiveLandmarkInspection();
+    const videos = installPreviewVideos();
+    const throwingSubscriber = vi.fn(() => {
+      throw new Error("subscriber failed");
+    });
+    const laterSubscriber = vi.fn();
+
+    liveInspection.sync({
+      screen: "previewing",
+      devices: [],
+      frontAssignment: undefined,
+      sideAssignment: undefined,
+      frontStream: createPinnedStream("front-id"),
+      sideStream: createPinnedStream("side-id"),
+      error: undefined
+    });
+    videos.frontVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
+    await vi.waitFor(() => {
+      expect(liveInspection.getState().frontAimFrame).toBeDefined();
+    });
+
+    liveInspection.subscribeFrame(throwingSubscriber);
+    liveInspection.subscribeFrame(laterSubscriber);
+    videos.sideVideo.fireFrame({ captureTime: 112, presentedFrames: 1 });
+
+    await vi.waitFor(() => {
+      expect(laterSubscriber).toHaveBeenCalledOnce();
+    });
+    expect(liveInspection.getState().sideLaneHealth).toBe("tracking");
+    expect(consoleError).toHaveBeenCalledWith(
+      "Diagnostic telemetry subscriber failed",
+      expect.objectContaining({
+        subscriberIndex: 0
+      }),
+      expect.any(Error)
+    );
+    const subscriberLog = consoleError.mock.calls[0]?.[1] as
+      | { readonly subscriberName?: unknown }
+      | undefined;
+    expect(typeof subscriberLog?.subscriberName).toBe("string");
+  });
+
   it("shows timestamp gap reject reasons in fusion snapshots", async () => {
     const frontTracker = createFakeTracker();
     const sideTracker = createFakeTracker();
