@@ -189,6 +189,41 @@ describe("adaptive side-trigger calibration reducer", () => {
     expect(reset.geometrySignatureEma).toEqual(nextSignature);
   });
 
+  it("does not reset on geometry jump when frame quality is not good", () => {
+    const config = DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG;
+    const seeded = updateSideTriggerAdaptiveCalibration(
+      createInitialAdaptiveSideTriggerCalibrationState(config),
+      metric({ geometrySignature: signature(1, 1, 1) }),
+      config
+    );
+    const distortedSignature = signature(1.3, 1, 1);
+
+    const occluded = updateSideTriggerAdaptiveCalibration(
+      seeded,
+      metric({
+        timestampMs: 1016,
+        sideViewQuality: "tooOccluded",
+        geometrySignature: distortedSignature
+      }),
+      config
+    );
+    const frontLike = updateSideTriggerAdaptiveCalibration(
+      seeded,
+      metric({
+        timestampMs: 1016,
+        sideViewQuality: "frontLike",
+        geometrySignature: distortedSignature
+      }),
+      config
+    );
+
+    for (const next of [occluded, frontLike]) {
+      expect(next.lastResetReason).toBeUndefined();
+      expect(next.geometrySignatureEma).toEqual(seeded.geometrySignatureEma);
+      expect(next.sampleCount).toBe(seeded.sampleCount);
+    }
+  });
+
   it("applies the five quality-gate cases", () => {
     const config = DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG;
     const initial = createInitialAdaptiveSideTriggerCalibrationState(config);

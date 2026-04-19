@@ -355,6 +355,8 @@ const resetReasonFor = (
     return "handLoss";
   }
   if (
+    metric.handDetected &&
+    metric.sideViewQuality === "good" &&
     metric.geometrySignature !== undefined &&
     state.geometrySignatureEma !== undefined &&
     detectGeometryJumpAndUpdateEma(
