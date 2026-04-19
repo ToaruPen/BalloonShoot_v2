@@ -33,8 +33,8 @@ export const renderSideTriggerAdaptiveCalibrationPanel = (
         ${renderValue("sample window", `${String(telemetry.sampleCount)} / ${String(telemetry.windowSize)}`)}
         ${renderValue("pulled calibrated", formatNumber(telemetry.pulledCalibrated))}
         ${renderValue("open calibrated", formatNumber(telemetry.openCalibrated))}
-        ${renderValue("observed p10", formatNumber(telemetry.observedPulledP10))}
-        ${renderValue("observed p90", formatNumber(telemetry.observedOpenP90))}
+        ${renderValue("observed pulled percentile", formatNumber(telemetry.observedPulledP10))}
+        ${renderValue("observed open percentile", formatNumber(telemetry.observedOpenP90))}
         ${renderValue("last reset", telemetry.lastResetReason ?? "none")}
         ${renderValue("reset timestamp", formatNumber(telemetry.lastResetTimestampMs))}
         ${renderValue("ema wrist-index", formatNumber(ema?.wristToIndexMcp))}

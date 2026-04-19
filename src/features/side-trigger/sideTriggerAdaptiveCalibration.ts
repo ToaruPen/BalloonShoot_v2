@@ -18,6 +18,8 @@ export interface AdaptiveSideTriggerCalibrationConfig {
   readonly geometryEmaAlpha: number;
   readonly pulledLowerBound: number;
   readonly openUpperBound: number;
+  readonly pulledPercentile: number;
+  readonly openPercentile: number;
   readonly pulledOpenMinSpan: number;
   readonly initialPulled: number;
   readonly initialOpen: number;
@@ -72,6 +74,8 @@ export const DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG: AdaptiveSideTrigg
     geometryEmaAlpha: 0.1,
     pulledLowerBound: 0,
     openUpperBound: 1.2,
+    pulledPercentile: 0.2,
+    openPercentile: 0.8,
     pulledOpenMinSpan: MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN,
     initialPulled: INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE,
     initialOpen: INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE
@@ -100,6 +104,8 @@ const assertFiniteConfig = (
     ["geometryEmaAlpha", config.geometryEmaAlpha],
     ["pulledLowerBound", config.pulledLowerBound],
     ["openUpperBound", config.openUpperBound],
+    ["pulledPercentile", config.pulledPercentile],
+    ["openPercentile", config.openPercentile],
     ["pulledOpenMinSpan", config.pulledOpenMinSpan],
     ["initialPulled", config.initialPulled],
     ["initialOpen", config.initialOpen]
@@ -155,6 +161,20 @@ const assertBoundConfig = (
   }
 };
 
+const assertPercentileConfig = (
+  config: AdaptiveSideTriggerCalibrationConfig
+): void => {
+  if (config.pulledPercentile <= 0) {
+    throw new Error("pulledPercentile must be > 0.");
+  }
+  if (config.openPercentile >= 1) {
+    throw new Error("openPercentile must be < 1.");
+  }
+  if (config.pulledPercentile >= config.openPercentile) {
+    throw new Error("pulledPercentile must be < openPercentile.");
+  }
+};
+
 const assertInitialConfig = (
   config: AdaptiveSideTriggerCalibrationConfig
 ): void => {
@@ -184,6 +204,7 @@ export const assertAdaptiveCalibrationConfig = (
   assertFiniteConfig(config);
   assertPositiveConfig(config);
   assertBoundConfig(config);
+  assertPercentileConfig(config);
   assertInitialConfig(config);
 };
 
@@ -280,8 +301,14 @@ const stateWithSamples = (
   samples: readonly AdaptiveSampleEntry[],
   config: AdaptiveSideTriggerCalibrationConfig
 ): AdaptiveSideTriggerCalibrationState => {
-  const observedPulledP10 = percentileNearestRank(samples, 0.1);
-  const observedOpenP90 = percentileNearestRank(samples, 0.9);
+  const observedPulledP10 = percentileNearestRank(
+    samples,
+    config.pulledPercentile
+  );
+  const observedOpenP90 = percentileNearestRank(
+    samples,
+    config.openPercentile
+  );
   const status = statusFor(samples.length, config);
 
   if (observedPulledP10 === undefined || observedOpenP90 === undefined) {

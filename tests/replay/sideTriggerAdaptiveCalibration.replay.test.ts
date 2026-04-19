@@ -170,11 +170,11 @@ describe("adaptive side-trigger calibration captured replay", () => {
       console.info(
         `side-trigger adaptive replay: static=${String(staticResult.commits)}, adaptive=${String(adaptiveResult.commits)}, releases=${String(adaptiveResult.releases)}`
       );
-      expect(adaptiveResult.commits).toBeGreaterThanOrEqual(13);
+      expect(adaptiveResult.commits).toBeGreaterThanOrEqual(16);
       expect(adaptiveResult.commits).toBeGreaterThan(staticResult.commits);
-      if (adaptiveResult.commits < 18) {
+      if (adaptiveResult.commits < 19) {
         console.warn(
-          `adaptive replay target warning: expected >=18 long-run target commits, received ${String(adaptiveResult.commits)}`
+          `adaptive replay target warning: expected >=19 long-run target commits, received ${String(adaptiveResult.commits)}`
         );
       }
     }
