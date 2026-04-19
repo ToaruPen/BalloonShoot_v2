@@ -138,6 +138,28 @@ describe("adaptive side-trigger calibration reducer", () => {
     expect(open(state)).toBeCloseTo(0.7);
   });
 
+  it("allows asymmetric configured percentiles (sum is not required to be 1)", () => {
+    const config: AdaptiveSideTriggerCalibrationConfig = {
+      ...DEFAULT_ADAPTIVE_SIDE_TRIGGER_CALIBRATION_CONFIG,
+      windowSamples: 10,
+      warmupSamples: 1,
+      pulledPercentile: 0.2,
+      openPercentile: 0.85
+    };
+
+    expect(() => { assertAdaptiveCalibrationConfig(config); }).not.toThrow();
+
+    const state = feed(
+      [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+      config
+    );
+
+    expect(state.observedPulledP10).toBe(0.2);
+    expect(state.observedOpenP90).toBe(0.9);
+    expect(pulled(state)).toBeCloseTo(0.2);
+    expect(open(state)).toBeCloseTo(0.9);
+  });
+
   it("clamps observed endpoints to bounds without widening valid observed spans", () => {
     const lowerClamped = feed([
       ...Array.from({ length: 6 }, () => -0.2),
