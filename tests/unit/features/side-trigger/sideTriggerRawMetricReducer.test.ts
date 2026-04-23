@@ -13,9 +13,9 @@ describe("reduceSideTriggerRawMetric", () => {
       normalizedThumbDistance: undefined, geometrySignature: undefined,
     };
     const result = reduceSideTriggerRawMetric(input);
-    expect(result).toEqual<RawMetric>({
-      kind: "unusable", timestampMs: 1000, sourceKey: undefined, reason: "noHand",
-    });
+    expect(result).toEqual({
+      kind: "unusable", timestampMs: 1000, reason: "noHand",
+    } satisfies RawMetric);
   });
 
   it("quality が frontLike の場合 sideViewQualityRejected", () => {
