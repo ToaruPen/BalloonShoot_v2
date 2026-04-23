@@ -35,9 +35,9 @@ import {
 import { drawGameFrame } from "../features/rendering/drawGameFrame";
 import {
   balloonAnimationFrameIndex,
-  loadBalloonSprites,
   type BalloonSprites
-} from "../features/rendering/loadBalloonSprites";
+} from "../features/rendering/balloonSpriteUtils";
+import { loadBalloonSprites } from "./loadBalloonSpritesAdapter";
 import type { Balloon } from "../features/gameplay/domain/balloon";
 import {
   createGameEngine,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { balloonAnimationFrameIndex } from "../../../../src/features/rendering/loadBalloonSprites";
+import { balloonAnimationFrameIndex } from "../../../../src/features/rendering/balloonSpriteUtils";
 
 describe("balloonAnimationFrameIndex", () => {
   it("returns 0 when frame count is 0", () => {
@@ -19,8 +19,7 @@ describe("balloonAnimationFrameIndex", () => {
   });
 
   it("handles negative time inputs without producing a negative index", () => {
-    const value = balloonAnimationFrameIndex(-1, 5);
-    expect(value).toBeGreaterThanOrEqual(0);
-    expect(value).toBeLessThan(5);
+    expect(balloonAnimationFrameIndex(-1, 5)).toBe(4);
+    expect(balloonAnimationFrameIndex(-121, 5)).toBe(3);
   });
 });

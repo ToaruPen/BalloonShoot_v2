@@ -1,6 +1,4 @@
-export interface BalloonSprites {
-  readonly frames: readonly HTMLImageElement[];
-}
+import type { BalloonSprites } from "../features/rendering/balloonSpriteUtils";
 
 const FRAME_PATHS = [
   "/images/balloons/rising/0.png",
@@ -13,10 +11,18 @@ const FRAME_PATHS = [
 const loadImage = (path: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
     const image = new Image();
-    image.addEventListener("load", () => { resolve(image); }, { once: true });
+    image.addEventListener(
+      "load",
+      () => {
+        resolve(image);
+      },
+      { once: true }
+    );
     image.addEventListener(
       "error",
-      () => { reject(new Error(`Failed to load balloon sprite: ${path}`)); },
+      () => {
+        reject(new Error(`Failed to load balloon sprite: ${path}`));
+      },
       { once: true }
     );
     image.src = path;
@@ -25,19 +31,4 @@ const loadImage = (path: string): Promise<HTMLImageElement> =>
 export const loadBalloonSprites = async (): Promise<BalloonSprites> => {
   const frames = await Promise.all(FRAME_PATHS.map(loadImage));
   return { frames };
-};
-
-const ANIMATION_FRAME_INTERVAL_MS = 120;
-
-export const balloonAnimationFrameIndex = (
-  nowMs: number,
-  frameCount: number
-): number => {
-  if (frameCount <= 0) {
-    return 0;
-  }
-
-  const tick = Math.floor(nowMs / ANIMATION_FRAME_INTERVAL_MS);
-  const wrapped = ((tick % frameCount) + frameCount) % frameCount;
-  return wrapped;
 };

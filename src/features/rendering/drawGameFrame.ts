@@ -1,5 +1,5 @@
 import type { Balloon } from "../gameplay/domain/balloon";
-import type { BalloonSprites } from "./loadBalloonSprites";
+import type { BalloonSprites } from "./balloonSpriteUtils";
 
 interface DrawState {
   balloons: Balloon[];
@@ -62,10 +62,13 @@ export const drawGameFrame = (
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
   const frames = state.balloonSprites?.frames;
-  const frameIndex = state.balloonFrameIndex ?? 0;
+  const rawFrameIndex = state.balloonFrameIndex ?? 0;
+  const safeFrameIndex = Number.isFinite(rawFrameIndex)
+    ? Math.trunc(rawFrameIndex)
+    : 0;
   const sprite =
     frames !== undefined && frames.length > 0
-      ? frames[frameIndex % frames.length]
+      ? frames[((safeFrameIndex % frames.length) + frames.length) % frames.length]
       : undefined;
 
   for (const balloon of state.balloons) {

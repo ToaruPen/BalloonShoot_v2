@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { drawGameFrame } from "../../../../src/features/rendering/drawGameFrame";
-import type { BalloonSprites } from "../../../../src/features/rendering/loadBalloonSprites";
+import type { BalloonSprites } from "../../../../src/features/rendering/balloonSpriteUtils";
 
 const createMockContext = (operations: string[]): CanvasRenderingContext2D =>
   ({
@@ -133,7 +133,27 @@ describe("drawGameFrame", () => {
     });
 
     const drawImageEntry = operations.find((op) => op.startsWith("drawImage:"));
+    expect(drawImageEntry).toBeDefined();
     expect(drawImageEntry).toContain("frame1");
+  });
+
+  it("normalizes invalid balloonFrameIndex values before selecting a sprite", () => {
+    const operations: string[] = [];
+    const ctx = createMockContext(operations);
+    const sprites = createMockSprites(["frame0", "frame1", "frame2"]);
+
+    drawGameFrame(ctx, {
+      balloons: [
+        { id: "b1", x: 200, y: 300, radius: 50, vy: 36, size: "normal", alive: true }
+      ],
+      crosshair: undefined,
+      balloonSprites: sprites,
+      balloonFrameIndex: Number.NaN
+    });
+
+    const drawImageEntry = operations.find((op) => op.startsWith("drawImage:"));
+    expect(drawImageEntry).toBeDefined();
+    expect(drawImageEntry).toContain("frame0");
   });
 
   it("draws shot and hit effects without mutating balloons", () => {
