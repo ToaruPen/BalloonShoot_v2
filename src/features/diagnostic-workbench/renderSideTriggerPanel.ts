@@ -1,5 +1,6 @@
 import { escapeHTML } from "../../shared/browser/escapeHTML";
 import type {
+  SideTriggerPhase,
   SideTriggerTelemetry,
   TriggerInputFrame
 } from "../../shared/types/trigger";
@@ -15,6 +16,45 @@ const renderValue = (label: string, value: string): string => `
     <strong>${escapeHTML(value)}</strong>
   </div>
 `;
+
+type ThumbState = "up" | "pulling" | "down" | "releasing" | "unknown";
+
+const deriveThumbState = (phase: SideTriggerPhase | undefined): ThumbState => {
+  switch (phase) {
+    case "SideTriggerOpenReady":
+      return "up";
+    case "SideTriggerPullCandidate":
+      return "pulling";
+    case "SideTriggerPulledLatched":
+    case "SideTriggerCooldown":
+      return "down";
+    case "SideTriggerReleaseCandidate":
+      return "releasing";
+    case "SideTriggerNoHand":
+    case "SideTriggerPoseSearching":
+    case "SideTriggerRecoveringAfterLoss":
+    case undefined:
+    default:
+      return "unknown";
+  }
+};
+
+const THUMB_STATE_LABEL: Record<ThumbState, string> = {
+  up: "親指 UP (open)",
+  pulling: "親指 ↓ pulling",
+  down: "親指 DOWN (pulled)",
+  releasing: "親指 ↑ releasing",
+  unknown: "親指 —"
+};
+
+const renderThumbStateBadge = (phase: SideTriggerPhase | undefined): string => {
+  const state = deriveThumbState(phase);
+  return `
+    <p class="wb-thumb-state wb-thumb-state--${state}" data-thumb-state="${state}">
+      ${escapeHTML(THUMB_STATE_LABEL[state])}
+    </p>
+  `;
+};
 
 export const renderSideTriggerPanel = (
   triggerFrame: TriggerInputFrame | undefined,
@@ -45,6 +85,7 @@ export const renderSideTriggerPanel = (
   return `
     <section class="wb-trigger-panel" id="wb-side-trigger-panel">
       <h4>サイド trigger evidence</h4>
+      ${renderThumbStateBadge(phase)}
       ${shotCommitted}
       <div class="wb-trigger-grid">
         ${renderValue("phase", phase ?? "unavailable")}
