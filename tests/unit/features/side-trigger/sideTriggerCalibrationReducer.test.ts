@@ -173,4 +173,22 @@ describe("calibrationReducer stableOpen assist + manualOverride", () => {
     expect(result.pulled).toBe(0.2);
     expect(result.open).toBe(1.2);
   });
+
+  it("manualOverride 復帰後の最初の cycle は EMA ではなく直接 set", () => {
+    const reset = updateCalibrationReducer(createInitialCalibrationState(), {
+      resetSignal: "manualOverrideEntered",
+      sliderInDefaultRange: false
+    });
+    const { result } = updateCalibrationReducer(reset.state, {
+      confirmedCycleEvent: evt({
+        pulledMedian: 0.3,
+        openPreMedian: 1.0,
+        openPostMedian: 1.0
+      }),
+      sliderInDefaultRange: true
+    });
+    expect(result.status).toBe("cycleReady");
+    expect(result.pulled).toBeCloseTo(0.3);
+    expect(result.open).toBeCloseTo(1.0);
+  });
 });

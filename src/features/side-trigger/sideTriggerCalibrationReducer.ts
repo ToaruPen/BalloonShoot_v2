@@ -95,7 +95,7 @@ const reduceConfirmedCycleEvent = (
     };
   }
   const avgOpen = (ev.openPreMedian + ev.openPostMedian) / 2;
-  if (state.status === "defaultWide") {
+  if (state.status === "defaultWide" || state.status === "manualOverride") {
     const nextState: CalibrationReducerState = {
       status: "cycleReady",
       pulled: ev.pulledMedian,
