@@ -18,6 +18,18 @@ describe("reduceSideTriggerRawMetric", () => {
     } satisfies RawMetric);
   });
 
+  it("sourceKey がある noHand は sourceKey を保持する", () => {
+    const input: SideTriggerRawMetric = {
+      sourceKey: "dev:stream", timestampMs: 1000,
+      handDetected: false, sideViewQuality: "lost",
+      normalizedThumbDistance: undefined, geometrySignature: undefined,
+    };
+    const result = reduceSideTriggerRawMetric(input);
+    expect(result).toEqual({
+      kind: "unusable", timestampMs: 1000, sourceKey: "dev:stream", reason: "noHand",
+    } satisfies RawMetric);
+  });
+
   it("quality が frontLike の場合 sideViewQualityRejected", () => {
     const input: SideTriggerRawMetric = {
       sourceKey: "dev:stream", timestampMs: 1000,
@@ -51,6 +63,18 @@ describe("reduceSideTriggerRawMetric", () => {
     const result = reduceSideTriggerRawMetric(input);
     expect(result).toEqual<RawMetric>({
       kind: "unusable", timestampMs: 1000, sourceKey: "dev:stream", reason: "geometryUnavailable",
+    });
+  });
+
+  it("handDetected=true で timestampMs が欠損した場合 metadataIncomplete", () => {
+    const input: SideTriggerRawMetric = {
+      sourceKey: "dev:stream", timestampMs: undefined,
+      handDetected: true, sideViewQuality: "good",
+      normalizedThumbDistance: 0.5, geometrySignature: geometry,
+    };
+    const result = reduceSideTriggerRawMetric(input);
+    expect(result).toEqual<RawMetric>({
+      kind: "unusable", sourceKey: "dev:stream", reason: "metadataIncomplete",
     });
   });
 

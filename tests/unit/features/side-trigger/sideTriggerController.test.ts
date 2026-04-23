@@ -8,13 +8,18 @@ import type {
 
 const makeDetection = (
   timestampMs: number,
-  thumbDistance: number
+  thumbDistance: number,
+  options: {
+    readonly streamId?: string;
+    readonly geometryScale?: number;
+  } = {}
 ): SideHandDetection => {
+  const geometryScale = options.geometryScale ?? 1;
   const wrist = { x: 0, y: 0, z: 0 };
-  const thumbTip = { x: thumbDistance, y: 0, z: 0 };
-  const indexMcp = { x: 1, y: 0, z: 0 };
-  const middleMcp = { x: 1, y: 0.1, z: 0 };
-  const pinkyMcp = { x: 1, y: 0.3, z: 0 };
+  const thumbTip = { x: thumbDistance * geometryScale, y: 0, z: 0 };
+  const indexMcp = { x: geometryScale, y: 0, z: 0 };
+  const middleMcp = { x: 0, y: 0, z: 0 };
+  const pinkyMcp = { x: 0, y: geometryScale * 0.3, z: 0 };
   const landmarks: HandLandmarkSet = {
     wrist,
     thumbIp: thumbTip,
@@ -30,7 +35,7 @@ const makeDetection = (
   return {
     laneRole: "sideTrigger",
     deviceId: "dev",
-    streamId: "stream",
+    streamId: options.streamId ?? "stream",
     timestamp: {
       frameTimestampMs: timestampMs,
       timestampSource: "performanceNowAtCallback",
@@ -53,6 +58,43 @@ const makeDetection = (
   };
 };
 
+const timestamp = (frameTimestampMs: number) => ({
+  frameTimestampMs,
+  timestampSource: "performanceNowAtCallback" as const,
+  presentedFrames: undefined,
+  receivedAtPerformanceMs: frameTimestampMs
+});
+
+const update = (
+  controller: ReturnType<typeof createSideTriggerController>,
+  timestampMs: number,
+  thumbDistance: number,
+  options?: Parameters<typeof makeDetection>[2]
+) =>
+  controller.update({
+    detection: makeDetection(timestampMs, thumbDistance, options),
+    tuning: defaultSideTriggerTuning,
+    sliderInDefaultRange: true
+  });
+
+const acceptCycleWithFinalPull = (
+  controller: ReturnType<typeof createSideTriggerController>
+) => {
+  for (let i = 0; i < 15; i++) {
+    update(controller, i * 30, 1.2);
+  }
+  update(controller, 450, 0.2);
+  update(controller, 470, 0.2);
+  update(controller, 510, 0.2);
+  update(controller, 550, 0.6);
+  update(controller, 590, 1.1);
+  update(controller, 630, 1.2);
+  update(controller, 670, 1.2);
+  update(controller, 710, 1.2);
+  update(controller, 750, 0.2);
+  return update(controller, 795, 0.2);
+};
+
 describe("sideTriggerController armed gate", () => {
   it("initial frame では armed=false、triggerEdge='none'", () => {
     const controller = createSideTriggerController();
@@ -63,6 +105,54 @@ describe("sideTriggerController armed gate", () => {
     });
     expect(out.controllerTelemetry.controllerArmed).toBe(false);
     expect(out.controllerTelemetry.triggerEdge).toBe("none");
+  });
+
+  it("armed=false: detection drives dwell counter but triggerEdge stays 'none'", () => {
+    const controller = createSideTriggerController();
+
+    update(controller, 0, 1.2);
+    update(controller, 16, 1.2);
+    update(controller, 32, 0.2);
+    const out = update(controller, 48, 0.2);
+
+    expect(out.controllerTelemetry.controllerArmed).toBe(false);
+    expect(out.controllerTelemetry.triggerEdge).toBe("none");
+    expect(out.triggerFrame?.triggerEdge).toBe("none");
+    expect(out.controllerTelemetry.fsmPhase).toBe("SideTriggerPullCandidate");
+    expect(out.controllerTelemetry.dwellFrameCounts.pullDwellFrames).toBe(2);
+  });
+
+  it("initial armed=false; after first accepted cycle telemetry shows controllerArmed=true", () => {
+    const controller = createSideTriggerController();
+
+    const out = acceptCycleWithFinalPull(controller);
+
+    expect(out.controllerTelemetry.controllerArmed).toBe(true);
+    expect(out.controllerTelemetry.justArmed).toBe(true);
+    expect(out.cycleEvent?.kind).toBe("accepted");
+  });
+
+  it("justArmed frame masks detection and triggerEdge even with strong pull pose", () => {
+    const controller = createSideTriggerController();
+
+    const out = acceptCycleWithFinalPull(controller);
+
+    expect(out.controllerTelemetry.justArmed).toBe(true);
+    expect(out.controllerTelemetry.triggerEdge).toBe("none");
+    expect(out.triggerFrame?.triggerEdge).toBe("none");
+  });
+
+  it("First accepted cycle → armed=true: next frame can immediately emit pull edge if dwell already satisfied", () => {
+    const controller = createSideTriggerController();
+
+    const justArmed = acceptCycleWithFinalPull(controller);
+    const out = update(controller, 811, 0.2);
+
+    expect(
+      justArmed.controllerTelemetry.dwellFrameCounts.pullDwellFrames
+    ).toBeGreaterThanOrEqual(defaultSideTriggerTuning.minPullDwellFrames);
+    expect(out.controllerTelemetry.controllerArmed).toBe(true);
+    expect(out.controllerTelemetry.triggerEdge).toBe("shotCommitted");
   });
 
   it("resetSignal=manualOverrideEntered frame では calibrationStatus=manualOverride、triggerEdge='none'", () => {
@@ -83,5 +173,41 @@ describe("sideTriggerController armed gate", () => {
     expect(out.controllerTelemetry.resetReason).toBe("manualOverrideEntered");
     expect(out.controllerTelemetry.calibrationStatus).toBe("manualOverride");
     expect(out.controllerTelemetry.triggerEdge).toBe("none");
+  });
+
+  it("handLoss reset (1500ms gap) sets calibrationStatus back to defaultWide", () => {
+    const controller = createSideTriggerController();
+    acceptCycleWithFinalPull(controller);
+
+    const out = controller.update({
+      detection: undefined,
+      tuning: defaultSideTriggerTuning,
+      timestamp: timestamp(2_295),
+      sliderInDefaultRange: true
+    });
+
+    expect(out.controllerTelemetry.resetReason).toBe("handLoss");
+    expect(out.controllerTelemetry.controllerArmed).toBe(false);
+    expect(out.controllerTelemetry.calibrationStatus).toBe("defaultWide");
+  });
+
+  it("geometryJump reset", () => {
+    const controller = createSideTriggerController();
+    update(controller, 0, 1.2);
+
+    const out = update(controller, 16, 1.2, { geometryScale: 2 });
+
+    expect(out.controllerTelemetry.resetReason).toBe("geometryJump");
+    expect(out.controllerTelemetry.controllerArmed).toBe(false);
+  });
+
+  it("sourceChanged reset", () => {
+    const controller = createSideTriggerController();
+    update(controller, 0, 1.2, { streamId: "stream-a" });
+
+    const out = update(controller, 16, 1.2, { streamId: "stream-b" });
+
+    expect(out.controllerTelemetry.resetReason).toBe("sourceChanged");
+    expect(out.controllerTelemetry.controllerArmed).toBe(false);
   });
 });

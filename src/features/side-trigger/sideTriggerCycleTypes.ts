@@ -32,6 +32,7 @@ export interface CycleSegmenterState {
   readonly baselineBuffer: readonly CycleSample[];
   readonly baselineWindowReady: boolean;
   readonly cycleStart?: { readonly timestampMs: number; readonly baselineAtStart: number };
+  readonly belowSinceMs?: number;
   readonly cycleSamples: readonly CycleSample[];
   readonly holdSamples: readonly CycleSample[];
   readonly pulledMedianFrozen?: number;

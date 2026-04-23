@@ -235,16 +235,17 @@ export const createSideTriggerController = (): SideTriggerController => {
         lastRejectedCycleReason = cal.result.rejectedCycleEvent.reason;
       }
 
-      // Use fresh calibration for inner FSM; mask detection with undefined if !armed
-      const effectiveDetection =
-        armed && !justArmed ? update.detection : undefined;
+      // Use fresh calibration for inner FSM; commit gating is applied after dwell
+      // accounting so unarmed frames still build pull timing state.
+      const commitArmed = armed && !justArmed;
       const innerResult = inner.update({
-        detection: effectiveDetection,
+        detection: update.detection,
         calibration: {
           openPose: { normalizedThumbDistance: calibrationState.open },
           pulledPose: { normalizedThumbDistance: calibrationState.pulled }
         },
         tuning: update.tuning,
+        commitArmed,
         ...(update.timestamp !== undefined ? { timestamp: update.timestamp } : {})
       });
 
@@ -288,14 +289,14 @@ export const createSideTriggerController = (): SideTriggerController => {
           : {}),
         pullEvidenceScalar: innerResult.telemetry.pullEvidenceScalar,
         fsmPhase: innerResult.telemetry.phase,
-        triggerEdge: armed && !justArmed ? innerResult.telemetry.edge : "none",
+        triggerEdge: commitArmed ? innerResult.telemetry.edge : "none",
         triggerAvailability: innerResult.telemetry.triggerAvailability,
         dwellFrameCounts: innerResult.telemetry.dwellFrameCounts
       };
 
-      // If justArmed, suppress edge in the trigger frame too
+      // If not commit-armed, suppress edge in the trigger frame too.
       const triggerFrame =
-        justArmed && innerResult.triggerFrame !== undefined
+        !commitArmed && innerResult.triggerFrame !== undefined
           ? { ...innerResult.triggerFrame, triggerEdge: "none" as const }
           : innerResult.triggerFrame;
 

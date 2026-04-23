@@ -25,6 +25,7 @@ interface SideTriggerMapperUpdate {
   readonly calibration: SideTriggerCalibration;
   readonly tuning: SideTriggerTuning;
   readonly timestamp?: FrameTimestamp;
+  readonly commitArmed?: boolean;
 }
 
 interface SideTriggerMapperResult {
@@ -130,14 +131,17 @@ export const createSideTriggerMapper = (): SideTriggerMapper => {
       const result = updateSideTriggerState(
         machineState,
         evidence,
-        update.tuning
+        update.tuning,
+        { commitArmed: update.commitArmed ?? true }
       );
       machineState = result.state;
+      const edge =
+        update.commitArmed === false ? ("none" as const) : result.edge;
 
       const triggerAvailability = availabilityFor(evidence, machineState);
       const telemetry = telemetryFor(
         machineState,
-        result.edge,
+        edge,
         evidence,
         update.calibration,
         triggerAvailability
@@ -150,7 +154,7 @@ export const createSideTriggerMapper = (): SideTriggerMapper => {
             : frameFor(
                 timestamp,
                 machineState,
-                result.edge,
+                edge,
                 evidence,
                 triggerAvailability
               ),

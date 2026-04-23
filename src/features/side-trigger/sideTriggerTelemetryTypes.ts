@@ -11,7 +11,8 @@ export type RawMetricUnusableReason =
   | "noHand"
   | "sideViewQualityRejected"
   | "noWorldLandmarks"
-  | "geometryUnavailable";
+  | "geometryUnavailable"
+  | "metadataIncomplete";
 
 export type ResetReason =
   | "handLoss"

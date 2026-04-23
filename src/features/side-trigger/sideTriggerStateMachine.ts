@@ -20,6 +20,10 @@ interface SideTriggerMachineResult {
   readonly edge: TriggerEdge;
 }
 
+interface SideTriggerMachineOptions {
+  readonly commitArmed?: boolean;
+}
+
 const zeroDwellFrameCounts = (): SideTriggerDwellFrameCounts => ({
   pullDwellFrames: 0,
   releaseDwellFrames: 0,
@@ -99,11 +103,12 @@ const noHandResult = (
 
 const enterPullCandidate = (
   previous: SideTriggerMachineState,
-  tuning: SideTriggerTuning
+  tuning: SideTriggerTuning,
+  commitArmed: boolean
 ): SideTriggerMachineResult => {
   const pullDwellFrames = 1;
 
-  if (pullDwellFrames >= tuning.minPullDwellFrames) {
+  if (pullDwellFrames >= tuning.minPullDwellFrames && commitArmed) {
     return result(
       {
         phase: "SideTriggerPulledLatched",
@@ -132,17 +137,18 @@ const enterPullCandidate = (
       }),
       lastRejectReason: undefined
     },
-    "pullStarted"
+    commitArmed ? "pullStarted" : "none"
   );
 };
 
 const enterReleaseCandidate = (
   previous: SideTriggerMachineState,
-  tuning: SideTriggerTuning
+  tuning: SideTriggerTuning,
+  commitArmed: boolean
 ): SideTriggerMachineResult => {
   const releaseDwellFrames = 1;
 
-  if (releaseDwellFrames >= tuning.minReleaseDwellFrames) {
+  if (releaseDwellFrames >= tuning.minReleaseDwellFrames && commitArmed) {
     return result(
       {
         phase: "SideTriggerCooldown",
@@ -206,14 +212,15 @@ const poseSearching = (
 const openReady = (
   previous: SideTriggerMachineState,
   evidence: SideTriggerEvidence,
-  tuning: SideTriggerTuning
+  tuning: SideTriggerTuning,
+  commitArmed: boolean
 ): SideTriggerMachineResult => {
   if (!poseUsable(evidence, tuning)) {
     return poseSearching(previous, evidence, tuning);
   }
 
   if (evidence.pullEvidenceScalar >= tuning.pullEnterThreshold) {
-    return enterPullCandidate(previous, tuning);
+    return enterPullCandidate(previous, tuning, commitArmed);
   }
 
   return result({
@@ -232,7 +239,8 @@ const openReady = (
 const pullCandidate = (
   previous: SideTriggerMachineState,
   evidence: SideTriggerEvidence,
-  tuning: SideTriggerTuning
+  tuning: SideTriggerTuning,
+  commitArmed: boolean
 ): SideTriggerMachineResult => {
   if (!poseUsable(evidence, tuning)) {
     return poseSearching(previous, evidence, tuning);
@@ -249,7 +257,7 @@ const pullCandidate = (
 
   const pullDwellFrames = previous.dwellFrameCounts.pullDwellFrames + 1;
 
-  if (pullDwellFrames >= tuning.minPullDwellFrames) {
+  if (pullDwellFrames >= tuning.minPullDwellFrames && commitArmed) {
     return result(
       {
         phase: "SideTriggerPulledLatched",
@@ -275,14 +283,15 @@ const pullCandidate = (
 const pulledLatched = (
   previous: SideTriggerMachineState,
   evidence: SideTriggerEvidence,
-  tuning: SideTriggerTuning
+  tuning: SideTriggerTuning,
+  commitArmed: boolean
 ): SideTriggerMachineResult => {
   if (!poseUsable(evidence, tuning)) {
     return result({ ...previous, lastRejectReason: evidence.rejectReason });
   }
 
   if (evidence.releaseEvidenceScalar >= tuning.releaseEnterThreshold) {
-    return enterReleaseCandidate(previous, tuning);
+    return enterReleaseCandidate(previous, tuning, commitArmed);
   }
 
   return result({
@@ -296,7 +305,8 @@ const pulledLatched = (
 const releaseCandidate = (
   previous: SideTriggerMachineState,
   evidence: SideTriggerEvidence,
-  tuning: SideTriggerTuning
+  tuning: SideTriggerTuning,
+  commitArmed: boolean
 ): SideTriggerMachineResult => {
   if (!poseUsable(evidence, tuning)) {
     return poseSearching(previous, evidence, tuning);
@@ -313,7 +323,7 @@ const releaseCandidate = (
 
   const releaseDwellFrames = previous.dwellFrameCounts.releaseDwellFrames + 1;
 
-  if (releaseDwellFrames >= tuning.minReleaseDwellFrames) {
+  if (releaseDwellFrames >= tuning.minReleaseDwellFrames && commitArmed) {
     return result(
       {
         phase: "SideTriggerCooldown",
@@ -367,7 +377,8 @@ const cooldown = (
 const recoveringAfterLoss = (
   previous: SideTriggerMachineState,
   evidence: SideTriggerEvidence,
-  tuning: SideTriggerTuning
+  tuning: SideTriggerTuning,
+  commitArmed: boolean
 ): SideTriggerMachineResult => {
   if (!poseUsable(evidence, tuning)) {
     return poseSearching(previous, evidence, tuning);
@@ -388,7 +399,7 @@ const recoveringAfterLoss = (
 
   if (previous.recoveringFromPhase === "SideTriggerReleaseCandidate") {
     if (evidence.releaseEvidenceScalar >= tuning.releaseExitThreshold) {
-      return enterReleaseCandidate(previous, tuning);
+      return enterReleaseCandidate(previous, tuning, commitArmed);
     }
 
     if (evidence.pullEvidenceScalar >= tuning.pullExitThreshold) {
@@ -424,8 +435,11 @@ const recoveringAfterLoss = (
 export const updateSideTriggerState = (
   previous: SideTriggerMachineState,
   evidence: SideTriggerEvidence,
-  tuning: SideTriggerTuning
+  tuning: SideTriggerTuning,
+  options: SideTriggerMachineOptions = {}
 ): SideTriggerMachineResult => {
+  const commitArmed = options.commitArmed ?? true;
+
   if (!evidence.sideHandDetected) {
     return noHandResult(previous, tuning, evidence.rejectReason);
   }
@@ -435,15 +449,15 @@ export const updateSideTriggerState = (
     case "SideTriggerPoseSearching":
       return poseSearching(previous, evidence, tuning);
     case "SideTriggerRecoveringAfterLoss":
-      return recoveringAfterLoss(previous, evidence, tuning);
+      return recoveringAfterLoss(previous, evidence, tuning, commitArmed);
     case "SideTriggerOpenReady":
-      return openReady(previous, evidence, tuning);
+      return openReady(previous, evidence, tuning, commitArmed);
     case "SideTriggerPullCandidate":
-      return pullCandidate(previous, evidence, tuning);
+      return pullCandidate(previous, evidence, tuning, commitArmed);
     case "SideTriggerPulledLatched":
-      return pulledLatched(previous, evidence, tuning);
+      return pulledLatched(previous, evidence, tuning, commitArmed);
     case "SideTriggerReleaseCandidate":
-      return releaseCandidate(previous, evidence, tuning);
+      return releaseCandidate(previous, evidence, tuning, commitArmed);
     case "SideTriggerCooldown":
       return cooldown(previous);
   }

@@ -3,6 +3,18 @@ import {
   createInitialCalibrationState,
   updateCalibrationReducer
 } from "../../../../src/features/side-trigger/sideTriggerCalibrationReducer";
+import {
+  CAL_ALPHA_OPEN_ASSIST,
+  CAL_ALPHA_OPEN_CYCLE,
+  CAL_ALPHA_PULL,
+  CAL_CYCLE_MAX_DURATION_MS,
+  CAL_CYCLE_MIN_INTERVAL_MS,
+  CAL_LAST_CYCLE_MAX_DEVIATION,
+  CAL_OPEN_MEDIAN_MAX_DEVIATION,
+  INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE,
+  INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE,
+  MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN
+} from "../../../../src/features/side-trigger/sideTriggerConstants";
 import type { ConfirmedCycleEvent } from "../../../../src/features/side-trigger/sideTriggerCycleTypes";
 
 const evt = (
@@ -20,8 +32,8 @@ describe("calibrationReducer defaultWide→cycleReady→adaptive", () => {
   it("initial は defaultWide (pulled=0.2, open=1.2)", () => {
     const state = createInitialCalibrationState();
     expect(state.status).toBe("defaultWide");
-    expect(state.pulled).toBe(0.2);
-    expect(state.open).toBe(1.2);
+    expect(state.pulled).toBe(INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE);
+    expect(state.open).toBe(INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE);
   });
 
   it("初 accepted cycle で cycleReady に遷移、直接値を set", () => {
@@ -59,8 +71,10 @@ describe("calibrationReducer defaultWide→cycleReady→adaptive", () => {
       sliderInDefaultRange: true
     });
     expect(result.status).toBe("adaptive");
-    expect(result.pulled).toBeCloseTo(0.3 + 0.1 * (0.4 - 0.3));
-    expect(result.open).toBeCloseTo(1.0 + 0.1 * (1.1 - 1.0));
+    expect(result.pulled).toBeCloseTo(0.3 + CAL_ALPHA_PULL * (0.4 - 0.3));
+    expect(result.open).toBeCloseTo(
+      1.0 + CAL_ALPHA_OPEN_CYCLE * (1.1 - 1.0)
+    );
   });
 });
 
@@ -68,9 +82,11 @@ describe("calibrationReducer sanity reject", () => {
   it("spanTooSmall: pulledMedian >= open - MIN_SPAN", () => {
     const { result } = updateCalibrationReducer(createInitialCalibrationState(), {
       confirmedCycleEvent: evt({
-        pulledMedian: 1.2,
-        openPreMedian: 1.2,
-        openPostMedian: 1.2
+        pulledMedian:
+          INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE -
+          MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN,
+        openPreMedian: INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE,
+        openPostMedian: INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE
       }),
       sliderInDefaultRange: true
     });
@@ -82,7 +98,7 @@ describe("calibrationReducer sanity reject", () => {
       confirmedCycleEvent: evt({
         pulledMedian: 0.3,
         openPreMedian: 1.0,
-        openPostMedian: 0.5
+        openPostMedian: 1.0 - CAL_OPEN_MEDIAN_MAX_DEVIATION - 0.01
       }),
       sliderInDefaultRange: true
     });
@@ -91,7 +107,7 @@ describe("calibrationReducer sanity reject", () => {
 
   it("durationTooLong: durationMs >= 1000", () => {
     const { result } = updateCalibrationReducer(createInitialCalibrationState(), {
-      confirmedCycleEvent: evt({ durationMs: 1500 }),
+      confirmedCycleEvent: evt({ durationMs: CAL_CYCLE_MAX_DURATION_MS }),
       sliderInDefaultRange: true
     });
     expect(result.rejectedCycleEvent?.reason).toBe("durationTooLong");
@@ -103,7 +119,9 @@ describe("calibrationReducer sanity reject", () => {
       sliderInDefaultRange: true
     });
     const { result } = updateCalibrationReducer(first.state, {
-      confirmedCycleEvent: evt({ timestampMs: 1100 }),
+      confirmedCycleEvent: evt({
+        timestampMs: 1000 + CAL_CYCLE_MIN_INTERVAL_MS - 1
+      }),
       sliderInDefaultRange: true
     });
     expect(result.rejectedCycleEvent?.reason).toBe("intervalTooShort");
@@ -115,10 +133,22 @@ describe("calibrationReducer sanity reject", () => {
       sliderInDefaultRange: true
     });
     const { result } = updateCalibrationReducer(first.state, {
-      confirmedCycleEvent: evt({ timestampMs: 1500, pulledMedian: 0.9 }),
+      confirmedCycleEvent: evt({
+        timestampMs: 1500,
+        pulledMedian: 0.3 + 0.3 * CAL_LAST_CYCLE_MAX_DEVIATION + 0.01
+      }),
       sliderInDefaultRange: true
     });
     expect(result.rejectedCycleEvent?.reason).toBe("medianDeviationFromLastAccepted");
+  });
+
+  it("invalidNumeric: NaN pulledMedian を reject", () => {
+    const { result } = updateCalibrationReducer(createInitialCalibrationState(), {
+      confirmedCycleEvent: evt({ pulledMedian: Number.NaN }),
+      sliderInDefaultRange: true
+    });
+
+    expect(result.rejectedCycleEvent?.reason).toBe("invalidNumeric");
   });
 });
 
@@ -136,7 +166,7 @@ describe("calibrationReducer stableOpen assist + manualOverride", () => {
       stableOpenObservation: { timestampMs: 2000, value: 1.2 },
       sliderInDefaultRange: true
     });
-    expect(result.open).toBeCloseTo(1.0 + 0.02 * (1.2 - 1.0));
+    expect(result.open).toBeCloseTo(1.0 + CAL_ALPHA_OPEN_ASSIST * (1.2 - 1.0));
   });
 
   it("defaultWide 中は stableOpen を無視", () => {
@@ -144,7 +174,25 @@ describe("calibrationReducer stableOpen assist + manualOverride", () => {
       stableOpenObservation: { timestampMs: 2000, value: 1.5 },
       sliderInDefaultRange: true
     });
-    expect(result.open).toBe(1.2);
+    expect(result.open).toBe(INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE);
+  });
+
+  it("Infinity stableOpen は状態を変更しない", () => {
+    const first = updateCalibrationReducer(createInitialCalibrationState(), {
+      confirmedCycleEvent: evt({
+        pulledMedian: 0.3,
+        openPreMedian: 1.0,
+        openPostMedian: 1.0
+      }),
+      sliderInDefaultRange: true
+    });
+    const { result, state } = updateCalibrationReducer(first.state, {
+      stableOpenObservation: { timestampMs: 2000, value: Number.POSITIVE_INFINITY },
+      sliderInDefaultRange: true
+    });
+
+    expect(result.open).toBe(first.state.open);
+    expect(state.open).toBe(first.state.open);
   });
 
   it("slider 外れたら manualOverride、cycle 更新停止", () => {
@@ -170,8 +218,8 @@ describe("calibrationReducer stableOpen assist + manualOverride", () => {
       sliderInDefaultRange: false
     });
     expect(result.status).toBe("manualOverride");
-    expect(result.pulled).toBe(0.2);
-    expect(result.open).toBe(1.2);
+    expect(result.pulled).toBe(INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE);
+    expect(result.open).toBe(INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE);
   });
 
   it("manualOverride 復帰後の最初の cycle は EMA ではなく直接 set", () => {

@@ -47,7 +47,7 @@ export const reduceSideTriggerRawMetric = (
   if (raw.geometrySignature === undefined)
     return buildUnusable(raw, "geometryUnavailable");
   if (raw.timestampMs === undefined || raw.sourceKey === undefined)
-    return buildUnusable(raw, "noHand");
+    return buildUnusable(raw, "metadataIncomplete");
   return {
     kind: "usable",
     timestampMs: raw.timestampMs,

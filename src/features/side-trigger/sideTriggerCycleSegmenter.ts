@@ -72,15 +72,9 @@ const openBranch = (
 ): CycleSegmenterUpdateResult => {
   const now = raw.timestampMs;
   const candidateBuffer = trimBaseline([...state.baselineBuffer, sample], now);
-  const baselineWindowReady =
-    state.baselineWindowReady || computeBaselineReady(candidateBuffer);
+  const baselineWindowReady = computeBaselineReady(candidateBuffer);
   if (baselineWindowReady) {
-    const baselineValue = median(
-      (state.baselineBuffer.length > 0
-        ? state.baselineBuffer
-        : candidateBuffer
-      ).map((s) => s.value)
-    );
+    const baselineValue = median(candidateBuffer.map((s) => s.value));
     if (raw.value <= baselineValue - CYCLE_DROP_THRESHOLD) {
       // Drop detected. Freeze baselineBuffer (spec: Drop/Hold/Recovery/PendingPostOpen 中は凍結).
       return {
@@ -89,6 +83,7 @@ const openBranch = (
           phase: "drop",
           baselineWindowReady,
           cycleStart: { timestampMs: now, baselineAtStart: baselineValue },
+          belowSinceMs: now,
           cycleSamples: [sample],
           holdSamples: [sample]
         },
@@ -125,12 +120,32 @@ const dropOrHoldBranch = (
     : state.holdSamples;
 
   if (state.phase === "drop") {
-    const dropStart = state.cycleStart?.timestampMs ?? now;
-    if (belowThreshold && now - dropStart >= CYCLE_HOLD_DURATION_MS) {
+    if (!belowThreshold) {
+      const baselineBuffer = trimBaseline([...state.baselineBuffer, sample], now);
+      return {
+        state: {
+          phase: "open",
+          baselineBuffer,
+          baselineWindowReady: computeBaselineReady(baselineBuffer),
+          cycleSamples: [],
+          holdSamples: [],
+          postOpenSamples: [],
+          lastStableOpenEmittedMs: state.lastStableOpenEmittedMs,
+          ...(state.lastConfirmedCycleAtMs !== undefined
+            ? { lastConfirmedCycleAtMs: state.lastConfirmedCycleAtMs }
+            : {})
+        },
+        result: { cyclePhase: "open" }
+      };
+    }
+
+    const belowSinceMs = state.belowSinceMs ?? now;
+    if (now - belowSinceMs >= CYCLE_HOLD_DURATION_MS) {
       return {
         state: {
           ...state,
           phase: "hold",
+          belowSinceMs,
           cycleSamples: nextCycleSamples,
           holdSamples: nextHoldSamples
         },
@@ -140,6 +155,7 @@ const dropOrHoldBranch = (
     return {
       state: {
         ...state,
+        belowSinceMs,
         cycleSamples: nextCycleSamples,
         holdSamples: nextHoldSamples
       },

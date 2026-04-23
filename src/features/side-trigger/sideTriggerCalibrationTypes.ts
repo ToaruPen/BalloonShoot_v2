@@ -1,3 +1,7 @@
+import {
+  INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE,
+  INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE
+} from "./sideTriggerConstants";
 import type { ConfirmedCycleEvent } from "./sideTriggerCycleTypes";
 import type { ControllerCalibrationStatus } from "./sideTriggerTelemetryTypes";
 
@@ -6,7 +10,8 @@ export type RejectedCycleReason =
   | "openMedianMismatch"
   | "durationTooLong"
   | "intervalTooShort"
-  | "medianDeviationFromLastAccepted";
+  | "medianDeviationFromLastAccepted"
+  | "invalidNumeric";
 
 export interface RejectedCycleDigest {
   readonly pulledMedian: number;
@@ -37,7 +42,7 @@ export interface CalibrationReducerState {
 
 export const createInitialCalibrationState = (): CalibrationReducerState => ({
   status: "defaultWide",
-  pulled: 0.2,
-  open: 1.2,
+  pulled: INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE,
+  open: INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE,
   manualOverrideActive: false
 });

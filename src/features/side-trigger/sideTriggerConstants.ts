@@ -23,12 +23,9 @@ export const CYCLE_RECOVERY_RATIO = 0.8;
 export const CYCLE_POST_OPEN_WINDOW_MS = 200;
 export const CYCLE_STABLE_OPEN_INTERVAL_MS = 500;
 
-export const CAL_DEFAULT_PULLED = 0.2;
-export const CAL_DEFAULT_OPEN = 1.2;
 export const CAL_ALPHA_PULL = 0.1;
 export const CAL_ALPHA_OPEN_CYCLE = 0.1;
 export const CAL_ALPHA_OPEN_ASSIST = 0.02;
-export const CAL_MIN_SPAN = 0.05;
 export const CAL_CYCLE_MIN_INTERVAL_MS = 200;
 export const CAL_CYCLE_MAX_DURATION_MS = 1000;
 export const CAL_OPEN_MEDIAN_MAX_DEVIATION = 0.3;

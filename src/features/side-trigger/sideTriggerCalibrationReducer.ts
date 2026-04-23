@@ -4,11 +4,11 @@ import {
   CAL_ALPHA_PULL,
   CAL_CYCLE_MAX_DURATION_MS,
   CAL_CYCLE_MIN_INTERVAL_MS,
-  CAL_DEFAULT_OPEN,
-  CAL_DEFAULT_PULLED,
   CAL_LAST_CYCLE_MAX_DEVIATION,
-  CAL_MIN_SPAN,
-  CAL_OPEN_MEDIAN_MAX_DEVIATION
+  CAL_OPEN_MEDIAN_MAX_DEVIATION,
+  INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE,
+  INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE,
+  MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN
 } from "./sideTriggerConstants";
 import type {
   CalibrationReducerState,
@@ -41,7 +41,17 @@ const evaluateSanity = (
   state: CalibrationReducerState,
   effectiveOpen: number
 ): RejectedCycleReason | undefined => {
-  if (ev.pulledMedian >= effectiveOpen - CAL_MIN_SPAN) return "spanTooSmall";
+  if (
+    !Number.isFinite(ev.timestampMs) ||
+    !Number.isFinite(ev.pulledMedian) ||
+    !Number.isFinite(ev.openPreMedian) ||
+    !Number.isFinite(ev.openPostMedian) ||
+    !Number.isFinite(ev.durationMs)
+  ) {
+    return "invalidNumeric";
+  }
+  if (ev.pulledMedian >= effectiveOpen - MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN)
+    return "spanTooSmall";
   const diff = Math.abs(ev.openPreMedian - ev.openPostMedian);
   const maxOpen = Math.max(ev.openPreMedian, ev.openPostMedian);
   if (maxOpen > 0 && diff / maxOpen >= CAL_OPEN_MEDIAN_MAX_DEVIATION)
@@ -143,8 +153,8 @@ export const updateCalibrationReducer = (
     const toManualOverride = input.resetSignal === "manualOverrideEntered";
     const nextState: CalibrationReducerState = {
       status: toManualOverride ? "manualOverride" : "defaultWide",
-      pulled: CAL_DEFAULT_PULLED,
-      open: CAL_DEFAULT_OPEN,
+      pulled: INITIAL_SIDE_TRIGGER_PULLED_POSE_DISTANCE,
+      open: INITIAL_SIDE_TRIGGER_OPEN_POSE_DISTANCE,
       manualOverrideActive: toManualOverride
     };
     return {
@@ -174,6 +184,7 @@ export const updateCalibrationReducer = (
 
   if (
     input.stableOpenObservation !== undefined &&
+    Number.isFinite(input.stableOpenObservation.value) &&
     state.status !== "defaultWide" &&
     state.status !== "manualOverride"
   ) {
