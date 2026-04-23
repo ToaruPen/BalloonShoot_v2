@@ -14,7 +14,7 @@
 
 ### 新規作成
 
-```
+```text
 src/features/side-trigger/
   sideTriggerTelemetryTypes.ts               # ControllerTelemetry, CycleEventTelemetry, RawMetricUnusableReason, ResetReason
   sideTriggerCycleTypes.ts                   # CyclePhase, ConfirmedCycleEvent, CycleResult, CycleSegmenterState
@@ -39,7 +39,7 @@ tests/unit/features/side-trigger/
 
 ### 既存を修正
 
-```
+```text
 src/features/side-trigger/
   sideTriggerConstants.ts                    # r9 constants 追加 (DROP_THRESHOLD, HOLD_DURATION_MS, etc.)
   sideTriggerStateMachine.ts                 # armed=false 契約 + time-based hold 支援
@@ -54,7 +54,7 @@ src/features/diagnostic-workbench/
 
 ### 削除 (migration 完了後)
 
-```
+```text
 src/features/side-trigger/sideTriggerAdaptiveCalibration.ts          # r8 reducer
 tests/unit/features/side-trigger/sideTriggerAdaptiveCalibration.test.ts
 tests/replay/sideTriggerAdaptiveCalibration.replay.test.ts           # r9 replay test で置き換え
@@ -64,7 +64,7 @@ tests/replay/sideTriggerAdaptiveCalibration.replay.test.ts           # r9 replay
 
 ## Task 順序と依存関係
 
-```
+```text
 Task 1: Types (全 types を先に定義、type-only)
   ↓
 Task 2: RawMetricReducer

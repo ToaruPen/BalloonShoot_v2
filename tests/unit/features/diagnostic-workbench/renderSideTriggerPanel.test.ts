@@ -185,7 +185,7 @@ describe("renderSideTriggerPanel", () => {
     expect(html).toContain(`wb-thumb-state--${expectedState}`);
   });
 
-  it("renders thumb state badge as unknown when both inputs are missing", () => {
+  it("does not render thumb state badge when both inputs are missing", () => {
     const html = renderSideTriggerPanel(undefined, undefined);
 
     expect(html).not.toContain("data-thumb-state");
