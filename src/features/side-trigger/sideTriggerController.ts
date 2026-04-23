@@ -1,0 +1,342 @@
+import type { FrameTimestamp } from "../../shared/types/camera";
+import type { SideHandDetection } from "../../shared/types/hand";
+import type {
+  SideTriggerTelemetry,
+  TriggerInputFrame
+} from "../../shared/types/trigger";
+import { sideTriggerCalibrationStatusFor } from "./sideTriggerCalibration";
+import {
+  CTRL_GEOMETRY_EMA_ALPHA,
+  CTRL_GEOMETRY_JUMP_RATIO,
+  CTRL_HAND_LOSS_THRESHOLD_MS
+} from "./sideTriggerConstants";
+import type { SideTriggerTuning } from "./sideTriggerConfig";
+import {
+  createSideTriggerMapper,
+  type SideTriggerMapper
+} from "./createSideTriggerMapper";
+import {
+  createInitialCalibrationState,
+  updateCalibrationReducer
+} from "./sideTriggerCalibrationReducer";
+import {
+  createInitialCycleSegmenterState,
+  updateCycleSegmenter
+} from "./sideTriggerCycleSegmenter";
+import type { CalibrationReducerState } from "./sideTriggerCalibrationTypes";
+import type { CycleSegmenterState } from "./sideTriggerCycleTypes";
+import { extractSideTriggerRawMetric } from "./sideTriggerRawMetric";
+import type { SideTriggerHandGeometrySignature } from "./sideTriggerRawMetric";
+import { reduceSideTriggerRawMetric } from "./sideTriggerRawMetricReducer";
+import type {
+  ControllerTelemetry,
+  CycleEventTelemetry,
+  ResetReason
+} from "./sideTriggerTelemetryTypes";
+
+export interface SideTriggerControllerUpdate {
+  readonly detection: SideHandDetection | undefined;
+  readonly tuning: SideTriggerTuning;
+  readonly timestamp?: FrameTimestamp;
+  readonly sliderInDefaultRange: boolean;
+}
+
+export interface SideTriggerControllerResult {
+  readonly triggerFrame: TriggerInputFrame | undefined;
+  readonly telemetry: SideTriggerTelemetry;
+  readonly controllerTelemetry: ControllerTelemetry;
+  readonly cycleEvent?: CycleEventTelemetry;
+}
+
+export interface SideTriggerControllerSnapshot {
+  readonly armed: boolean;
+  readonly cycleState: CycleSegmenterState;
+  readonly calibrationState: CalibrationReducerState;
+  readonly baselineWindowReady: boolean;
+  readonly lastAcceptedCycleAtMs?: number;
+}
+
+export interface SideTriggerController {
+  update(update: SideTriggerControllerUpdate): SideTriggerControllerResult;
+  reset(): void;
+  getSnapshot(): SideTriggerControllerSnapshot;
+}
+
+const geometryJumpDetected = (
+  ema: SideTriggerHandGeometrySignature,
+  current: SideTriggerHandGeometrySignature
+): boolean => {
+  const ratios = [
+    Math.abs(current.wristToIndexMcp - ema.wristToIndexMcp) /
+      Math.max(ema.wristToIndexMcp, 0.001),
+    Math.abs(current.wristToMiddleMcp - ema.wristToMiddleMcp) /
+      Math.max(ema.wristToMiddleMcp, 0.001),
+    Math.abs(current.indexMcpToPinkyMcp - ema.indexMcpToPinkyMcp) /
+      Math.max(ema.indexMcpToPinkyMcp, 0.001)
+  ];
+  return Math.max(...ratios) > CTRL_GEOMETRY_JUMP_RATIO;
+};
+
+const updateGeometryEma = (
+  ema: SideTriggerHandGeometrySignature | undefined,
+  current: SideTriggerHandGeometrySignature
+): SideTriggerHandGeometrySignature => {
+  if (ema === undefined) return current;
+  const a = CTRL_GEOMETRY_EMA_ALPHA;
+  return {
+    wristToIndexMcp: (1 - a) * ema.wristToIndexMcp + a * current.wristToIndexMcp,
+    wristToMiddleMcp: (1 - a) * ema.wristToMiddleMcp + a * current.wristToMiddleMcp,
+    indexMcpToPinkyMcp:
+      (1 - a) * ema.indexMcpToPinkyMcp + a * current.indexMcpToPinkyMcp
+  };
+};
+
+export const createSideTriggerController = (): SideTriggerController => {
+  const inner: SideTriggerMapper = createSideTriggerMapper();
+  let cycleState: CycleSegmenterState = createInitialCycleSegmenterState();
+  let calibrationState: CalibrationReducerState = createInitialCalibrationState();
+  let armed = false;
+  let lastSourceKey: string | undefined;
+  let lastObservedHandTimestampMs: number | undefined;
+  let geometryEma: SideTriggerHandGeometrySignature | undefined;
+  let manualOverridePrev = false;
+  let lastAcceptedCycleAtMs: number | undefined;
+  let lastRejectedCycleReason:
+    | NonNullable<ControllerTelemetry["lastRejectedCycleReason"]>
+    | undefined;
+
+  const resetAll = (toManualOverride: boolean): void => {
+    cycleState = createInitialCycleSegmenterState();
+    const { state: nextCal } = updateCalibrationReducer(calibrationState, {
+      resetSignal: toManualOverride ? "manualOverrideEntered" : "handLoss",
+      sliderInDefaultRange: !toManualOverride
+    });
+    calibrationState = nextCal;
+    armed = false;
+    geometryEma = undefined;
+    lastAcceptedCycleAtMs = undefined;
+    lastRejectedCycleReason = undefined;
+    inner.reset();
+  };
+
+  return {
+    update(update) {
+      const timestampMs =
+        update.detection?.timestamp.frameTimestampMs ??
+        update.timestamp?.frameTimestampMs ??
+        0;
+      const rawLegacy = extractSideTriggerRawMetric(update.detection, {
+        timestampMs
+      });
+      const raw = reduceSideTriggerRawMetric(rawLegacy);
+
+      // Detect reset reason
+      let resetReason: ResetReason | undefined;
+      const currentSourceKey = rawLegacy.sourceKey;
+      if (
+        currentSourceKey !== undefined &&
+        lastSourceKey !== undefined &&
+        currentSourceKey !== lastSourceKey
+      ) {
+        resetReason = "sourceChanged";
+      } else if (
+        raw.kind === "usable" &&
+        geometryEma !== undefined &&
+        geometryJumpDetected(geometryEma, raw.geometrySignature)
+      ) {
+        resetReason = "geometryJump";
+      } else if (
+        lastObservedHandTimestampMs !== undefined &&
+        timestampMs - lastObservedHandTimestampMs >=
+          CTRL_HAND_LOSS_THRESHOLD_MS &&
+        raw.kind === "unusable"
+      ) {
+        resetReason = "handLoss";
+      } else if (!update.sliderInDefaultRange && !manualOverridePrev) {
+        resetReason = "manualOverrideEntered";
+      }
+
+      if (currentSourceKey !== undefined) lastSourceKey = currentSourceKey;
+      if (raw.kind === "usable") {
+        lastObservedHandTimestampMs = timestampMs;
+        geometryEma = updateGeometryEma(geometryEma, raw.geometrySignature);
+      }
+      manualOverridePrev = !update.sliderInDefaultRange;
+
+      if (resetReason !== undefined) {
+        resetAll(resetReason === "manualOverrideEntered");
+        // Inner reset returns a minimal trigger frame; skip FSM eval
+        const innerResult = inner.update({
+          detection: undefined,
+          calibration: {
+            openPose: { normalizedThumbDistance: calibrationState.open },
+            pulledPose: { normalizedThumbDistance: calibrationState.pulled }
+          },
+          tuning: update.tuning,
+          ...(update.timestamp !== undefined ? { timestamp: update.timestamp } : {})
+        });
+        const ctrlTelemetry: ControllerTelemetry = {
+          timestampMs,
+          rawMetricKind: raw.kind,
+          ...(raw.kind === "usable" ? { rawValue: raw.value } : {}),
+          ...(raw.kind === "unusable" && raw.reason
+            ? { rawUnusableReason: raw.reason }
+            : {}),
+          controllerArmed: false,
+          justArmed: false,
+          baselineWindowReady: false,
+          cyclePhase: "open",
+          calibrationStatus: calibrationState.status,
+          calibrationSnapshot: {
+            pulled: calibrationState.pulled,
+            open: calibrationState.open
+          },
+          pullEvidenceScalar: 0,
+          fsmPhase: "SideTriggerNoHand",
+          triggerEdge: "none",
+          triggerAvailability: "unavailable",
+          dwellFrameCounts: innerResult.telemetry.dwellFrameCounts,
+          resetReason
+        };
+        return {
+          triggerFrame: innerResult.triggerFrame,
+          telemetry: innerResult.telemetry,
+          controllerTelemetry: ctrlTelemetry
+        };
+      }
+
+      const cycle = updateCycleSegmenter(cycleState, raw);
+      cycleState = cycle.state;
+
+      const calInput: Parameters<typeof updateCalibrationReducer>[1] = {
+        sliderInDefaultRange: update.sliderInDefaultRange
+      };
+      if (cycle.result.confirmedCycleEvent !== undefined) {
+        (calInput as {
+          confirmedCycleEvent?: typeof cycle.result.confirmedCycleEvent;
+        }).confirmedCycleEvent = cycle.result.confirmedCycleEvent;
+      }
+      if (cycle.result.stableOpenObservation !== undefined) {
+        (calInput as {
+          stableOpenObservation?: typeof cycle.result.stableOpenObservation;
+        }).stableOpenObservation = cycle.result.stableOpenObservation;
+      }
+      const cal = updateCalibrationReducer(calibrationState, calInput);
+      calibrationState = cal.state;
+
+      let justArmed = false;
+      if (cal.result.acceptedCycleEvent && !armed) {
+        armed = true;
+        justArmed = true;
+      }
+      if (cal.result.acceptedCycleEvent) {
+        lastAcceptedCycleAtMs = cal.result.acceptedCycleEvent.timestampMs;
+      }
+      if (cal.result.rejectedCycleEvent) {
+        lastRejectedCycleReason = cal.result.rejectedCycleEvent.reason;
+      }
+
+      // Use fresh calibration for inner FSM; mask detection with undefined if !armed
+      const effectiveDetection =
+        armed && !justArmed ? update.detection : undefined;
+      const innerResult = inner.update({
+        detection: effectiveDetection,
+        calibration: {
+          openPose: { normalizedThumbDistance: calibrationState.open },
+          pulledPose: { normalizedThumbDistance: calibrationState.pulled }
+        },
+        tuning: update.tuning,
+        ...(update.timestamp !== undefined ? { timestamp: update.timestamp } : {})
+      });
+
+      let cycleEvent: CycleEventTelemetry | undefined;
+      if (cal.result.acceptedCycleEvent) {
+        const ev = cal.result.acceptedCycleEvent;
+        cycleEvent = {
+          kind: "accepted",
+          timestampMs: ev.timestampMs,
+          pulledMedian: ev.pulledMedian,
+          openPreMedian: ev.openPreMedian,
+          openPostMedian: ev.openPostMedian,
+          durationMs: ev.durationMs
+        };
+      } else if (cal.result.rejectedCycleEvent) {
+        cycleEvent = {
+          kind: "rejected",
+          timestampMs: timestampMs,
+          reason: cal.result.rejectedCycleEvent.reason,
+          cycleDigest: cal.result.rejectedCycleEvent.cycleDigest
+        };
+      }
+
+      const ctrlTelemetry: ControllerTelemetry = {
+        timestampMs,
+        rawMetricKind: raw.kind,
+        ...(raw.kind === "usable" ? { rawValue: raw.value } : {}),
+        ...(raw.kind === "unusable" && raw.reason
+          ? { rawUnusableReason: raw.reason }
+          : {}),
+        controllerArmed: armed,
+        justArmed,
+        baselineWindowReady: cycleState.baselineWindowReady,
+        cyclePhase: cycle.result.cyclePhase,
+        calibrationStatus: cal.result.status,
+        calibrationSnapshot: {
+          pulled: cal.result.pulled,
+          open: cal.result.open
+        },
+        ...(lastAcceptedCycleAtMs !== undefined ? { lastAcceptedCycleAtMs } : {}),
+        ...(lastRejectedCycleReason !== undefined
+          ? { lastRejectedCycleReason }
+          : {}),
+        pullEvidenceScalar: innerResult.telemetry.pullEvidenceScalar,
+        fsmPhase: innerResult.telemetry.phase,
+        triggerEdge: armed && !justArmed ? innerResult.telemetry.edge : "none",
+        triggerAvailability: innerResult.telemetry.triggerAvailability,
+        dwellFrameCounts: innerResult.telemetry.dwellFrameCounts
+      };
+
+      // If justArmed, suppress edge in the trigger frame too
+      const triggerFrame =
+        justArmed && innerResult.triggerFrame !== undefined
+          ? { ...innerResult.triggerFrame, triggerEdge: "none" as const }
+          : innerResult.triggerFrame;
+
+      return {
+        triggerFrame,
+        telemetry: {
+          ...innerResult.telemetry,
+          calibrationStatus: sideTriggerCalibrationStatusFor({
+            openPose: { normalizedThumbDistance: calibrationState.open },
+            pulledPose: { normalizedThumbDistance: calibrationState.pulled }
+          })
+        },
+        controllerTelemetry: ctrlTelemetry,
+        ...(cycleEvent !== undefined ? { cycleEvent } : {})
+      };
+    },
+    reset() {
+      cycleState = createInitialCycleSegmenterState();
+      calibrationState = createInitialCalibrationState();
+      armed = false;
+      lastSourceKey = undefined;
+      lastObservedHandTimestampMs = undefined;
+      geometryEma = undefined;
+      manualOverridePrev = false;
+      lastAcceptedCycleAtMs = undefined;
+      lastRejectedCycleReason = undefined;
+      inner.reset();
+    },
+    getSnapshot() {
+      return {
+        armed,
+        cycleState,
+        calibrationState,
+        baselineWindowReady: cycleState.baselineWindowReady,
+        ...(lastAcceptedCycleAtMs !== undefined
+          ? { lastAcceptedCycleAtMs }
+          : {})
+      };
+    }
+  };
+};
