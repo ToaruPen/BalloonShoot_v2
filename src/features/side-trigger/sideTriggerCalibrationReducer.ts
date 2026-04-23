@@ -21,7 +21,7 @@ import type { ResetReason } from "./sideTriggerTelemetryTypes";
 
 export { createInitialCalibrationState };
 
-export interface CalibrationReducerInput {
+interface CalibrationReducerInput {
   readonly confirmedCycleEvent?: ConfirmedCycleEvent;
   readonly stableOpenObservation?: {
     readonly timestampMs: number;
@@ -31,7 +31,7 @@ export interface CalibrationReducerInput {
   readonly sliderInDefaultRange: boolean;
 }
 
-export interface CalibrationReducerUpdateResult {
+interface CalibrationReducerUpdateResult {
   readonly state: CalibrationReducerState;
   readonly result: CalibrationResult;
 }

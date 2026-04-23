@@ -23,30 +23,7 @@ export type { SideTriggerMapper } from "./createSideTriggerMapper";
 export { createAdaptiveSideTriggerMapper } from "./createAdaptiveSideTriggerMapper";
 export type { AdaptiveSideTriggerMapper } from "./createAdaptiveSideTriggerMapper";
 export { createCycleDrivenSideTriggerMapper } from "./createCycleDrivenSideTriggerMapper";
-export type {
-  CycleDrivenSideTriggerMapper,
-  CycleDrivenSideTriggerMapperResult,
-  CycleDrivenSideTriggerMapperUpdate
-} from "./createCycleDrivenSideTriggerMapper";
-export { createSideTriggerController } from "./sideTriggerController";
-export type {
-  SideTriggerController,
-  SideTriggerControllerResult,
-  SideTriggerControllerSnapshot,
-  SideTriggerControllerUpdate
-} from "./sideTriggerController";
-export type {
-  ControllerTelemetry,
-  CycleEventTelemetry,
-  ControllerCalibrationStatus,
-  RawMetricUnusableReason,
-  ResetReason
-} from "./sideTriggerTelemetryTypes";
-export type { CyclePhase, ConfirmedCycleEvent } from "./sideTriggerCycleTypes";
-export type {
-  CalibrationResult,
-  RejectedCycleReason
-} from "./sideTriggerCalibrationTypes";
+export type { CycleDrivenSideTriggerMapper } from "./createCycleDrivenSideTriggerMapper";
 export { extractSideTriggerRawMetric } from "./sideTriggerRawMetric";
 export type {
   SideTriggerHandGeometrySignature,

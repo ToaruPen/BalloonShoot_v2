@@ -19,7 +19,7 @@ import type { RawMetric } from "./sideTriggerRawMetricReducer";
 
 export { createInitialCycleSegmenterState };
 
-export interface CycleSegmenterUpdateResult {
+interface CycleSegmenterUpdateResult {
   readonly state: CycleSegmenterState;
   readonly result: CycleResult;
 }
