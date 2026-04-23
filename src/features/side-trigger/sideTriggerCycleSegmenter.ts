@@ -28,9 +28,13 @@ const median = (values: readonly number[]): number => {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = sorted.length >> 1;
-  return sorted.length % 2 === 0
-    ? (sorted[mid - 1]! + sorted[mid]!) / 2
-    : sorted[mid]!;
+  const center = sorted[mid];
+  if (center === undefined) return 0;
+  if (sorted.length % 2 === 0) {
+    const lower = sorted[mid - 1];
+    return lower === undefined ? center : (lower + center) / 2;
+  }
+  return center;
 };
 
 const trimBaseline = (
@@ -43,8 +47,9 @@ const computeBaselineReady = (
   buffer: readonly CycleSample[]
 ): boolean => {
   if (buffer.length < CYCLE_BASELINE_MIN_SAMPLES) return false;
-  const first = buffer[0]!;
-  const last = buffer[buffer.length - 1]!;
+  const first = buffer[0];
+  const last = buffer[buffer.length - 1];
+  if (first === undefined || last === undefined) return false;
   return last.timestampMs - first.timestampMs >= CYCLE_BASELINE_WINDOW_MS;
 };
 

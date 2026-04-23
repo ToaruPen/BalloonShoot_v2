@@ -126,8 +126,9 @@ describe("cycleSegmenter Recovery→PendingPostOpen→Confirmed", () => {
     state = updateCycleSegmenter(state, usable(800, 1.02)).state;
     const final = updateCycleSegmenter(state, usable(845, 1.0));
     expect(final.state.phase).toBe("open");
-    expect(final.result.confirmedCycleEvent).toBeDefined();
-    const ev = final.result.confirmedCycleEvent!;
+    const ev = final.result.confirmedCycleEvent;
+    expect(ev).toBeDefined();
+    if (ev === undefined) return;
     expect(ev.pulledMedian).toBeCloseTo(0.88, 1);
     expect(ev.openPostMedian).toBeCloseTo(1.0, 1);
     expect(ev.durationMs).toBe(845 - 500);

@@ -71,6 +71,70 @@ const evaluateSanity = (
   return undefined;
 };
 
+const reduceConfirmedCycleEvent = (
+  state: CalibrationReducerState,
+  ev: ConfirmedCycleEvent | undefined
+): CalibrationReducerUpdateResult | undefined => {
+  if (ev === undefined) return undefined;
+  const rejectReason = evaluateSanity(ev, state, state.open);
+  const digest = {
+    pulledMedian: ev.pulledMedian,
+    openPreMedian: ev.openPreMedian,
+    openPostMedian: ev.openPostMedian,
+    durationMs: ev.durationMs
+  };
+  if (rejectReason !== undefined) {
+    return {
+      state,
+      result: {
+        status: state.status,
+        pulled: state.pulled,
+        open: state.open,
+        rejectedCycleEvent: { reason: rejectReason, cycleDigest: digest }
+      }
+    };
+  }
+  const avgOpen = (ev.openPreMedian + ev.openPostMedian) / 2;
+  if (state.status === "defaultWide") {
+    const nextState: CalibrationReducerState = {
+      status: "cycleReady",
+      pulled: ev.pulledMedian,
+      open: avgOpen,
+      lastAcceptedCycleAtMs: ev.timestampMs,
+      lastAcceptedCycleDigest: digest,
+      manualOverrideActive: false
+    };
+    return {
+      state: nextState,
+      result: {
+        status: "cycleReady",
+        pulled: ev.pulledMedian,
+        open: avgOpen,
+        acceptedCycleEvent: ev
+      }
+    };
+  }
+  const nextPulled = state.pulled + CAL_ALPHA_PULL * (ev.pulledMedian - state.pulled);
+  const nextOpen = state.open + CAL_ALPHA_OPEN_CYCLE * (avgOpen - state.open);
+  const nextState: CalibrationReducerState = {
+    status: "adaptive",
+    pulled: nextPulled,
+    open: nextOpen,
+    lastAcceptedCycleAtMs: ev.timestampMs,
+    lastAcceptedCycleDigest: digest,
+    manualOverrideActive: false
+  };
+  return {
+    state: nextState,
+    result: {
+      status: "adaptive",
+      pulled: nextPulled,
+      open: nextOpen,
+      acceptedCycleEvent: ev
+    }
+  };
+};
+
 export const updateCalibrationReducer = (
   state: CalibrationReducerState,
   input: CalibrationReducerInput
@@ -105,79 +169,8 @@ export const updateCalibrationReducer = (
     };
   }
 
-  if (state.manualOverrideActive && input.sliderInDefaultRange) {
-    // Slider restored. manualOverride→adaptive 復帰は controller が 3 秒安定で判定する。
-    // ここでは mode のまま (controller が別途 resetSignal 発火して defaultWide に戻す)。
-  }
-
-  if (input.confirmedCycleEvent !== undefined) {
-    const ev = input.confirmedCycleEvent;
-    const rejectReason = evaluateSanity(ev, state, state.open);
-    if (rejectReason !== undefined) {
-      return {
-        state,
-        result: {
-          status: state.status,
-          pulled: state.pulled,
-          open: state.open,
-          rejectedCycleEvent: {
-            reason: rejectReason,
-            cycleDigest: {
-              pulledMedian: ev.pulledMedian,
-              openPreMedian: ev.openPreMedian,
-              openPostMedian: ev.openPostMedian,
-              durationMs: ev.durationMs
-            }
-          }
-        }
-      };
-    }
-    const avgOpen = (ev.openPreMedian + ev.openPostMedian) / 2;
-    const digest = {
-      pulledMedian: ev.pulledMedian,
-      openPreMedian: ev.openPreMedian,
-      openPostMedian: ev.openPostMedian,
-      durationMs: ev.durationMs
-    };
-    if (state.status === "defaultWide") {
-      const nextState: CalibrationReducerState = {
-        status: "cycleReady",
-        pulled: ev.pulledMedian,
-        open: avgOpen,
-        lastAcceptedCycleAtMs: ev.timestampMs,
-        lastAcceptedCycleDigest: digest,
-        manualOverrideActive: false
-      };
-      return {
-        state: nextState,
-        result: {
-          status: "cycleReady",
-          pulled: ev.pulledMedian,
-          open: avgOpen,
-          acceptedCycleEvent: ev
-        }
-      };
-    }
-    const nextPulled = state.pulled + CAL_ALPHA_PULL * (ev.pulledMedian - state.pulled);
-    const nextOpen = state.open + CAL_ALPHA_OPEN_CYCLE * (avgOpen - state.open);
-    const nextState: CalibrationReducerState = {
-      status: "adaptive",
-      pulled: nextPulled,
-      open: nextOpen,
-      lastAcceptedCycleAtMs: ev.timestampMs,
-      lastAcceptedCycleDigest: digest,
-      manualOverrideActive: false
-    };
-    return {
-      state: nextState,
-      result: {
-        status: "adaptive",
-        pulled: nextPulled,
-        open: nextOpen,
-        acceptedCycleEvent: ev
-      }
-    };
-  }
+  const cycleResult = reduceConfirmedCycleEvent(state, input.confirmedCycleEvent);
+  if (cycleResult !== undefined) return cycleResult;
 
   if (
     input.stableOpenObservation !== undefined &&

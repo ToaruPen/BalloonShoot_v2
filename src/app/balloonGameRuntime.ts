@@ -25,14 +25,19 @@ import {
   type InputFusionMapper
 } from "../features/input-fusion";
 import {
-  createAdaptiveSideTriggerMapper,
+  createCycleDrivenSideTriggerMapper,
   defaultSideTriggerCalibration,
   defaultSideTriggerTuning,
   getSideTriggerFilterConfig,
   toSideDetection,
-  type SideTriggerMapper
+  type CycleDrivenSideTriggerMapper
 } from "../features/side-trigger";
 import { drawGameFrame } from "../features/rendering/drawGameFrame";
+import {
+  balloonAnimationFrameIndex,
+  loadBalloonSprites,
+  type BalloonSprites
+} from "../features/rendering/loadBalloonSprites";
 import type { Balloon } from "../features/gameplay/domain/balloon";
 import {
   createGameEngine,
@@ -81,6 +86,7 @@ interface BalloonGameRuntimeOptions {
   readonly nowMs?: () => number;
   readonly createAudioController?: () => AudioController;
   readonly drawGameFrame?: typeof drawGameFrame;
+  readonly loadBalloonSprites?: () => Promise<BalloonSprites>;
   readonly requestAnimationFrame?: RequestAnimationFrameLike;
   readonly cancelAnimationFrame?: CancelAnimationFrameLike;
   readonly createDevicePinnedStream?: (
@@ -193,6 +199,7 @@ export const createBalloonGameRuntime = ({
   nowMs = () => performance.now(),
   createAudioController: createAudio = createAudioController,
   drawGameFrame: renderFrame = drawGameFrame,
+  loadBalloonSprites: loadSprites = loadBalloonSprites,
   requestAnimationFrame: requestFrame = (callback) =>
     window.requestAnimationFrame(callback),
   cancelAnimationFrame: cancelFrame = (handle) => {
@@ -220,9 +227,11 @@ export const createBalloonGameRuntime = ({
   let latestFusedFrame: FusedGameInputFrame | undefined;
   let frontLaneHealth: LaneHealthStatus = "notStarted";
   let sideLaneHealth: LaneHealthStatus = "notStarted";
+  let balloonSprites: BalloonSprites | undefined;
+  let spritesLoadStarted = false;
   const frontAimMapper = createFrontAimMapper();
-  const sideTriggerMapper: SideTriggerMapper =
-    createAdaptiveSideTriggerMapper();
+  const sideTriggerMapper: CycleDrivenSideTriggerMapper =
+    createCycleDrivenSideTriggerMapper();
   const inputFusionMapper: InputFusionMapper = createInputFusionMapper();
   const streams: DevicePinnedStream[] = [];
   const trackers: MediaPipeHandTracker[] = [];
@@ -294,6 +303,26 @@ export const createBalloonGameRuntime = ({
     }
   };
 
+  const ensureBalloonSpritesLoaded = (): void => {
+    if (spritesLoadStarted) {
+      return;
+    }
+
+    spritesLoadStarted = true;
+    void loadSprites()
+      .then((sprites) => {
+        balloonSprites = sprites;
+      })
+      .catch((error: unknown) => {
+        if (!stopped) {
+          console.error(
+            "[balloon game runtime] balloon sprites load failed",
+            error
+          );
+        }
+      });
+  };
+
   const renderCanvas = (
     crosshair: { x: number; y: number } | undefined
   ): void => {
@@ -301,11 +330,17 @@ export const createBalloonGameRuntime = ({
       return;
     }
 
+    const frameCount = balloonSprites?.frames.length ?? 0;
+    const balloonFrameIndex =
+      frameCount > 0 ? balloonAnimationFrameIndex(nowMs(), frameCount) : 0;
+
     renderFrame(context, {
       balloons: engine.balloons,
       crosshair,
       shotEffect,
-      hitEffect
+      hitEffect,
+      balloonSprites,
+      balloonFrameIndex
     });
   };
 
@@ -708,6 +743,7 @@ export const createBalloonGameRuntime = ({
       lastFrameMs = startMs;
       session = startGameSession(session, startMs);
       play(() => audio.startBgm());
+      ensureBalloonSpritesLoaded();
       startCameraTracking();
       renderHud();
       schedule();

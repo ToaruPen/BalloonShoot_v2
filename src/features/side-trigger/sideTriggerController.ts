@@ -120,6 +120,7 @@ export const createSideTriggerController = (): SideTriggerController => {
   };
 
   return {
+    // eslint-disable-next-line sonarjs/cognitive-complexity
     update(update) {
       const timestampMs =
         update.detection?.timestamp.frameTimestampMs ??
@@ -179,9 +180,7 @@ export const createSideTriggerController = (): SideTriggerController => {
           timestampMs,
           rawMetricKind: raw.kind,
           ...(raw.kind === "usable" ? { rawValue: raw.value } : {}),
-          ...(raw.kind === "unusable" && raw.reason
-            ? { rawUnusableReason: raw.reason }
-            : {}),
+          ...(raw.kind === "unusable" ? { rawUnusableReason: raw.reason } : {}),
           controllerArmed: false,
           justArmed: false,
           baselineWindowReady: false,
@@ -273,9 +272,7 @@ export const createSideTriggerController = (): SideTriggerController => {
         timestampMs,
         rawMetricKind: raw.kind,
         ...(raw.kind === "usable" ? { rawValue: raw.value } : {}),
-        ...(raw.kind === "unusable" && raw.reason
-          ? { rawUnusableReason: raw.reason }
-          : {}),
+        ...(raw.kind === "unusable" ? { rawUnusableReason: raw.reason } : {}),
         controllerArmed: armed,
         justArmed,
         baselineWindowReady: cycleState.baselineWindowReady,
