@@ -105,11 +105,14 @@ export const createSideTriggerController = (): SideTriggerController => {
     | NonNullable<ControllerTelemetry["lastRejectedCycleReason"]>
     | undefined;
 
-  const resetAll = (toManualOverride: boolean): void => {
+  const resetAll = (
+    resetReason: ResetReason,
+    sliderInDefaultRange: boolean
+  ): void => {
     cycleState = createInitialCycleSegmenterState();
     const { state: nextCal } = updateCalibrationReducer(calibrationState, {
-      resetSignal: toManualOverride ? "manualOverrideEntered" : "handLoss",
-      sliderInDefaultRange: !toManualOverride
+      resetSignal: resetReason,
+      sliderInDefaultRange
     });
     calibrationState = nextCal;
     armed = false;
@@ -165,8 +168,10 @@ export const createSideTriggerController = (): SideTriggerController => {
       }
       manualOverridePrev = !update.sliderInDefaultRange;
 
+      const frameTimestamp = update.detection?.timestamp ?? update.timestamp;
+
       if (resetReason !== undefined) {
-        resetAll(resetReason === "manualOverrideEntered");
+        resetAll(resetReason, update.sliderInDefaultRange);
         // Inner reset returns a minimal trigger frame; skip FSM eval
         const innerResult = inner.update({
           detection: undefined,
@@ -175,7 +180,7 @@ export const createSideTriggerController = (): SideTriggerController => {
             pulledPose: { normalizedThumbDistance: calibrationState.pulled }
           },
           tuning: update.tuning,
-          ...(update.timestamp !== undefined ? { timestamp: update.timestamp } : {})
+          ...(frameTimestamp !== undefined ? { timestamp: frameTimestamp } : {})
         });
         const ctrlTelemetry: ControllerTelemetry = {
           timestampMs,

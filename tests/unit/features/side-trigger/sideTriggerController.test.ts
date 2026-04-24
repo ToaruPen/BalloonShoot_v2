@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { createSideTriggerController } from "../../../../src/features/side-trigger/sideTriggerController";
 import { defaultSideTriggerTuning } from "../../../../src/features/side-trigger/sideTriggerConfig";
+import {
+  createInitialCalibrationState,
+  updateCalibrationReducer
+} from "../../../../src/features/side-trigger/sideTriggerCalibrationReducer";
+import type { ResetReason } from "../../../../src/features/side-trigger/sideTriggerTelemetryTypes";
 import type {
   HandLandmarkSet,
   SideHandDetection,
   SideViewQuality
 } from "../../../../src/shared/types/hand";
+import type { SideTriggerControllerResult } from "../../../../src/features/side-trigger/sideTriggerController";
 
 const makeDetection = (
   timestampMs: number,
@@ -97,6 +103,24 @@ const acceptCycleWithFinalPull = (
   return update(controller, 795, 0.2);
 };
 
+const expectedResetCalibrationStatus = (
+  resetReason: ResetReason,
+  sliderInDefaultRange: boolean
+) =>
+  updateCalibrationReducer(createInitialCalibrationState(), {
+    resetSignal: resetReason,
+    sliderInDefaultRange
+  }).result.status;
+
+const expectResetPublicOutput = (
+  out: SideTriggerControllerResult,
+  timestampMs: number,
+  telemetryCalibrationStatus: "default" | "liveTuning"
+) => {
+  expect(out.triggerFrame?.timestamp.frameTimestampMs).toBe(timestampMs);
+  expect(out.telemetry.calibrationStatus).toBe(telemetryCalibrationStatus);
+};
+
 describe("sideTriggerController armed gate", () => {
   it("initial frame では armed=false、triggerEdge='none'", () => {
     const controller = createSideTriggerController();
@@ -175,6 +199,7 @@ describe("sideTriggerController armed gate", () => {
     expect(out.controllerTelemetry.resetReason).toBe("manualOverrideEntered");
     expect(out.controllerTelemetry.calibrationStatus).toBe("manualOverride");
     expect(out.controllerTelemetry.triggerEdge).toBe("none");
+    expectResetPublicOutput(out, 60, "liveTuning");
   });
 
   it("handLoss reset (1500ms gap) sets calibrationStatus back to defaultWide", () => {
@@ -191,6 +216,7 @@ describe("sideTriggerController armed gate", () => {
     expect(out.controllerTelemetry.resetReason).toBe("handLoss");
     expect(out.controllerTelemetry.controllerArmed).toBe(false);
     expect(out.controllerTelemetry.calibrationStatus).toBe("defaultWide");
+    expectResetPublicOutput(out, 2_295, "liveTuning");
   });
 
   it("handLoss reset fires once until a new usable hand is observed", () => {
@@ -223,22 +249,31 @@ describe("sideTriggerController armed gate", () => {
 
   it("geometryJump reset", () => {
     const controller = createSideTriggerController();
-    update(controller, 0, 1.2);
+    acceptCycleWithFinalPull(controller);
 
-    const out = update(controller, 16, 1.2, { geometryScale: 2 });
+    const out = update(controller, 811, 1.2, { geometryScale: 2 });
 
     expect(out.controllerTelemetry.resetReason).toBe("geometryJump");
     expect(out.controllerTelemetry.controllerArmed).toBe(false);
+    expect(out.controllerTelemetry.calibrationStatus).toBe(
+      expectedResetCalibrationStatus("geometryJump", true)
+    );
+    expectResetPublicOutput(out, 811, "liveTuning");
   });
 
   it("sourceChanged reset", () => {
     const controller = createSideTriggerController();
-    update(controller, 0, 1.2, { streamId: "stream-a" });
+    acceptCycleWithFinalPull(controller);
+    update(controller, 811, 1.2, { streamId: "stream-a" });
 
-    const out = update(controller, 16, 1.2, { streamId: "stream-b" });
+    const out = update(controller, 827, 1.2, { streamId: "stream-b" });
 
     expect(out.controllerTelemetry.resetReason).toBe("sourceChanged");
     expect(out.controllerTelemetry.controllerArmed).toBe(false);
+    expect(out.controllerTelemetry.calibrationStatus).toBe(
+      expectedResetCalibrationStatus("sourceChanged", true)
+    );
+    expectResetPublicOutput(out, 827, "liveTuning");
   });
 });
 
