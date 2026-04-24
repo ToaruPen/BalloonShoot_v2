@@ -168,4 +168,26 @@ describe("renderSideTriggerPanel", () => {
 
     expect(html).toMatch(/<span>triggerPulled<\/span>\s*<strong>true<\/strong>/);
   });
+
+  it.each<[SideTriggerPhase, string]>([
+    ["SideTriggerOpenReady", "up"],
+    ["SideTriggerPullCandidate", "pulling"],
+    ["SideTriggerPulledLatched", "down"],
+    ["SideTriggerReleaseCandidate", "releasing"],
+    ["SideTriggerCooldown", "down"],
+    ["SideTriggerNoHand", "unknown"],
+    ["SideTriggerPoseSearching", "unknown"],
+    ["SideTriggerRecoveringAfterLoss", "unknown"]
+  ])("renders thumb state badge %s -> %s", (phase, expectedState) => {
+    const html = renderSideTriggerPanel(createFrame(phase));
+
+    expect(html).toContain(`data-thumb-state="${expectedState}"`);
+    expect(html).toContain(`wb-thumb-state--${expectedState}`);
+  });
+
+  it("does not render thumb state badge when both inputs are missing", () => {
+    const html = renderSideTriggerPanel(undefined, undefined);
+
+    expect(html).not.toContain("data-thumb-state");
+  });
 });

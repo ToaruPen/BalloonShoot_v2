@@ -481,7 +481,7 @@ export const createLiveLandmarkInspection = (): LiveLandmarkInspection => {
       const sideResult = sideTriggerMapper.update({
         detection: sideDetection,
         timestamp,
-        calibration: context.sideTriggerCalibration,
+        calibration: sideTriggerAdaptiveState.calibration,
         tuning: context.sideTriggerTuning
       });
       const fusionResult =

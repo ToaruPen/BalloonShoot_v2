@@ -1,33 +1,86 @@
 import type { Balloon } from "../gameplay/domain/balloon";
+import type { BalloonSprites } from "./balloonSpriteUtils";
 
 interface DrawState {
   balloons: Balloon[];
-  crosshair?: {
-    x: number;
-    y: number;
-  } | undefined;
-  shotEffect?: {
-    x: number;
-    y: number;
-  } | undefined;
-  hitEffect?: {
-    x: number;
-    y: number;
-  } | undefined;
+  crosshair?:
+    | {
+        x: number;
+        y: number;
+      }
+    | undefined;
+  shotEffect?:
+    | {
+        x: number;
+        y: number;
+      }
+    | undefined;
+  hitEffect?:
+    | {
+        x: number;
+        y: number;
+      }
+    | undefined;
+  balloonSprites?: BalloonSprites | undefined;
+  balloonFrameIndex?: number | undefined;
 }
 
-export const drawGameFrame = (ctx: CanvasRenderingContext2D, state: DrawState): void => {
+const drawBalloonSprite = (
+  ctx: CanvasRenderingContext2D,
+  balloon: Balloon,
+  sprite: HTMLImageElement
+): void => {
+  const aspect =
+    sprite.naturalHeight > 0 && sprite.naturalWidth > 0
+      ? sprite.naturalWidth / sprite.naturalHeight
+      : 0.5;
+  const drawHeight = balloon.radius * 2.6;
+  const drawWidth = drawHeight * aspect;
+  ctx.drawImage(
+    sprite,
+    balloon.x - drawWidth / 2,
+    balloon.y - drawHeight / 2,
+    drawWidth,
+    drawHeight
+  );
+};
+
+const drawBalloonFallback = (
+  ctx: CanvasRenderingContext2D,
+  balloon: Balloon
+): void => {
+  ctx.beginPath();
+  ctx.fillStyle = balloon.size === "small" ? "#ff8a80" : "#4fc3f7";
+  ctx.arc(balloon.x, balloon.y, balloon.radius, 0, Math.PI * 2);
+  ctx.fill();
+};
+
+export const drawGameFrame = (
+  ctx: CanvasRenderingContext2D,
+  state: DrawState
+): void => {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+  const frames = state.balloonSprites?.frames;
+  const rawFrameIndex = state.balloonFrameIndex ?? 0;
+  const safeFrameIndex = Number.isFinite(rawFrameIndex)
+    ? Math.trunc(rawFrameIndex)
+    : 0;
+  const sprite =
+    frames !== undefined && frames.length > 0
+      ? frames[((safeFrameIndex % frames.length) + frames.length) % frames.length]
+      : undefined;
 
   for (const balloon of state.balloons) {
     if (!balloon.alive) {
       continue;
     }
 
-    ctx.beginPath();
-    ctx.fillStyle = balloon.size === "small" ? "#ff8a80" : "#4fc3f7";
-    ctx.arc(balloon.x, balloon.y, balloon.radius, 0, Math.PI * 2);
-    ctx.fill();
+    if (sprite !== undefined) {
+      drawBalloonSprite(ctx, balloon, sprite);
+    } else {
+      drawBalloonFallback(ctx, balloon);
+    }
   }
 
   if (state.shotEffect !== undefined) {

@@ -25,14 +25,20 @@ import {
   type InputFusionMapper
 } from "../features/input-fusion";
 import {
-  createAdaptiveSideTriggerMapper,
+  createCycleDrivenSideTriggerMapper,
   defaultSideTriggerCalibration,
   defaultSideTriggerTuning,
   getSideTriggerFilterConfig,
   toSideDetection,
-  type SideTriggerMapper
+  type CycleDrivenSideTriggerMapper
 } from "../features/side-trigger";
 import { drawGameFrame } from "../features/rendering/drawGameFrame";
+import {
+  balloonAnimationFrameIndex,
+  type BalloonSprites
+} from "../features/rendering/balloonSpriteUtils";
+import { createBalloonSpriteLoader } from "../features/rendering/createBalloonSpriteLoader";
+import { loadBalloonSprites } from "./loadBalloonSpritesAdapter";
 import type { Balloon } from "../features/gameplay/domain/balloon";
 import {
   createGameEngine,
@@ -81,6 +87,7 @@ interface BalloonGameRuntimeOptions {
   readonly nowMs?: () => number;
   readonly createAudioController?: () => AudioController;
   readonly drawGameFrame?: typeof drawGameFrame;
+  readonly loadBalloonSprites?: () => Promise<BalloonSprites>;
   readonly requestAnimationFrame?: RequestAnimationFrameLike;
   readonly cancelAnimationFrame?: CancelAnimationFrameLike;
   readonly createDevicePinnedStream?: (
@@ -193,6 +200,7 @@ export const createBalloonGameRuntime = ({
   nowMs = () => performance.now(),
   createAudioController: createAudio = createAudioController,
   drawGameFrame: renderFrame = drawGameFrame,
+  loadBalloonSprites: loadSprites = loadBalloonSprites,
   requestAnimationFrame: requestFrame = (callback) =>
     window.requestAnimationFrame(callback),
   cancelAnimationFrame: cancelFrame = (handle) => {
@@ -220,13 +228,28 @@ export const createBalloonGameRuntime = ({
   let latestFusedFrame: FusedGameInputFrame | undefined;
   let frontLaneHealth: LaneHealthStatus = "notStarted";
   let sideLaneHealth: LaneHealthStatus = "notStarted";
+  let balloonSprites: BalloonSprites | undefined;
   const frontAimMapper = createFrontAimMapper();
-  const sideTriggerMapper: SideTriggerMapper =
-    createAdaptiveSideTriggerMapper();
+  const sideTriggerMapper: CycleDrivenSideTriggerMapper =
+    createCycleDrivenSideTriggerMapper();
   const inputFusionMapper: InputFusionMapper = createInputFusionMapper();
   const streams: DevicePinnedStream[] = [];
   const trackers: MediaPipeHandTracker[] = [];
   const laneStops: (() => void)[] = [];
+  const balloonSpriteLoader = createBalloonSpriteLoader({
+    load: loadSprites,
+    onLoaded: (sprites) => {
+      balloonSprites = sprites;
+    },
+    onError: (error: unknown) => {
+      if (!stopped) {
+        console.error(
+          "[balloon game runtime] balloon sprites load failed",
+          error
+        );
+      }
+    }
+  });
 
   const safeCleanupTracker = (tracker: MediaPipeHandTracker): void => {
     removeItem(trackers, tracker);
@@ -295,17 +318,24 @@ export const createBalloonGameRuntime = ({
   };
 
   const renderCanvas = (
-    crosshair: { x: number; y: number } | undefined
+    crosshair: { x: number; y: number } | undefined,
+    frameNowMs: number
   ): void => {
     if (context === null) {
       return;
     }
 
+    const frameCount = balloonSprites?.frames.length ?? 0;
+    const balloonFrameIndex =
+      frameCount > 0 ? balloonAnimationFrameIndex(frameNowMs, frameCount) : 0;
+
     renderFrame(context, {
       balloons: engine.balloons,
       crosshair,
       shotEffect,
-      hitEffect
+      hitEffect,
+      balloonSprites,
+      balloonFrameIndex
     });
   };
 
@@ -364,7 +394,7 @@ export const createBalloonGameRuntime = ({
       play(() => audio.playResult());
     }
 
-    renderCanvas(input.crosshair);
+    renderCanvas(input.crosshair, frameNowMs);
     renderHud();
     schedule();
   }
@@ -708,6 +738,7 @@ export const createBalloonGameRuntime = ({
       lastFrameMs = startMs;
       session = startGameSession(session, startMs);
       play(() => audio.startBgm());
+      balloonSpriteLoader.ensureStarted();
       startCameraTracking();
       renderHud();
       schedule();
@@ -729,6 +760,7 @@ export const createBalloonGameRuntime = ({
       shotEffect = undefined;
       hitEffect = undefined;
       play(() => audio.startBgm());
+      balloonSpriteLoader.ensureStarted();
       startCameraTracking();
       renderHud();
     },

@@ -22,6 +22,8 @@ export { createSideTriggerMapper } from "./createSideTriggerMapper";
 export type { SideTriggerMapper } from "./createSideTriggerMapper";
 export { createAdaptiveSideTriggerMapper } from "./createAdaptiveSideTriggerMapper";
 export type { AdaptiveSideTriggerMapper } from "./createAdaptiveSideTriggerMapper";
+export { createCycleDrivenSideTriggerMapper } from "./createCycleDrivenSideTriggerMapper";
+export type { CycleDrivenSideTriggerMapper } from "./createCycleDrivenSideTriggerMapper";
 export { extractSideTriggerRawMetric } from "./sideTriggerRawMetric";
 export type {
   SideTriggerHandGeometrySignature,

@@ -1385,7 +1385,7 @@ describe("createLiveLandmarkInspection", () => {
     );
   });
 
-  it("passes side calibration changes to subsequent trigger evidence updates", async () => {
+  it("retains slider calibration state independent of the FSM source", async () => {
     const sideTracker = createFakeTracker();
     sideTracker.detect.mockResolvedValueOnce(
       createHandDetectionWithWorld(pulledWorldLandmarks())
@@ -1408,16 +1408,19 @@ describe("createLiveLandmarkInspection", () => {
     videos.sideVideo.fireFrame({ captureTime: 100, presentedFrames: 1 });
 
     await vi.waitFor(() => {
-      expect(
-        liveInspection.getState().sideTriggerTelemetry?.pullEvidenceScalar
-      ).toBeGreaterThan(0.95);
-      expect(
-        liveInspection.getState().sideTriggerTelemetry?.calibrationStatus
-      ).toBe("liveTuning");
+      expect(liveInspection.getState().sideTriggerTelemetry).toBeDefined();
     });
+    expect(
+      liveInspection.getState().sideTriggerCalibration.openPose
+        .normalizedThumbDistance
+    ).toBe(1.4);
+    expect(
+      liveInspection.getState().sideTriggerCalibration.pulledPose
+        .normalizedThumbDistance
+    ).toBe(0.25);
   });
 
-  it("updates observe-only adaptive calibration without changing slider calibration", async () => {
+  it("drives the FSM from adaptive calibration so the diagnostic mirrors the runtime", async () => {
     const sideTracker = createFakeTracker();
     sideTracker.detect.mockResolvedValueOnce(
       createHandDetectionWithWorld(pulledWorldLandmarks())
@@ -1445,9 +1448,17 @@ describe("createLiveLandmarkInspection", () => {
     expect(liveInspection.getState().sideTriggerCalibration).toEqual(
       defaultSideTriggerCalibration
     );
-    expect(
-      liveInspection.getState().sideTriggerTelemetry?.calibration
-    ).toEqual(defaultSideTriggerCalibration);
+    const adaptive = liveInspection.getState().sideTriggerAdaptiveCalibration;
+    expect(adaptive).toBeDefined();
+    const telemetryCalibration =
+      liveInspection.getState().sideTriggerTelemetry?.calibration;
+    expect(telemetryCalibration?.openPose.normalizedThumbDistance).toBe(
+      adaptive?.openCalibrated
+    );
+    expect(telemetryCalibration?.pulledPose.normalizedThumbDistance).toBe(
+      adaptive?.pulledCalibrated
+    );
+    expect(telemetryCalibration).not.toEqual(defaultSideTriggerCalibration);
   });
 
   it("preserves calibration across same-device reselection after capture loss", () => {

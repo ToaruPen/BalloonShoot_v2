@@ -2,6 +2,9 @@
 
 作成日: 2026-04-19
 
+> **Superseded by `2026-04-23-side-trigger-cycle-driven-calibration-design.md` (r9)。**
+> r8 は sliding-window p20/p80 による adaptive calibration を導入したが、specificity 検証 (30s 「親指静止+手だけ動かす」capture で 9 FP) で誤発火問題が判明。r9 では explicit pull-cycle 検出に基づく calibration へ全面再設計。本 r8 文書は historical reference として残す。実装は r9 spec を参照。
+
 ## 位置づけ
 
 この文書は、`BalloonShoot_v2` のサイドカメラ・トリガー判定に**ランタイム適応キャリブレーション**を導入するための設計書である。

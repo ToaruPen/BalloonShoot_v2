@@ -262,6 +262,50 @@ h4 {
   text-align: center;
 }
 
+.wb-thumb-state {
+  margin: 0 0 0.5rem;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: #c9d4dc;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+.wb-thumb-state--up {
+  border-color: #2ecc71;
+  background: rgba(46, 204, 113, 0.18);
+  color: #e6ffe6;
+}
+
+.wb-thumb-state--pulling {
+  border-color: #f39c12;
+  background: rgba(243, 156, 18, 0.22);
+  color: #fff3d6;
+}
+
+.wb-thumb-state--down {
+  border-color: #e74c3c;
+  background: rgba(231, 76, 60, 0.22);
+  color: #ffe4df;
+}
+
+.wb-thumb-state--releasing {
+  border-color: #3498db;
+  background: rgba(52, 152, 219, 0.22);
+  color: #dff2ff;
+}
+
+.wb-thumb-state--unknown {
+  border-color: #4a5a72;
+  background: rgba(74, 90, 114, 0.18);
+  color: #9aa7b6;
+}
+
 .wb-recording-error {
   margin-top: 0.5rem;
   color: #ffb4a8;

@@ -538,6 +538,101 @@ describe("createBalloonGameRuntime", () => {
     expect(hudRoot.innerHTML).toContain("サイドカメラの入力を待っています");
   });
 
+  it("retries sprite loading after a transient failure on retry", async () => {
+    const raf = createRaf();
+    const hudRoot = { innerHTML: "" } as HTMLElement;
+    const sprites = { frames: [{} as HTMLImageElement] };
+    const loadError = new Error("sprite load failed once");
+    const loadBalloonSprites = vi
+      .fn()
+      .mockRejectedValueOnce(loadError)
+      .mockResolvedValueOnce(sprites);
+    const drawGameFrame = vi.fn();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: {} as HTMLVideoElement,
+      sideVideo: {} as HTMLVideoElement,
+      canvas: createCanvas(),
+      hudRoot,
+      readFusedInputFrame: () => undefined,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame,
+      loadBalloonSprites,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(loadBalloonSprites).toHaveBeenCalledOnce();
+    });
+    await vi.waitFor(() => {
+      expect(consoleError).toHaveBeenCalledWith(
+        "[balloon game runtime] balloon sprites load failed",
+        loadError
+      );
+    });
+
+    runtime.retry();
+    await vi.waitFor(() => {
+      expect(loadBalloonSprites).toHaveBeenCalledTimes(2);
+    });
+    raf.fire(4_000);
+
+    expect(drawGameFrame).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        balloonSprites: sprites,
+        balloonFrameIndex: 0
+      })
+    );
+  });
+
+  it("selects balloon sprite frames from the animation tick timestamp", async () => {
+    const raf = createRaf();
+    const sprites = {
+      frames: [{} as HTMLImageElement, {} as HTMLImageElement]
+    };
+    const drawGameFrame = vi.fn();
+    const loadBalloonSprites = vi.fn(() => Promise.resolve(sprites));
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: {} as HTMLVideoElement,
+      sideVideo: {} as HTMLVideoElement,
+      canvas: createCanvas(),
+      hudRoot: { innerHTML: "" } as HTMLElement,
+      readFusedInputFrame: () => undefined,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame,
+      loadBalloonSprites,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(loadBalloonSprites).toHaveBeenCalledOnce();
+    });
+    await Promise.resolve();
+
+    raf.fire(120);
+
+    expect(drawGameFrame).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        balloonSprites: sprites,
+        balloonFrameIndex: 1
+      })
+    );
+  });
+
   it("ignores a shot committed before countdown completes", () => {
     const raf = createRaf();
     const hudRoot = { innerHTML: "" } as HTMLElement;
