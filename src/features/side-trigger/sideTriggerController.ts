@@ -114,6 +114,7 @@ export const createSideTriggerController = (): SideTriggerController => {
     calibrationState = nextCal;
     armed = false;
     geometryEma = undefined;
+    lastObservedHandTimestampMs = undefined;
     lastAcceptedCycleAtMs = undefined;
     lastRejectedCycleReason = undefined;
     inner.reset();

@@ -191,6 +191,34 @@ describe("sideTriggerController armed gate", () => {
     expect(out.controllerTelemetry.calibrationStatus).toBe("defaultWide");
   });
 
+  it("handLoss reset fires once until a new usable hand is observed", () => {
+    const controller = createSideTriggerController();
+    update(controller, 0, 1.2);
+
+    const firstLoss = controller.update({
+      detection: undefined,
+      tuning: defaultSideTriggerTuning,
+      timestamp: timestamp(1_600),
+      sliderInDefaultRange: true
+    });
+    const stillLost = controller.update({
+      detection: undefined,
+      tuning: defaultSideTriggerTuning,
+      timestamp: timestamp(1_700),
+      sliderInDefaultRange: true
+    });
+    const stillLostLater = controller.update({
+      detection: undefined,
+      tuning: defaultSideTriggerTuning,
+      timestamp: timestamp(1_800),
+      sliderInDefaultRange: true
+    });
+
+    expect(firstLoss.controllerTelemetry.resetReason).toBe("handLoss");
+    expect(stillLost.controllerTelemetry.resetReason).toBeUndefined();
+    expect(stillLostLater.controllerTelemetry.resetReason).toBeUndefined();
+  });
+
   it("geometryJump reset", () => {
     const controller = createSideTriggerController();
     update(controller, 0, 1.2);
