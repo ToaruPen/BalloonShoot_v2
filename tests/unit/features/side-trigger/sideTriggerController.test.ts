@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createSideTriggerController } from "../../../../src/features/side-trigger/sideTriggerController";
 import { defaultSideTriggerTuning } from "../../../../src/features/side-trigger/sideTriggerConfig";
-import {
-  createInitialCalibrationState,
-  updateCalibrationReducer
-} from "../../../../src/features/side-trigger/sideTriggerCalibrationReducer";
-import type { ResetReason } from "../../../../src/features/side-trigger/sideTriggerTelemetryTypes";
 import type {
   HandLandmarkSet,
   SideHandDetection,
@@ -102,15 +97,6 @@ const acceptCycleWithFinalPull = (
   update(controller, 750, 0.2);
   return update(controller, 795, 0.2);
 };
-
-const expectedResetCalibrationStatus = (
-  resetReason: ResetReason,
-  sliderInDefaultRange: boolean
-) =>
-  updateCalibrationReducer(createInitialCalibrationState(), {
-    resetSignal: resetReason,
-    sliderInDefaultRange
-  }).result.status;
 
 const expectResetPublicOutput = (
   out: SideTriggerControllerResult,
@@ -256,9 +242,7 @@ describe("sideTriggerController armed gate", () => {
 
     expect(out.controllerTelemetry.resetReason).toBe("geometryJump");
     expect(out.controllerTelemetry.controllerArmed).toBe(false);
-    expect(out.controllerTelemetry.calibrationStatus).toBe(
-      expectedResetCalibrationStatus("geometryJump", true)
-    );
+    expect(out.controllerTelemetry.calibrationStatus).toBe("defaultWide");
     expectResetPublicOutput(out, 811, "liveTuning");
   });
 
@@ -271,9 +255,7 @@ describe("sideTriggerController armed gate", () => {
 
     expect(out.controllerTelemetry.resetReason).toBe("sourceChanged");
     expect(out.controllerTelemetry.controllerArmed).toBe(false);
-    expect(out.controllerTelemetry.calibrationStatus).toBe(
-      expectedResetCalibrationStatus("sourceChanged", true)
-    );
+    expect(out.controllerTelemetry.calibrationStatus).toBe("defaultWide");
     expectResetPublicOutput(out, 827, "liveTuning");
   });
 });
