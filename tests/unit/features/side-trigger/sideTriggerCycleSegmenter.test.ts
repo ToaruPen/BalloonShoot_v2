@@ -3,6 +3,10 @@ import {
   createInitialCycleSegmenterState,
   updateCycleSegmenter
 } from "../../../../src/features/side-trigger/sideTriggerCycleSegmenter";
+import {
+  CYCLE_BASELINE_MIN_COVERAGE_MS,
+  CYCLE_BASELINE_WINDOW_MS
+} from "../../../../src/features/side-trigger/sideTriggerConstants";
 import type { RawMetric } from "../../../../src/features/side-trigger/sideTriggerRawMetricReducer";
 
 const geometry = {
@@ -31,7 +35,7 @@ describe("cycleSegmenter baseline + Open→Drop", () => {
     expect(state.phase).toBe("open");
   });
 
-  it("sample>=10 かつ duration>=300ms で baselineWindowReady=true", () => {
+  it("sample>=MIN_SAMPLES かつ duration>=MIN_COVERAGE_MS で baselineWindowReady=true", () => {
     let state = createInitialCycleSegmenterState();
     for (let i = 0; i < 15; i++) {
       state = updateCycleSegmenter(state, usable(i * 30, 1.0)).state;
@@ -70,6 +74,25 @@ describe("cycleSegmenter baseline + Open→Drop", () => {
     expect(state.phase).toBe("drop");
     const afterDrop = state.baselineBuffer.length;
     expect(afterDrop).toBe(beforeDrop);
+  });
+});
+
+describe("cycleSegmenter baseline readiness at realistic camera cadence", () => {
+  it("keeps minimum coverage below the trim window", () => {
+    expect(CYCLE_BASELINE_MIN_COVERAGE_MS).toBeLessThan(CYCLE_BASELINE_WINDOW_MS);
+  });
+
+  it("becomes ready at the first eligible ~21fps frame", () => {
+    let state = createInitialCycleSegmenterState();
+    const frameIntervalMs = 48;
+    for (let i = 0; i <= 6; i++) {
+      state = updateCycleSegmenter(state, usable(i * frameIntervalMs, 1.0)).state;
+      if (i === 5) expect(state.baselineWindowReady).toBe(false);
+      if (i === 6) {
+        expect(state.baselineWindowReady).toBe(true);
+        expect(state.phase).toBe("open");
+      }
+    }
   });
 });
 

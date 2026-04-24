@@ -16,7 +16,11 @@ export const MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN = 0.05;
 
 // r9 cycle-driven calibration constants
 export const CYCLE_BASELINE_WINDOW_MS = 300;
-export const CYCLE_BASELINE_MIN_SAMPLES = 10;
+export const CYCLE_BASELINE_MIN_SAMPLES = 6;
+// Must be < WINDOW_MS: at realistic camera cadences the trim window rarely
+// contains samples spanning the full WINDOW_MS, so equating the two would
+// leave the gate unreachable.
+export const CYCLE_BASELINE_MIN_COVERAGE_MS = 250;
 export const CYCLE_DROP_THRESHOLD = 0.05;
 export const CYCLE_HOLD_DURATION_MS = 50;
 export const CYCLE_RECOVERY_RATIO = 0.8;

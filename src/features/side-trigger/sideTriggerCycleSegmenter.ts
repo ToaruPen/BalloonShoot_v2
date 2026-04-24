@@ -1,4 +1,5 @@
 import {
+  CYCLE_BASELINE_MIN_COVERAGE_MS,
   CYCLE_BASELINE_MIN_SAMPLES,
   CYCLE_BASELINE_WINDOW_MS,
   CYCLE_DROP_THRESHOLD,
@@ -50,7 +51,7 @@ const computeBaselineReady = (
   const first = buffer[0];
   const last = buffer[buffer.length - 1];
   if (first === undefined || last === undefined) return false;
-  return last.timestampMs - first.timestampMs >= CYCLE_BASELINE_WINDOW_MS;
+  return last.timestampMs - first.timestampMs >= CYCLE_BASELINE_MIN_COVERAGE_MS;
 };
 
 const buildStableOpen = (
