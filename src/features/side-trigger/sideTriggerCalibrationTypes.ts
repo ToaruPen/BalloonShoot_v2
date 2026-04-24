@@ -20,16 +20,28 @@ export interface RejectedCycleDigest {
   readonly durationMs: number;
 }
 
-export interface CalibrationResult {
+interface CalibrationBase {
   readonly status: ControllerCalibrationStatus;
   readonly pulled: number;
   readonly open: number;
-  readonly acceptedCycleEvent?: ConfirmedCycleEvent;
-  readonly rejectedCycleEvent?: {
-    readonly reason: RejectedCycleReason;
-    readonly cycleDigest: RejectedCycleDigest;
-  };
 }
+
+export type CalibrationResult =
+  | (CalibrationBase & {
+      readonly acceptedCycleEvent: ConfirmedCycleEvent;
+      readonly rejectedCycleEvent?: never;
+    })
+  | (CalibrationBase & {
+      readonly rejectedCycleEvent: {
+        readonly reason: RejectedCycleReason;
+        readonly cycleDigest: RejectedCycleDigest;
+      };
+      readonly acceptedCycleEvent?: never;
+    })
+  | (CalibrationBase & {
+      readonly acceptedCycleEvent?: undefined;
+      readonly rejectedCycleEvent?: undefined;
+    });
 
 export interface CalibrationReducerState {
   readonly status: ControllerCalibrationStatus;
