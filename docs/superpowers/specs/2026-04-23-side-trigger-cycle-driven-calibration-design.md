@@ -149,7 +149,7 @@ type RawMetric =
 
 - `baselineBuffer` は **Open phase 中のみ更新** (直近 BASELINE_WINDOW_MS の usable samples)
 - Drop/Hold/Recovery/PendingPostOpen 中は `cycleStart.baselineAtStart` を凍結使用 (cycle 中に baseline が下振れするのを防ぐ)
-- `baselineWindowReady = (sampleCount >= 10) && (duration >= 300ms)` まで cycle 検出を行わない (cold start 安全策)
+- `baselineWindowReady = (sampleCount >= BASELINE_MIN_SAMPLES) && (duration >= BASELINE_MIN_COVERAGE_MS)` まで cycle 検出を行わない (cold start 安全策)。2026-04-24 live 検証で side lane が ~21fps まで落ちるケースが判明し、`sampleCount >= 10 && duration >= 300ms` では baseline が永久に成立しなかったため、現行値は `BASELINE_MIN_SAMPLES=6`, `BASELINE_MIN_COVERAGE_MS=250ms` に緩和 (trim 窓は `BASELINE_WINDOW_MS=300ms` のまま)
 
 #### holdSamples の収集範囲
 
