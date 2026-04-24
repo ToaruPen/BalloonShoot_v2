@@ -207,7 +207,7 @@ const recoveryBranch = (
         ...state,
         phase: "pendingPostOpen",
         cycleSamples: nextCycleSamples,
-        postOpenSamples: [],
+        postOpenSamples: [sample],
         postOpenStartMs: now
       },
       result: { cyclePhase: "pendingPostOpen" }

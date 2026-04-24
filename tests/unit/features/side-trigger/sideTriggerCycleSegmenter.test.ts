@@ -158,18 +158,18 @@ describe("cycleSegmenter Recovery→PendingPostOpen→Confirmed", () => {
 
   it("PendingPostOpen で 200ms 経過後 Confirmed、cycle event 発火、Open に戻る", () => {
     let state = primeToRecovery();
-    state = updateCycleSegmenter(state, usable(590, 0.98)).state;
-    state = updateCycleSegmenter(state, usable(630, 1.01)).state;
-    state = updateCycleSegmenter(state, usable(670, 1.0)).state;
-    state = updateCycleSegmenter(state, usable(710, 1.0)).state;
-    state = updateCycleSegmenter(state, usable(750, 1.02)).state;
-    const final = updateCycleSegmenter(state, usable(795, 1.0));
+    state = updateCycleSegmenter(state, usable(590, 1.0)).state;
+    state = updateCycleSegmenter(state, usable(630, 0.95)).state;
+    state = updateCycleSegmenter(state, usable(670, 0.96)).state;
+    state = updateCycleSegmenter(state, usable(710, 0.97)).state;
+    state = updateCycleSegmenter(state, usable(750, 0.98)).state;
+    const final = updateCycleSegmenter(state, usable(795, 0.99));
     expect(final.state.phase).toBe("open");
     const ev = final.result.confirmedCycleEvent;
     expect(ev).toBeDefined();
     if (ev === undefined) return;
     expect(ev.pulledMedian).toBeCloseTo(0.88, 1);
-    expect(ev.openPostMedian).toBeCloseTo(1.0, 1);
+    expect(ev.openPostMedian).toBeCloseTo(0.975, 6);
     expect(ev.durationMs).toBe(795 - 450);
   });
 });
