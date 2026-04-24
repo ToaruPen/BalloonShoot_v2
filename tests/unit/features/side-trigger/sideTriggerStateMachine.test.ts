@@ -437,6 +437,48 @@ describe("updateSideTriggerState", () => {
     expect(recovered.state.triggerPulled).toBe(true);
   });
 
+  it("does not restore a latched trigger after brief hand loss while commitArmed=false", () => {
+    let state = driveToPulledLatched();
+
+    state = updateSideTriggerState(
+      state,
+      noHandEvidence(),
+      defaultSideTriggerTuning
+    ).state;
+
+    const recovered = updateSideTriggerState(
+      state,
+      pulledEvidence(),
+      defaultSideTriggerTuning,
+      { commitArmed: false }
+    );
+
+    expect(recovered.edge).toBe("none");
+    expect(recovered.state.phase).toBe("SideTriggerPullCandidate");
+    expect(recovered.state.triggerPulled).toBe(false);
+  });
+
+  it("still restores a latched trigger after brief hand loss when commitArmed=true", () => {
+    let state = driveToPulledLatched();
+
+    state = updateSideTriggerState(
+      state,
+      noHandEvidence(),
+      defaultSideTriggerTuning
+    ).state;
+
+    const recovered = updateSideTriggerState(
+      state,
+      pulledEvidence(),
+      defaultSideTriggerTuning,
+      { commitArmed: true }
+    );
+
+    expect(recovered.edge).toBe("none");
+    expect(recovered.state.phase).toBe("SideTriggerPulledLatched");
+    expect(recovered.state.triggerPulled).toBe(true);
+  });
+
   it("drops preserved pull state after brief hand loss when reacquired clearly open", () => {
     let state = driveToPulledLatched();
 
@@ -495,6 +537,27 @@ describe("updateSideTriggerState", () => {
 
     expect(state.phase).toBe("SideTriggerOpenReady");
     expect(state.dwellFrameCounts.cooldownRemainingFrames).toBe(0);
+  });
+
+  it("does not resume cooldown after brief hand loss while commitArmed=false", () => {
+    let state = driveToCooldown();
+
+    state = updateSideTriggerState(
+      state,
+      noHandEvidence(),
+      defaultSideTriggerTuning
+    ).state;
+
+    const recovered = updateSideTriggerState(
+      state,
+      openEvidence(),
+      defaultSideTriggerTuning,
+      { commitArmed: false }
+    );
+
+    expect(recovered.edge).toBe("none");
+    expect(recovered.state.phase).toBe("SideTriggerOpenReady");
+    expect(recovered.state.triggerPulled).toBe(false);
   });
 
   it("blocks shot commitment when side view quality is rejected", () => {

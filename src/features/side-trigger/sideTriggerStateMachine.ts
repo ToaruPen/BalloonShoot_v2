@@ -374,6 +374,44 @@ const cooldown = (
   });
 };
 
+const resumeCooldownAfterRecovery = (
+  previous: SideTriggerMachineState,
+  evidence: SideTriggerEvidence,
+  tuning: SideTriggerTuning,
+  commitArmed: boolean
+): SideTriggerMachineResult => {
+  if (!commitArmed) {
+    return poseSearching(previous, evidence, tuning);
+  }
+
+  return cooldown({
+    phase: "SideTriggerCooldown",
+    triggerPulled: false,
+    dwellFrameCounts: withCounts(previous, { lostHandFrames: 0 }),
+    lastRejectReason: undefined
+  });
+};
+
+const restorePulledAfterRecovery = (
+  previous: SideTriggerMachineState,
+  tuning: SideTriggerTuning,
+  commitArmed: boolean
+): SideTriggerMachineResult => {
+  if (!commitArmed) {
+    return enterPullCandidate(previous, tuning, false);
+  }
+
+  return result({
+    phase: "SideTriggerPulledLatched",
+    triggerPulled: true,
+    dwellFrameCounts: withCounts(previous, {
+      releaseDwellFrames: 0,
+      lostHandFrames: 0
+    }),
+    lastRejectReason: undefined
+  });
+};
+
 const recoveringAfterLoss = (
   previous: SideTriggerMachineState,
   evidence: SideTriggerEvidence,
@@ -385,12 +423,7 @@ const recoveringAfterLoss = (
   }
 
   if (previous.recoveringFromPhase === "SideTriggerCooldown") {
-    return cooldown({
-      phase: "SideTriggerCooldown",
-      triggerPulled: false,
-      dwellFrameCounts: withCounts(previous, { lostHandFrames: 0 }),
-      lastRejectReason: undefined
-    });
+    return resumeCooldownAfterRecovery(previous, evidence, tuning, commitArmed);
   }
 
   if (!previous.triggerPulled) {
@@ -403,30 +436,14 @@ const recoveringAfterLoss = (
     }
 
     if (evidence.pullEvidenceScalar >= tuning.pullExitThreshold) {
-      return result({
-        phase: "SideTriggerPulledLatched",
-        triggerPulled: true,
-        dwellFrameCounts: withCounts(previous, {
-          releaseDwellFrames: 0,
-          lostHandFrames: 0
-        }),
-        lastRejectReason: undefined
-      });
+      return restorePulledAfterRecovery(previous, tuning, commitArmed);
     }
 
     return poseSearching(previous, evidence, tuning);
   }
 
   if (evidence.pullEvidenceScalar >= tuning.pullExitThreshold) {
-    return result({
-      phase: "SideTriggerPulledLatched",
-      triggerPulled: true,
-      dwellFrameCounts: withCounts(previous, {
-        releaseDwellFrames: 0,
-        lostHandFrames: 0
-      }),
-      lastRejectReason: undefined
-    });
+    return restorePulledAfterRecovery(previous, tuning, commitArmed);
   }
 
   return poseSearching(previous, evidence, tuning);
