@@ -37,6 +37,7 @@ import {
   balloonAnimationFrameIndex,
   type BalloonSprites
 } from "../features/rendering/balloonSpriteUtils";
+import { createBalloonSpriteLoader } from "../features/rendering/createBalloonSpriteLoader";
 import { loadBalloonSprites } from "./loadBalloonSpritesAdapter";
 import type { Balloon } from "../features/gameplay/domain/balloon";
 import {
@@ -228,7 +229,6 @@ export const createBalloonGameRuntime = ({
   let frontLaneHealth: LaneHealthStatus = "notStarted";
   let sideLaneHealth: LaneHealthStatus = "notStarted";
   let balloonSprites: BalloonSprites | undefined;
-  let spritesLoadStarted = false;
   const frontAimMapper = createFrontAimMapper();
   const sideTriggerMapper: CycleDrivenSideTriggerMapper =
     createCycleDrivenSideTriggerMapper();
@@ -236,6 +236,20 @@ export const createBalloonGameRuntime = ({
   const streams: DevicePinnedStream[] = [];
   const trackers: MediaPipeHandTracker[] = [];
   const laneStops: (() => void)[] = [];
+  const balloonSpriteLoader = createBalloonSpriteLoader({
+    load: loadSprites,
+    onLoaded: (sprites) => {
+      balloonSprites = sprites;
+    },
+    onError: (error: unknown) => {
+      if (!stopped) {
+        console.error(
+          "[balloon game runtime] balloon sprites load failed",
+          error
+        );
+      }
+    }
+  });
 
   const safeCleanupTracker = (tracker: MediaPipeHandTracker): void => {
     removeItem(trackers, tracker);
@@ -303,30 +317,9 @@ export const createBalloonGameRuntime = ({
     }
   };
 
-  const ensureBalloonSpritesLoaded = (): void => {
-    if (spritesLoadStarted || balloonSprites !== undefined) {
-      return;
-    }
-
-    spritesLoadStarted = true;
-    void Promise.resolve()
-      .then(() => loadSprites())
-      .then((sprites) => {
-        balloonSprites = sprites;
-      })
-      .catch((error: unknown) => {
-        spritesLoadStarted = false;
-        if (!stopped) {
-          console.error(
-            "[balloon game runtime] balloon sprites load failed",
-            error
-          );
-        }
-      });
-  };
-
   const renderCanvas = (
-    crosshair: { x: number; y: number } | undefined
+    crosshair: { x: number; y: number } | undefined,
+    frameNowMs: number
   ): void => {
     if (context === null) {
       return;
@@ -334,7 +327,7 @@ export const createBalloonGameRuntime = ({
 
     const frameCount = balloonSprites?.frames.length ?? 0;
     const balloonFrameIndex =
-      frameCount > 0 ? balloonAnimationFrameIndex(nowMs(), frameCount) : 0;
+      frameCount > 0 ? balloonAnimationFrameIndex(frameNowMs, frameCount) : 0;
 
     renderFrame(context, {
       balloons: engine.balloons,
@@ -401,7 +394,7 @@ export const createBalloonGameRuntime = ({
       play(() => audio.playResult());
     }
 
-    renderCanvas(input.crosshair);
+    renderCanvas(input.crosshair, frameNowMs);
     renderHud();
     schedule();
   }
@@ -745,7 +738,7 @@ export const createBalloonGameRuntime = ({
       lastFrameMs = startMs;
       session = startGameSession(session, startMs);
       play(() => audio.startBgm());
-      ensureBalloonSpritesLoaded();
+      balloonSpriteLoader.ensureStarted();
       startCameraTracking();
       renderHud();
       schedule();
@@ -767,7 +760,7 @@ export const createBalloonGameRuntime = ({
       shotEffect = undefined;
       hitEffect = undefined;
       play(() => audio.startBgm());
-      ensureBalloonSpritesLoaded();
+      balloonSpriteLoader.ensureStarted();
       startCameraTracking();
       renderHud();
     },

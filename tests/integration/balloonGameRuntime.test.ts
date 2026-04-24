@@ -593,6 +593,46 @@ describe("createBalloonGameRuntime", () => {
     );
   });
 
+  it("selects balloon sprite frames from the animation tick timestamp", async () => {
+    const raf = createRaf();
+    const sprites = {
+      frames: [{} as HTMLImageElement, {} as HTMLImageElement]
+    };
+    const drawGameFrame = vi.fn();
+    const loadBalloonSprites = vi.fn(() => Promise.resolve(sprites));
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: {} as HTMLVideoElement,
+      sideVideo: {} as HTMLVideoElement,
+      canvas: createCanvas(),
+      hudRoot: { innerHTML: "" } as HTMLElement,
+      readFusedInputFrame: () => undefined,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame,
+      loadBalloonSprites,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(loadBalloonSprites).toHaveBeenCalledOnce();
+    });
+    await Promise.resolve();
+
+    raf.fire(120);
+
+    expect(drawGameFrame).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        balloonSprites: sprites,
+        balloonFrameIndex: 1
+      })
+    );
+  });
+
   it("ignores a shot committed before countdown completes", () => {
     const raf = createRaf();
     const hudRoot = { innerHTML: "" } as HTMLElement;
