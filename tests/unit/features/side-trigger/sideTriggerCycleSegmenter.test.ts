@@ -177,6 +177,22 @@ describe("cycleSegmenter Recovery→PendingPostOpen→Confirmed", () => {
     expect(next.state.phase).toBe("open");
     expect(next.result.cyclePhase).toBe("open");
   });
+
+  it("Confirmed 後の baseline は pending post-open samples を引き継ぐ", () => {
+    let state = primeToRecovery();
+    state = updateCycleSegmenter(state, usable(590, 1.0)).state;
+    for (let timestampMs = 595; timestampMs <= 775; timestampMs += 15) {
+      state = updateCycleSegmenter(state, usable(timestampMs, 1.0)).state;
+      expect(state.phase).toBe("pendingPostOpen");
+    }
+
+    const confirmed = updateCycleSegmenter(state, usable(895, 1.0));
+
+    expect(confirmed.result.cyclePhase).toBe("confirmed");
+    expect(confirmed.state.phase).toBe("open");
+    expect(confirmed.state.baselineBuffer.length).toBeGreaterThan(1);
+    expect(confirmed.state.baselineWindowReady).toBe(true);
+  });
 });
 
 describe("cycleSegmenter stableOpenObservation", () => {

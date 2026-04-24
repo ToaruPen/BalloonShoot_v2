@@ -244,7 +244,10 @@ const pendingPostOpenBranch = (
       openPostMedian,
       durationMs
     };
-    const baselineBuffer = trimBaseline([...state.baselineBuffer, sample], now);
+    const baselineBuffer = trimBaseline(
+      [...state.baselineBuffer, ...nextPostSamples],
+      now
+    );
     const baselineWindowReady = computeBaselineReady(baselineBuffer);
     const nextState: CycleSegmenterState = {
       phase: "open",
