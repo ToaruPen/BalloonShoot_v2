@@ -93,6 +93,19 @@ describe("calibrationReducer sanity reject", () => {
     expect(result.rejectedCycleEvent?.reason).toBe("spanTooSmall");
   });
 
+  it("spanTooSmall: 初回 cycle でも cycle 自身の open 幅で判定する", () => {
+    const { result } = updateCalibrationReducer(createInitialCalibrationState(), {
+      confirmedCycleEvent: evt({
+        pulledMedian: 0.6,
+        openPreMedian: 0.6,
+        openPostMedian: 0.6
+      }),
+      sliderInDefaultRange: true
+    });
+
+    expect(result.rejectedCycleEvent?.reason).toBe("spanTooSmall");
+  });
+
   it("openMedianMismatch: |openPre - openPost| / max > 0.30", () => {
     const { result } = updateCalibrationReducer(createInitialCalibrationState(), {
       confirmedCycleEvent: evt({

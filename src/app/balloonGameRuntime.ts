@@ -304,16 +304,18 @@ export const createBalloonGameRuntime = ({
   };
 
   const ensureBalloonSpritesLoaded = (): void => {
-    if (spritesLoadStarted) {
+    if (spritesLoadStarted || balloonSprites !== undefined) {
       return;
     }
 
     spritesLoadStarted = true;
-    void loadSprites()
+    void Promise.resolve()
+      .then(() => loadSprites())
       .then((sprites) => {
         balloonSprites = sprites;
       })
       .catch((error: unknown) => {
+        spritesLoadStarted = false;
         if (!stopped) {
           console.error(
             "[balloon game runtime] balloon sprites load failed",
@@ -765,6 +767,7 @@ export const createBalloonGameRuntime = ({
       shotEffect = undefined;
       hitEffect = undefined;
       play(() => audio.startBgm());
+      ensureBalloonSpritesLoaded();
       startCameraTracking();
       renderHud();
     },

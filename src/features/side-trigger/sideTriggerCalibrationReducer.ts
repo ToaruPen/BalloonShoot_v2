@@ -38,8 +38,7 @@ interface CalibrationReducerUpdateResult {
 
 const evaluateSanity = (
   ev: ConfirmedCycleEvent,
-  state: CalibrationReducerState,
-  effectiveOpen: number
+  state: CalibrationReducerState
 ): RejectedCycleReason | undefined => {
   if (
     !Number.isFinite(ev.timestampMs) ||
@@ -50,7 +49,11 @@ const evaluateSanity = (
   ) {
     return "invalidNumeric";
   }
-  if (ev.pulledMedian >= effectiveOpen - MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN)
+  const cycleOpenMedian = (ev.openPreMedian + ev.openPostMedian) / 2;
+  if (
+    ev.pulledMedian >=
+    cycleOpenMedian - MIN_SIDE_TRIGGER_CALIBRATION_DISTANCE_SPAN
+  )
     return "spanTooSmall";
   const diff = Math.abs(ev.openPreMedian - ev.openPostMedian);
   const maxOpen = Math.max(ev.openPreMedian, ev.openPostMedian);
@@ -86,7 +89,7 @@ const reduceConfirmedCycleEvent = (
   ev: ConfirmedCycleEvent | undefined
 ): CalibrationReducerUpdateResult | undefined => {
   if (ev === undefined) return undefined;
-  const rejectReason = evaluateSanity(ev, state, state.open);
+  const rejectReason = evaluateSanity(ev, state);
   const digest = {
     pulledMedian: ev.pulledMedian,
     openPreMedian: ev.openPreMedian,

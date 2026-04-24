@@ -6,6 +6,11 @@ describe("balloonAnimationFrameIndex", () => {
     expect(balloonAnimationFrameIndex(123, 0)).toBe(0);
   });
 
+  it("returns 0 for non-finite time inputs", () => {
+    expect(balloonAnimationFrameIndex(Number.NaN, 5)).toBe(0);
+    expect(balloonAnimationFrameIndex(Number.POSITIVE_INFINITY, 5)).toBe(0);
+  });
+
   it("advances the index every 120ms", () => {
     expect(balloonAnimationFrameIndex(0, 5)).toBe(0);
     expect(balloonAnimationFrameIndex(119, 5)).toBe(0);

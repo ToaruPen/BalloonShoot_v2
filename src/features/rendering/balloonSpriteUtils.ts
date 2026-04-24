@@ -11,6 +11,9 @@ export const balloonAnimationFrameIndex = (
   if (frameCount <= 0) {
     return 0;
   }
+  if (!Number.isFinite(nowMs)) {
+    return 0;
+  }
 
   const tick = Math.floor(nowMs / ANIMATION_FRAME_INTERVAL_MS);
   const wrapped = ((tick % frameCount) + frameCount) % frameCount;
