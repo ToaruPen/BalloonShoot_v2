@@ -165,12 +165,17 @@ describe("cycleSegmenter Recovery→PendingPostOpen→Confirmed", () => {
     state = updateCycleSegmenter(state, usable(750, 0.98)).state;
     const final = updateCycleSegmenter(state, usable(795, 0.99));
     expect(final.state.phase).toBe("open");
+    expect(final.result.cyclePhase).toBe("confirmed");
     const ev = final.result.confirmedCycleEvent;
     expect(ev).toBeDefined();
     if (ev === undefined) return;
     expect(ev.pulledMedian).toBeCloseTo(0.88, 1);
     expect(ev.openPostMedian).toBeCloseTo(0.975, 6);
     expect(ev.durationMs).toBe(795 - 450);
+
+    const next = updateCycleSegmenter(final.state, usable(830, 1.0));
+    expect(next.state.phase).toBe("open");
+    expect(next.result.cyclePhase).toBe("open");
   });
 });
 

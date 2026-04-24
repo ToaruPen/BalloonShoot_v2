@@ -1,6 +1,12 @@
 import type { ResetReason } from "./sideTriggerTelemetryTypes";
 
-export type CyclePhase = "open" | "drop" | "hold" | "recovery" | "pendingPostOpen";
+export type CyclePhase =
+  | "open"
+  | "drop"
+  | "hold"
+  | "recovery"
+  | "pendingPostOpen"
+  | "confirmed";
 
 export interface ConfirmedCycleEvent {
   readonly timestampMs: number;

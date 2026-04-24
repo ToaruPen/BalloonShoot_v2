@@ -258,7 +258,7 @@ const pendingPostOpenBranch = (
     };
     return {
       state: nextState,
-      result: { cyclePhase: "open", confirmedCycleEvent: confirmedEvent }
+      result: { cyclePhase: "confirmed", confirmedCycleEvent: confirmedEvent }
     };
   }
   return {

@@ -155,6 +155,7 @@ describe("sideTriggerController armed gate", () => {
 
     expect(out.controllerTelemetry.controllerArmed).toBe(true);
     expect(out.controllerTelemetry.justArmed).toBe(true);
+    expect(out.controllerTelemetry.cyclePhase).toBe("confirmed");
     expect(out.cycleEvent?.kind).toBe("accepted");
   });
 
