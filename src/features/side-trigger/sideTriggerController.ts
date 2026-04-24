@@ -209,18 +209,14 @@ export const createSideTriggerController = (): SideTriggerController => {
       cycleState = cycle.state;
 
       const calInput: Parameters<typeof updateCalibrationReducer>[1] = {
-        sliderInDefaultRange: update.sliderInDefaultRange
+        sliderInDefaultRange: update.sliderInDefaultRange,
+        ...(cycle.result.confirmedCycleEvent !== undefined
+          ? { confirmedCycleEvent: cycle.result.confirmedCycleEvent }
+          : {}),
+        ...(cycle.result.stableOpenObservation !== undefined
+          ? { stableOpenObservation: cycle.result.stableOpenObservation }
+          : {})
       };
-      if (cycle.result.confirmedCycleEvent !== undefined) {
-        (calInput as {
-          confirmedCycleEvent?: typeof cycle.result.confirmedCycleEvent;
-        }).confirmedCycleEvent = cycle.result.confirmedCycleEvent;
-      }
-      if (cycle.result.stableOpenObservation !== undefined) {
-        (calInput as {
-          stableOpenObservation?: typeof cycle.result.stableOpenObservation;
-        }).stableOpenObservation = cycle.result.stableOpenObservation;
-      }
       const cal = updateCalibrationReducer(calibrationState, calInput);
       calibrationState = cal.state;
 

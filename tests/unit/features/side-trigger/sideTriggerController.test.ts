@@ -3,7 +3,8 @@ import { createSideTriggerController } from "../../../../src/features/side-trigg
 import { defaultSideTriggerTuning } from "../../../../src/features/side-trigger/sideTriggerConfig";
 import type {
   HandLandmarkSet,
-  SideHandDetection
+  SideHandDetection,
+  SideViewQuality
 } from "../../../../src/shared/types/hand";
 
 const makeDetection = (
@@ -12,6 +13,7 @@ const makeDetection = (
   options: {
     readonly streamId?: string;
     readonly geometryScale?: number;
+    readonly sideViewQuality?: SideViewQuality;
   } = {}
 ): SideHandDetection => {
   const geometryScale = options.geometryScale ?? 1;
@@ -43,7 +45,7 @@ const makeDetection = (
       receivedAtPerformanceMs: timestampMs
     },
     handPresenceConfidence: 0.9,
-    sideViewQuality: "good",
+    sideViewQuality: options.sideViewQuality ?? "good",
     rawFrame: {
       width: 640,
       height: 480,
@@ -237,5 +239,61 @@ describe("sideTriggerController armed gate", () => {
 
     expect(out.controllerTelemetry.resetReason).toBe("sourceChanged");
     expect(out.controllerTelemetry.controllerArmed).toBe(false);
+  });
+});
+
+describe("sideTriggerController reset priority", () => {
+  it("orders reset reasons as sourceChanged > geometryJump > handLoss > manualOverrideEntered", () => {
+    const sourceOverGeometry = createSideTriggerController();
+    update(sourceOverGeometry, 0, 1.2, { streamId: "stream-a" });
+    const sourceOverGeometryOut = sourceOverGeometry.update({
+      detection: makeDetection(16, 1.2, {
+        geometryScale: 2,
+        streamId: "stream-b"
+      }),
+      tuning: defaultSideTriggerTuning,
+      sliderInDefaultRange: false
+    });
+
+    const sourceOverHandLoss = createSideTriggerController();
+    update(sourceOverHandLoss, 0, 1.2, { streamId: "stream-a" });
+    const sourceOverHandLossOut = sourceOverHandLoss.update({
+      detection: makeDetection(1_600, 1.2, {
+        sideViewQuality: "lost",
+        streamId: "stream-b"
+      }),
+      tuning: defaultSideTriggerTuning,
+      sliderInDefaultRange: false
+    });
+
+    const geometryOverManual = createSideTriggerController();
+    update(geometryOverManual, 0, 1.2);
+    const geometryOverManualOut = geometryOverManual.update({
+      detection: makeDetection(16, 1.2, { geometryScale: 2 }),
+      tuning: defaultSideTriggerTuning,
+      sliderInDefaultRange: false
+    });
+
+    const handLossOverManual = createSideTriggerController();
+    update(handLossOverManual, 0, 1.2);
+    const handLossOverManualOut = handLossOverManual.update({
+      detection: undefined,
+      tuning: defaultSideTriggerTuning,
+      timestamp: timestamp(1_600),
+      sliderInDefaultRange: false
+    });
+
+    expect(sourceOverGeometryOut.controllerTelemetry.resetReason).toBe(
+      "sourceChanged"
+    );
+    expect(sourceOverHandLossOut.controllerTelemetry.resetReason).toBe(
+      "sourceChanged"
+    );
+    expect(geometryOverManualOut.controllerTelemetry.resetReason).toBe(
+      "geometryJump"
+    );
+    expect(handLossOverManualOut.controllerTelemetry.resetReason).toBe(
+      "handLoss"
+    );
   });
 });
