@@ -44,9 +44,10 @@ src/features/side-trigger/
   sideTriggerConstants.ts                    # r9 constants 追加 (DROP_THRESHOLD, HOLD_DURATION_MS, etc.)
   sideTriggerStateMachine.ts                 # armed=false 契約 + time-based hold 支援
   sideTriggerEvidence.ts                     # evidenceFor(raw, calResult) ラッパー helper
-  createAdaptiveSideTriggerMapper.ts         # Controller-based 実装へ rewrite
+  createCycleDrivenSideTriggerMapper.ts      # Controller-backed r9 mapper
+  createAdaptiveSideTriggerMapper.ts         # r8 fallback export retained for legacy tests/workbench paths
   index.ts                                   # exports 更新
-src/app/balloonGameRuntime.ts                # Controller wiring (既に adaptive mapper を使っているので内部差し替え)
+src/app/balloonGameRuntime.ts                # createCycleDrivenSideTriggerMapper を直接使用
 src/features/diagnostic-workbench/
   renderSideTriggerPanel.ts                  # 新 telemetry 表示 (cyclePhase, calibrationStatus, baselineWindowReady)
   liveLandmarkInspection.ts                  # observe-only controller に置き換え
@@ -1535,24 +1536,46 @@ git commit -am "feat(side-trigger): Controller telemetry builders"
 
 ---
 
-## Task 15: createAdaptiveSideTriggerMapper を Controller-based に rewrite
+## Task 15: balloonGameRuntime consumer を cycle-driven mapper へ migrate
 
 **Files:**
-- Modify: `src/features/side-trigger/createAdaptiveSideTriggerMapper.ts`
+- Modify: `src/app/balloonGameRuntime.ts`
+- Modify: `src/features/side-trigger/createCycleDrivenSideTriggerMapper.ts`
+- Verify: `src/features/side-trigger/createAdaptiveSideTriggerMapper.ts`
 - Modify: `src/features/side-trigger/index.ts`
 
-既存 export signature を維持しつつ内部実装を Controller ベースに置き換え。既存 API consumer (`balloonGameRuntime.ts`) は無変更で済むように。
+実際の migration は `balloonGameRuntime.ts` 側の consumer を
+`createCycleDrivenSideTriggerMapper` の直接 import に切り替える方針で実施した。
+`createAdaptiveSideTriggerMapper` は diagnostic workbench / r8 fallback 用の
+legacy export として残し、controller-backed r9 path とは分ける。
 
-- [ ] **Step 1: Read existing API surface**
+- [ ] **Step 1: Verify current API surface**
 
-Run: `grep -n "export" src/features/side-trigger/createAdaptiveSideTriggerMapper.ts`
+Run:
 
-- [ ] **Step 2-4: Rewrite internal impl, run existing consumer tests PASS**
+```bash
+grep -n "createCycleDrivenSideTriggerMapper\|createAdaptiveSideTriggerMapper" \
+  src/app/balloonGameRuntime.ts src/features/side-trigger/index.ts \
+  src/features/side-trigger/createAdaptiveSideTriggerMapper.ts
+```
+
+- [ ] **Step 2: Switch runtime consumer**
+
+`src/app/balloonGameRuntime.ts` imports and instantiates
+`createCycleDrivenSideTriggerMapper` directly.
+
+- [ ] **Step 3: Keep legacy export explicit**
+
+`src/features/side-trigger/index.ts` continues exporting
+`createAdaptiveSideTriggerMapper` only for remaining r8 fallback/workbench paths.
+Do not rewrite it to hide the r9 mapper behind the old API.
+
+- [ ] **Step 4: Run consumer tests PASS**
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git commit -am "feat(side-trigger): rewrite createAdaptiveSideTriggerMapper to use Controller"
+git commit -am "feat(app): use cycle-driven side-trigger mapper in runtime"
 ```
 
 ---
@@ -1651,7 +1674,8 @@ git commit -am "test(side-trigger): r9 replay opt-in behavior-only test"
 - [ ] **Step 1: Confirm no consumers**
 
 Run: `grep -rn "sideTriggerAdaptiveCalibration\|updateSideTriggerAdaptiveCalibration" src tests`
-Expected: 削除対象のファイルからのみ参照 (既に `createAdaptiveSideTriggerMapper.ts` は Task 15 で rewrite 済み)
+Expected: r8 fallback/workbench paths からの参照のみ。削除する場合は
+`createAdaptiveSideTriggerMapper` legacy export の必要性を先に再確認する。
 
 - [ ] **Step 2-4: Delete & verify**
 

@@ -242,7 +242,7 @@ defaultWide → cycleReady → adaptive
 
 cycle event を受け取った時、以下の条件を全て満たせば accept、いずれか不成立なら reject:
 
-- `cycle.pulledMedian < cal.open - MIN_SPAN(0.05)`  → 失敗時 `spanTooSmall`
+- `cycle.pulledMedian < avg(openPre, openPost) - MIN_SPAN(0.05)`  → 失敗時 `spanTooSmall`
 - `|openPre - openPost| / max(openPre, openPost) < 0.30` → 失敗時 `openMedianMismatch`
 - `cycle.durationMs < 1000ms` → 失敗時 `durationTooLong`
 - 直前 accepted cycle との pulledMedian/openMedian 乖離 < 50% (rejected cycles はスキップして比較) → 失敗時 `medianDeviationFromLastAccepted`
@@ -408,11 +408,13 @@ slider value を inDefaultRange と判定する epsilon = SLIDER_STEP / 2
 mode 切替条件:
   - adaptive → manualOverride: いずれかの slider 値が inDefaultRange を外れた瞬間
                                   (manualOverrideEntered を 1 frame 発火)
-  - manualOverride → adaptive:  両 slider が inDefaultRange に戻り、3 秒安定した時点
-                                  (途中で再度外れたらタイマーリセット)
+  - manualOverride → cycleReady: sliderInDefaultRange が true に戻った後、
+                                  次の accepted cycle で direct-set
+                                  (defaultWide → cycleReady と同じ扱い)
 
 mode 切替時の adaptive state:
-  - manualOverride → adaptive 復帰時、cycle/cal state は defaultWide にリセット
+  - manualOverride 復帰時、cycle/cal state は defaultWide 相当から再確立
+  - 3 秒安定待ちによる automatic adaptive 復帰は Phase 2 deferred
 ```
 
 ### 2.7 オープン論点 (r9 残件)
@@ -671,7 +673,7 @@ HandLandmarker `frameTimestampMs` 採用、欠落時 `performance.now()` fallbac
 - 1 frame orchestration (raw → cycle → cal → evidence → fsm 順)
 - armed gate (acceptedCycleEvent 受領後 armed=true、justArmed で同 frame commit 抑制)
 - reset orchestration (各 ResetReason で resetAll → reset telemetry 返す、manualOverrideEntered だけ cal も呼ぶ)
-- manual override mode 切替 (slider 操作 → manualOverride、3s 復帰 → adaptive + cal reset)
+- manual override mode 切替 (slider 操作 → manualOverride、sliderInDefaultRange 復帰後の次 accepted cycle → cycleReady direct-set)
 
 ### 4.3 Replay opt-in テスト
 
