@@ -5,6 +5,7 @@ interface FakeAudioInstance {
   src: string;
   loop: boolean;
   currentTime: number;
+  volume: number;
   play: ReturnType<typeof vi.fn>;
   pause: ReturnType<typeof vi.fn>;
 }
@@ -17,6 +18,7 @@ describe("createAudioController", () => {
       src: string;
       loop = false;
       currentTime = 0;
+      volume = 1;
       play = vi.fn(() => Promise.resolve(undefined));
       pause = vi.fn(() => undefined);
 
@@ -38,7 +40,9 @@ describe("createAudioController", () => {
 
   it("loops bgm and resets it on stop", async () => {
     const audio = createAudioController();
-    const bgm = (globalThis as unknown as { __createdAudio: FakeAudioInstance[] }).__createdAudio[0];
+    const bgm = (
+      globalThis as unknown as { __createdAudio: FakeAudioInstance[] }
+    ).__createdAudio[0];
 
     expect(bgm?.src).toBe("/audio/bgm.mp3");
     expect(bgm?.loop).toBe(true);
@@ -51,6 +55,30 @@ describe("createAudioController", () => {
     expect(bgm?.currentTime).toBe(0);
   });
 
+  it("uses named mix levels and can briefly duck bgm", () => {
+    const audio = createAudioController();
+    const bgm = (
+      globalThis as unknown as { __createdAudio: FakeAudioInstance[] }
+    ).__createdAudio[0];
+
+    expect(bgm?.volume).toBe(0.13);
+    audio.duckBgm(0.07);
+    expect(bgm?.volume).toBe(0.07);
+    audio.restoreBgmVolume();
+    expect(bgm?.volume).toBe(0.13);
+  });
+
+  it("uses the default ducked bgm volume when no volume is passed", () => {
+    const audio = createAudioController();
+    const bgm = (
+      globalThis as unknown as { __createdAudio: FakeAudioInstance[] }
+    ).__createdAudio[0];
+
+    audio.duckBgm();
+
+    expect(bgm?.volume).toBe(0.07);
+  });
+
   it("creates dedicated one-shot players for every sound effect", async () => {
     const audio = createAudioController();
 
@@ -59,7 +87,9 @@ describe("createAudioController", () => {
     await audio.playTimeout();
     await audio.playResult();
 
-    const created = (globalThis as unknown as { __createdAudio: FakeAudioInstance[] }).__createdAudio;
+    const created = (
+      globalThis as unknown as { __createdAudio: FakeAudioInstance[] }
+    ).__createdAudio;
     const effectSources = created.slice(1).map((instance) => instance.src);
 
     expect(effectSources).toEqual([
@@ -70,6 +100,7 @@ describe("createAudioController", () => {
     ]);
     created.slice(1).forEach((instance) => {
       expect(instance.play).toHaveBeenCalledTimes(1);
+      expect(instance.volume).toBe(0.5);
     });
   });
 
@@ -80,8 +111,11 @@ describe("createAudioController", () => {
       src: string;
       loop = false;
       currentTime = 0;
+      volume = 1;
       play = vi.fn(() =>
-        this.src === "/audio/shot.mp3" ? Promise.reject(blocked) : Promise.resolve(undefined)
+        this.src === "/audio/shot.mp3"
+          ? Promise.reject(blocked)
+          : Promise.resolve(undefined)
       );
       pause = vi.fn(() => undefined);
 

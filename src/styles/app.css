@@ -2,6 +2,11 @@
   font-family: "Trebuchet MS", "Hiragino Kaku Gothic ProN", sans-serif;
   color: #10241f;
   background: #e8fbff;
+  --arcade-ink: #1a1430;
+  --arcade-cream: #fff5e1;
+  --arcade-candy: #ff5a8a;
+  --arcade-lime: #c8ff3a;
+  --arcade-alert: #ffb400;
 }
 
 body {
@@ -81,17 +86,67 @@ select {
   min-height: calc(100vh - 2rem);
 }
 
-.hud {
+.hud-arcade {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
+  align-items: flex-start;
+  gap: 0.75rem;
   min-height: 2rem;
-  border-radius: 8px;
-  padding: 0.45rem 0.7rem;
-  background: rgb(16 36 31 / 78%);
-  color: #ffffff;
-  font-weight: 700;
+  color: var(--arcade-ink);
+  font-weight: 900;
+}
+
+.hud-score-badge,
+.hud-timer-disc,
+.hud-combo-chip,
+.hud-multiplier-chip {
+  border: 4px solid var(--arcade-ink);
+  background: var(--arcade-cream);
+  box-shadow: 5px 5px 0 var(--arcade-ink);
+  color: var(--arcade-ink);
+}
+
+.hud-score-badge {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 5rem;
+  border-radius: 14px;
+  padding: 0.55rem 0.75rem;
+  background: var(--arcade-candy);
+  color: var(--arcade-cream);
+  transform: rotate(-3deg);
+}
+
+.hud-score-badge span,
+.hud-timer-disc span,
+.hud-combo-chip span,
+.hud-multiplier-chip span {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  opacity: 0.9;
+}
+
+.hud-score-badge strong {
+  font-size: 2rem;
+  line-height: 0.95;
+}
+
+.hud-timer-disc {
+  display: grid;
+  place-items: center;
+  width: 5.25rem;
+  height: 5.25rem;
+  border-radius: 50%;
+  background: var(--arcade-lime);
+}
+
+.hud-combo-chip,
+.hud-multiplier-chip {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  border-radius: 999px;
+  padding: 0.55rem 0.85rem;
 }
 
 .hud-item {
@@ -139,6 +194,44 @@ select {
 
 .result-panel h2 {
   margin: 0;
+}
+
+.result-panel-arcade {
+  border: 4px solid var(--arcade-ink);
+  background: var(--arcade-cream);
+  color: var(--arcade-ink);
+  box-shadow: 8px 8px 0 var(--arcade-ink);
+}
+
+.result-kicker {
+  margin: 0;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.result-score {
+  display: grid;
+  justify-items: center;
+}
+
+.result-score span {
+  font-weight: 900;
+}
+
+.result-score strong {
+  font-size: 4rem;
+  line-height: 1;
+}
+
+.result-stars {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.result-stars img {
+  width: 2.35rem;
+  height: 2.35rem;
+  object-fit: contain;
 }
 
 .result-grid {

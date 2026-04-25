@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { renderGameHud } from "../../../src/app/gameHud";
+import {
+  renderGameHud,
+  resultStarCountForScore
+} from "../../../src/app/gameHud";
 
 describe("renderGameHud", () => {
   it("renders score, combo, multiplier, timer, and countdown as key/value pairs", () => {
@@ -22,6 +25,11 @@ describe("renderGameHud", () => {
     expect(html).toMatch(/<span[^>]*>倍率<\/span>\s*<strong[^>]*>x2<\/strong>/);
     expect(html).toMatch(/<span[^>]*>残り<\/span>\s*<strong[^>]*>55<\/strong>/);
     expect(html).toContain('data-game-countdown="2"');
+    expect(html).toContain('class="hud hud-arcade"');
+    expect(html).toContain('class="hud-score-badge"');
+    expect(html).toContain('class="hud-timer-disc"');
+    expect(html).toContain('class="hud-combo-chip"');
+    expect(html).toContain('class="hud-multiplier-chip"');
   });
 
   it("renders result summary and retry action", () => {
@@ -32,17 +40,47 @@ describe("renderGameHud", () => {
       timeRemainingMs: 0,
       countdownLabel: undefined,
       statusMessage: undefined,
-      result: { finalScore: 24, bestCombo: 6 }
+      result: { finalScore: 30, bestCombo: 6, starCount: 3 }
     });
 
-    expect(html).toContain("結果");
+    expect(html).toContain("ナイスシュート");
+    expect(html).toContain('class="result-score"');
+    expect(html).toContain('class="result-stars"');
+    expect(html).toContain("/images/arcade/ui/star-badge.png");
+    expect(html).toContain("もういっかい");
+    expect(html).not.toContain("🎈");
+    expect(html).not.toContain("🎯");
     expect(html).toMatch(
-      /<span[^>]*>最終スコア<\/span>\s*<strong[^>]*>24<\/strong>/
+      /<span[^>]*>スコア<\/span>\s*<strong[^>]*>30<\/strong>/
     );
     expect(html).toMatch(
       /<span[^>]*>最大コンボ<\/span>\s*<strong[^>]*>6<\/strong>/
     );
     expect(html).toContain('data-game-action="retry"');
+  });
+
+  it("renders only the requested number of result stars", () => {
+    const html = renderGameHud({
+      score: 4,
+      combo: 0,
+      multiplier: 1,
+      timeRemainingMs: 0,
+      countdownLabel: undefined,
+      statusMessage: undefined,
+      result: { finalScore: 4, bestCombo: 1, starCount: 1 }
+    });
+
+    expect(
+      html.match(/\/images\/arcade\/ui\/star-badge\.png/g) ?? []
+    ).toHaveLength(1);
+  });
+
+  it("maps final score to one to three result stars", () => {
+    expect(resultStarCountForScore(0)).toBe(1);
+    expect(resultStarCountForScore(9)).toBe(1);
+    expect(resultStarCountForScore(10)).toBe(2);
+    expect(resultStarCountForScore(29)).toBe(2);
+    expect(resultStarCountForScore(30)).toBe(3);
   });
 
   it("escapes status text and omits diagnostic labels", () => {

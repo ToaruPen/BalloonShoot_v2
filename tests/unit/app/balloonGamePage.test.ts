@@ -1,5 +1,28 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createBalloonGamePage } from "../../../src/app/balloonGamePage";
+
+class FakeActionElement {
+  constructor(
+    private readonly action: string | null,
+    private readonly closestAction?: string
+  ) {}
+
+  getAttribute(name: string): string | null {
+    return name === "data-game-action" ? this.action : null;
+  }
+
+  closest(selector: string): FakeActionElement | null {
+    if (selector !== "[data-game-action]") {
+      return null;
+    }
+
+    if (this.closestAction !== undefined) {
+      return new FakeActionElement(this.closestAction);
+    }
+
+    return this.action === null ? null : this;
+  }
+}
 
 const createDevice = (deviceId: string, label: string): MediaDeviceInfo =>
   ({
@@ -41,9 +64,20 @@ const createRoot = () => {
     querySelector: vi.fn((selector: string) => elements.get(selector) ?? null),
     clickAction(action: string) {
       clickListener?.({
+        target: new FakeActionElement(action)
+      } as unknown as Event);
+    },
+    clickNestedAction(action: string) {
+      clickListener?.({
+        target: new FakeActionElement(null, action)
+      } as unknown as Event);
+    },
+    clickNonElementTarget() {
+      clickListener?.({
         target: {
-          getAttribute: (name: string) =>
-            name === "data-game-action" ? action : null
+          getAttribute: () => {
+            throw new Error("getAttribute should not be called");
+          }
         }
       } as unknown as Event);
     }
@@ -51,10 +85,20 @@ const createRoot = () => {
     innerHTML: string;
     querySelector: ReturnType<typeof vi.fn>;
     clickAction(action: string): void;
+    clickNestedAction(action: string): void;
+    clickNonElementTarget(): void;
   };
 };
 
 describe("createBalloonGamePage", () => {
+  beforeEach(() => {
+    vi.stubGlobal("Element", FakeActionElement);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("renders production start copy without diagnostic strings", () => {
     const root = createRoot();
     const page = createBalloonGamePage();
@@ -144,6 +188,56 @@ describe("createBalloonGamePage", () => {
       })
     );
     expect(runtime.start).toHaveBeenCalledOnce();
+  });
+
+  it("retries the runtime when a nested element inside the retry button is clicked", async () => {
+    const root = createRoot();
+    const runtime = { start: vi.fn(), retry: vi.fn(), destroy: vi.fn() };
+    const page = createBalloonGamePage({
+      requestCameraPermission: vi.fn(() =>
+        Promise.resolve({ status: "granted" as const })
+      ),
+      enumerateVideoDevices: vi.fn(() =>
+        Promise.resolve([
+          createDevice("front", "Front Camera"),
+          createDevice("side", "Side Camera")
+        ])
+      ),
+      createBalloonGameRuntime: vi.fn(() => runtime)
+    });
+
+    page.mount(root);
+    await page.requestCameraAccess();
+    page.selectCameras("front", "side");
+    root.clickNestedAction("retry");
+
+    expect(runtime.retry).toHaveBeenCalledOnce();
+  });
+
+  it("ignores delegated clicks from non-Element targets", async () => {
+    const root = createRoot();
+    const runtime = { start: vi.fn(), retry: vi.fn(), destroy: vi.fn() };
+    const page = createBalloonGamePage({
+      requestCameraPermission: vi.fn(() =>
+        Promise.resolve({ status: "granted" as const })
+      ),
+      enumerateVideoDevices: vi.fn(() =>
+        Promise.resolve([
+          createDevice("front", "Front Camera"),
+          createDevice("side", "Side Camera")
+        ])
+      ),
+      createBalloonGameRuntime: vi.fn(() => runtime)
+    });
+
+    page.mount(root);
+    await page.requestCameraAccess();
+    page.selectCameras("front", "side");
+
+    expect(() => {
+      root.clickNonElementTarget();
+    }).not.toThrow();
+    expect(runtime.retry).not.toHaveBeenCalled();
   });
 
   it("reselects cameras from the running page while preserving available previous selections", async () => {

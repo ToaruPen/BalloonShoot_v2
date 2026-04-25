@@ -326,8 +326,11 @@ export const createBalloonGamePage = ({
   };
 
   const handleClick = (event: Event): void => {
-    const target = event.target as Element | null;
-    const action = target?.getAttribute("data-game-action");
+    const actionTarget =
+      typeof Element !== "undefined" && event.target instanceof Element
+        ? event.target.closest("[data-game-action]")
+        : null;
+    const action = actionTarget?.getAttribute("data-game-action");
 
     if (action === "requestCamera") {
       void page.requestCameraAccess();

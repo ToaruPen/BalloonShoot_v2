@@ -7,7 +7,7 @@
 ## WHAT
 
 - `unit/`: pure logic coverage
-- `integration/`: reducer and seam coverage
+- `integration/`: app/runtime and cross-module seam coverage
 - `e2e/`: Chromium smoke coverage
 
 ## HOW

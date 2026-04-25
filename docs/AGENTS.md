@@ -6,6 +6,7 @@
 
 ## WHAT
 
+- `memo/`: v2 bootstrap and migration notes
 - `notes/`: project memos and evolving context
 - `setup/`: environment and remote workflow notes
 - `superpowers/`: formal design, plans, and handoffs

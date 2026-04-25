@@ -11,10 +11,13 @@
 - `gameplay/`: balloons, score, combo, timer, and difficulty
 - `rendering/`: Canvas-only drawing
 - `audio/`: BGM and sound effect playback
+- `front-aim/`: front-camera aiming semantics
+- `side-trigger/`: side-camera trigger judgment
+- `input-fusion/`: timestamp pairing between aim and trigger lanes
+- `diagnostic-workbench/`: diagnostic UI reached through `diagnostic.html`
 
 ## HOW
 
-- Prefer pure logic for gameplay and input mapping.
+- Prefer pure logic for gameplay, lane mapping, trigger judgment, and input fusion.
 - Keep browser adapters thin.
 - Avoid importing from `src/app/`.
-- v2 lane modules (`front-aim/`, `side-trigger/`, `input-fusion/`, `diagnostic-workbench/`) are introduced incrementally per the v2 implementation plan.

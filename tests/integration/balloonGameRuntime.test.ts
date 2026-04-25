@@ -275,7 +275,9 @@ const createAudio = () => ({
   playShot: vi.fn(() => Promise.resolve()),
   playHit: vi.fn(() => Promise.resolve()),
   playTimeout: vi.fn(() => Promise.resolve()),
-  playResult: vi.fn(() => Promise.resolve())
+  playResult: vi.fn(() => Promise.resolve()),
+  duckBgm: vi.fn(),
+  restoreBgmVolume: vi.fn()
 });
 
 describe("createBalloonGameRuntime", () => {
@@ -489,6 +491,7 @@ describe("createBalloonGameRuntime", () => {
 
     expect(audio.playShot).toHaveBeenCalledTimes(1);
     expect(audio.playHit).toHaveBeenCalledTimes(1);
+    expect(audio.duckBgm).toHaveBeenCalledWith(0.07);
     expect(hudRoot.innerHTML).toMatch(
       /<span[^>]*>スコア<\/span>\s*<strong[^>]*>1<\/strong>/
     );
@@ -496,9 +499,152 @@ describe("createBalloonGameRuntime", () => {
       expect.anything(),
       expect.objectContaining({
         crosshair: { x: 100, y: 100 },
-        shotEffect: { x: 100, y: 100 }
+        shotEffect: { x: 100, y: 100, startedAtMs: 4_000 },
+        hitEffects: [
+          expect.objectContaining({
+            x: 100,
+            y: 100,
+            points: 1,
+            scoreLabel: "+1",
+            startedAtMs: 4_000
+          })
+        ]
       })
     );
+  });
+
+  it("keeps bgm ducked until the latest rapid hit restore window expires", () => {
+    vi.useFakeTimers();
+    try {
+      const raf = createRaf();
+      const hudRoot = { innerHTML: "" } as HTMLElement;
+      const audio = createAudio();
+      const secondTrigger = createTriggerFrame(4_116, {
+        triggerEdge: "shotCommitted",
+        triggerPulled: true
+      });
+      const baseSideSource = createFusedFrame().sideSource;
+      const frames = [
+        createFusedFrame(),
+        createFusedFrame({
+          fusionTimestampMs: 4_116,
+          aim: createAimFrame(4_116, {
+            aimPointViewport: { x: 100, y: 100 },
+            aimPointNormalized: { x: 0.2, y: 0.2 }
+          }),
+          trigger: secondTrigger,
+          sideSource: {
+            ...baseSideSource,
+            frameTimestamp: secondTrigger.timestamp
+          }
+        })
+      ];
+      let currentFrame = frames[0];
+      const runtime = createBalloonGameRuntime({
+        frontDeviceId: "front",
+        sideDeviceId: "side",
+        frontVideo: {} as HTMLVideoElement,
+        sideVideo: {} as HTMLVideoElement,
+        canvas: createCanvas(),
+        hudRoot,
+        readFusedInputFrame: () => currentFrame,
+        initialBalloons: [
+          {
+            id: "target-1",
+            x: 100,
+            y: 100,
+            radius: 32,
+            vy: 0,
+            size: "normal",
+            alive: true
+          },
+          {
+            id: "target-2",
+            x: 100,
+            y: 100,
+            radius: 32,
+            vy: 0,
+            size: "normal",
+            alive: true
+          }
+        ],
+        nowMs: () => 0,
+        createAudioController: () => audio,
+        drawGameFrame: vi.fn(),
+        loadBalloonSprites: () => Promise.resolve({ frames: [] }),
+        requestAnimationFrame: raf.requestAnimationFrame,
+        cancelAnimationFrame: raf.cancelAnimationFrame
+      });
+
+      runtime.start();
+      raf.fire(4_000);
+      vi.advanceTimersByTime(100);
+      currentFrame = frames[1];
+      raf.fire(4_100);
+      vi.advanceTimersByTime(99);
+
+      expect(audio.duckBgm).toHaveBeenCalledTimes(2);
+      expect(audio.restoreBgmVolume).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1);
+      expect(audio.restoreBgmVolume).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(100);
+      expect(audio.restoreBgmVolume).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("restores bgm volume before starting bgm on retry after a hit duck", () => {
+    vi.useFakeTimers();
+    try {
+      const raf = createRaf();
+      const hudRoot = { innerHTML: "" } as HTMLElement;
+      const audio = createAudio();
+      const runtime = createBalloonGameRuntime({
+        frontDeviceId: "front",
+        sideDeviceId: "side",
+        frontVideo: {} as HTMLVideoElement,
+        sideVideo: {} as HTMLVideoElement,
+        canvas: createCanvas(),
+        hudRoot,
+        readFusedInputFrame: createFusedFrame,
+        initialBalloons: [
+          {
+            id: "target-1",
+            x: 100,
+            y: 100,
+            radius: 32,
+            vy: 0,
+            size: "normal",
+            alive: true
+          }
+        ],
+        nowMs: () => 0,
+        createAudioController: () => audio,
+        drawGameFrame: vi.fn(),
+        requestAnimationFrame: raf.requestAnimationFrame,
+        cancelAnimationFrame: raf.cancelAnimationFrame
+      });
+
+      runtime.start();
+      raf.fire(4_000);
+      runtime.retry();
+      vi.advanceTimersByTime(200);
+
+      expect(audio.duckBgm).toHaveBeenCalledOnce();
+      expect(audio.restoreBgmVolume).toHaveBeenCalledOnce();
+      const restoreCallOrder =
+        audio.restoreBgmVolume.mock.invocationCallOrder[0];
+      const retryStartCallOrder = audio.startBgm.mock.invocationCallOrder[1];
+      if (restoreCallOrder === undefined || retryStartCallOrder === undefined) {
+        throw new Error("Expected retry BGM call order to be recorded");
+      }
+      expect(restoreCallOrder).toBeLessThan(retryStartCallOrder);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("shows HUD status while side input is missing but front aim remains usable", () => {
@@ -587,13 +733,12 @@ describe("createBalloonGameRuntime", () => {
     expect(drawGameFrame).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        balloonSprites: sprites,
-        balloonFrameIndex: 0
+        balloonSprites: sprites
       })
     );
   });
 
-  it("selects balloon sprite frames from the animation tick timestamp", async () => {
+  it("passes loaded balloon sprites without animation frame switching", async () => {
     const raf = createRaf();
     const sprites = {
       frames: [{} as HTMLImageElement, {} as HTMLImageElement]
@@ -624,13 +769,11 @@ describe("createBalloonGameRuntime", () => {
 
     raf.fire(120);
 
-    expect(drawGameFrame).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        balloonSprites: sprites,
-        balloonFrameIndex: 1
-      })
-    );
+    const drawState = (drawGameFrame.mock.calls.at(-1)?.[1] ?? {}) as {
+      readonly balloonSprites?: typeof sprites;
+    };
+    expect(drawState.balloonSprites).toBe(sprites);
+    expect(drawState).not.toHaveProperty("balloonFrameIndex");
   });
 
   it("ignores a shot committed before countdown completes", () => {
@@ -690,7 +833,8 @@ describe("createBalloonGameRuntime", () => {
       expect.anything(),
       expect.objectContaining({
         crosshair: { x: 100, y: 100 },
-        shotEffect: undefined
+        shotEffect: undefined,
+        hitEffects: []
       })
     );
   });
@@ -1046,7 +1190,7 @@ describe("createBalloonGameRuntime", () => {
     vi.unstubAllGlobals();
   });
 
-  it("fires time-up and result audio once when playing duration ends", () => {
+  it("plays only the result jingle when playing duration ends", () => {
     const raf = createRaf();
     const hudRoot = { innerHTML: "" } as HTMLElement;
     const audio = createAudio();
@@ -1071,7 +1215,7 @@ describe("createBalloonGameRuntime", () => {
     raf.fire(64_016);
 
     expect(audio.stopBgm).toHaveBeenCalledTimes(1);
-    expect(audio.playTimeout).toHaveBeenCalledTimes(1);
+    expect(audio.playTimeout).not.toHaveBeenCalled();
     expect(audio.playResult).toHaveBeenCalledTimes(1);
     expect(hudRoot.innerHTML).toContain("結果");
     expect(hudRoot.innerHTML).toContain('data-game-action="retry"');

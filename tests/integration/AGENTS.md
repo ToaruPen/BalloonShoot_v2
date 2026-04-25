@@ -6,9 +6,9 @@
 
 ## WHAT
 
-- App reducers
-- Bootstrap seams
-- Integration between shell and feature modules
+- Runtime orchestration seams
+- Diagnostic workbench seams
+- Integration between app shell and feature modules
 
 ## HOW
 
