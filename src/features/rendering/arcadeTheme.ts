@@ -23,3 +23,17 @@ export const arcadeEffects = {
   hitRingMs: 280,
   floatingScoreMs: 700
 } as const;
+
+export const arcadeHitEffects = {
+  ringStartRadius: 20,
+  ringRadiusGrowth: 58,
+  shardLifetimeMs: 600,
+  shardGravity: 36,
+  shardWidth: 16,
+  shardHeight: 10,
+  scoreXOffset: 42,
+  scoreBaseYOffset: 82,
+  scoreRiseDelayMs: 100,
+  scoreRiseStepMs: 20,
+  scoreMaxRise: 24
+} as const;

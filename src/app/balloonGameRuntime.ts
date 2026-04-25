@@ -67,7 +67,7 @@ import type {
 } from "../shared/types/fusion";
 import type { FrameTimestamp, LaneHealthStatus } from "../shared/types/camera";
 import type { HandDetection } from "../shared/types/hand";
-import { renderGameHud } from "./gameHud";
+import { renderGameHud, resultStarCountForScore } from "./gameHud";
 
 type RequestAnimationFrameLike = (callback: FrameRequestCallback) => number;
 type CancelAnimationFrameLike = (handle: number) => void;
@@ -327,7 +327,11 @@ export const createBalloonGameRuntime = ({
           : undefined,
       result:
         session.state === "result"
-          ? { finalScore: engine.score, bestCombo }
+          ? {
+              finalScore: engine.score,
+              bestCombo,
+              starCount: resultStarCountForScore(engine.score)
+            }
           : undefined
     });
 

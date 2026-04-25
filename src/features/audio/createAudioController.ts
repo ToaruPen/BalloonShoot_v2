@@ -5,7 +5,7 @@ export interface AudioController {
   playHit(): Promise<void>;
   playTimeout(): Promise<void>;
   playResult(): Promise<void>;
-  duckBgm(volume: number): void;
+  duckBgm(volume?: number): void;
   restoreBgmVolume(): void;
 }
 

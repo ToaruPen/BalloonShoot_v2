@@ -4,6 +4,7 @@ import type { CountdownLabel } from "../features/gameplay/domain/gameSession";
 interface GameHudResult {
   readonly finalScore: number;
   readonly bestCombo: number;
+  readonly starCount: 1 | 2 | 3;
 }
 
 interface GameHudStatusAction {
@@ -31,6 +32,25 @@ const renderHudItem = (label: string, value: string): string => `
 
 const secondsRemaining = (timeRemainingMs: number): number =>
   Math.ceil(Math.max(0, timeRemainingMs) / 1_000);
+
+export const resultStarCountForScore = (score: number): 1 | 2 | 3 => {
+  if (score >= 30) {
+    return 3;
+  }
+
+  if (score >= 10) {
+    return 2;
+  }
+
+  return 1;
+};
+
+const renderResultStars = (starCount: 1 | 2 | 3): string =>
+  Array.from(
+    { length: starCount },
+    () =>
+      '<img src="/images/arcade/ui/star-badge.png" alt="" aria-hidden="true">'
+  ).join("");
 
 export const renderGameHud = ({
   score,
@@ -66,9 +86,7 @@ export const renderGameHud = ({
             <strong>${String(result.finalScore)}</strong>
           </div>
           <div class="result-stars" aria-label="スター評価">
-            <img src="/images/arcade/ui/star-badge.png" alt="" aria-hidden="true">
-            <img src="/images/arcade/ui/star-badge.png" alt="" aria-hidden="true">
-            <img src="/images/arcade/ui/star-badge.png" alt="" aria-hidden="true">
+            ${renderResultStars(result.starCount)}
           </div>
           <div class="result-grid">
             ${renderHudItem("最大コンボ", String(result.bestCombo))}

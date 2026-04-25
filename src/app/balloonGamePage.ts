@@ -23,11 +23,6 @@ interface BalloonGamePage {
 
 type GamePageScreen = "start" | "deviceSelection" | "running" | "error";
 
-interface ActionClickTarget {
-  getAttribute(name: string): string | null;
-  closest?(selector: string): ActionClickTarget | null;
-}
-
 interface GamePageState {
   readonly screen: GamePageScreen;
   readonly devices: MediaDeviceInfo[];
@@ -331,11 +326,10 @@ export const createBalloonGamePage = ({
   };
 
   const handleClick = (event: Event): void => {
-    const target = event.target as ActionClickTarget | null;
     const actionTarget =
-      typeof target?.closest === "function"
-        ? (target.closest("[data-game-action]") ?? target)
-        : target;
+      typeof Element !== "undefined" && event.target instanceof Element
+        ? event.target.closest("[data-game-action]")
+        : null;
     const action = actionTarget?.getAttribute("data-game-action");
 
     if (action === "requestCamera") {

@@ -159,7 +159,7 @@ describe("drawGameFrame", () => {
       op.startsWith("drawImage:")
     );
     expect(drawImageEntries).toHaveLength(2);
-    expect(drawImageEntries[0]).toContain("normal-candy");
+    expect(drawImageEntries[0]).toContain("normal-mint");
     expect(drawImageEntries[1]).toContain("small-alert");
     expect(operations).not.toContain("fill");
     expect(
@@ -227,7 +227,48 @@ describe("drawGameFrame", () => {
       op.startsWith("drawImage:")
     );
     expect(drawImageEntries).toHaveLength(2);
-    expect(drawImageEntries[0]).toContain("normal-candy");
+    expect(drawImageEntries[0]).toContain("normal-mint");
+    expect(drawImageEntries[1]).toContain("normal-mint");
+  });
+
+  it("uses an order-sensitive stable hash for normal balloon variants", () => {
+    const operations: string[] = [];
+    const ctx = createMockContext(operations);
+    const sprites = createMockSprites([
+      "normal-candy",
+      "normal-mint",
+      "small-alert"
+    ]);
+
+    drawGameFrame(ctx, {
+      balloons: [
+        {
+          id: "ab",
+          x: 180,
+          y: 300,
+          radius: 50,
+          vy: 36,
+          size: "normal",
+          alive: true
+        },
+        {
+          id: "ba",
+          x: 300,
+          y: 300,
+          radius: 50,
+          vy: 36,
+          size: "normal",
+          alive: true
+        }
+      ],
+      crosshair: undefined,
+      balloonSprites: sprites
+    });
+
+    const drawImageEntries = operations.filter((op) =>
+      op.startsWith("drawImage:")
+    );
+    expect(drawImageEntries[0]).toContain("normal-mint");
     expect(drawImageEntries[1]).toContain("normal-candy");
   });
 

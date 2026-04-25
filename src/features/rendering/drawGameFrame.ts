@@ -4,7 +4,12 @@ import {
   type HitPopEffect,
   type TimedPointEffect
 } from "./arcadeEffects";
-import { arcadeCrosshair, arcadeEffects, arcadePalette } from "./arcadeTheme";
+import {
+  arcadeCrosshair,
+  arcadeEffects,
+  arcadeHitEffects,
+  arcadePalette
+} from "./arcadeTheme";
 import type { BalloonSprites } from "./balloonSpriteUtils";
 
 interface DrawState {
@@ -58,10 +63,12 @@ const stableIndexForId = (id: string, count: number): number => {
 
   let hash = 0;
   for (const char of id) {
-    hash += char.charCodeAt(0);
+    hash = Math.imul(hash, 31) + char.charCodeAt(0);
   }
 
-  return hash % count;
+  const multipliedHash = Math.imul(hash, 2_654_435_761);
+  const mixedHash = multipliedHash ^ (multipliedHash >>> 16);
+  return (mixedHash >>> 0) % count;
 };
 
 const selectBalloonSprite = (
@@ -117,25 +124,17 @@ const drawHitEffects = (
   effects: readonly HitPopEffect[],
   nowMs: number
 ): void => {
-  const ringStartRadius = 20;
-  const ringRadiusGrowth = 58;
-  const shardLifetimeMs = 600;
-  const shardGravity = 36;
-  const shardWidth = 16;
-  const shardHeight = 10;
-  const scoreXOffset = 42;
-  const scoreBaseYOffset = 82;
-  const scoreRiseDelayMs = 100;
-  const scoreRiseStepMs = 20;
-  const scoreMaxRise = 24;
-
   for (const effect of effects) {
     const ageMs = Math.max(0, nowMs - effect.startedAtMs);
     const ringProgress = Math.min(1, ageMs / arcadeEffects.hitRingMs);
-    const shardProgress = Math.min(1, ageMs / shardLifetimeMs);
+    const shardProgress = Math.min(1, ageMs / arcadeHitEffects.shardLifetimeMs);
     const scoreRise = Math.min(
-      scoreMaxRise,
-      Math.max(0, (ageMs - scoreRiseDelayMs) / scoreRiseStepMs)
+      arcadeHitEffects.scoreMaxRise,
+      Math.max(
+        0,
+        (ageMs - arcadeHitEffects.scoreRiseDelayMs) /
+          arcadeHitEffects.scoreRiseStepMs
+      )
     );
 
     ctx.save();
@@ -146,7 +145,8 @@ const drawHitEffects = (
     ctx.arc(
       effect.x,
       effect.y,
-      ringStartRadius + ringProgress * ringRadiusGrowth,
+      arcadeHitEffects.ringStartRadius +
+        ringProgress * arcadeHitEffects.ringRadiusGrowth,
       0,
       Math.PI * 2
     );
@@ -157,21 +157,21 @@ const drawHitEffects = (
       const y =
         effect.y +
         shard.dy * shardProgress +
-        shardGravity * shardProgress * shardProgress;
+        arcadeHitEffects.shardGravity * shardProgress * shardProgress;
       ctx.fillStyle = shard.color;
       ctx.strokeStyle = arcadePalette.ink;
       ctx.lineWidth = 3;
       ctx.fillRect(
-        x - shardWidth / 2,
-        y - shardHeight / 2,
-        shardWidth,
-        shardHeight
+        x - arcadeHitEffects.shardWidth / 2,
+        y - arcadeHitEffects.shardHeight / 2,
+        arcadeHitEffects.shardWidth,
+        arcadeHitEffects.shardHeight
       );
       ctx.strokeRect(
-        x - shardWidth / 2,
-        y - shardHeight / 2,
-        shardWidth,
-        shardHeight
+        x - arcadeHitEffects.shardWidth / 2,
+        y - arcadeHitEffects.shardHeight / 2,
+        arcadeHitEffects.shardWidth,
+        arcadeHitEffects.shardHeight
       );
     }
 
@@ -183,13 +183,13 @@ const drawHitEffects = (
     ctx.lineWidth = 4;
     ctx.strokeText(
       effect.scoreLabel,
-      effect.x + scoreXOffset,
-      effect.y - scoreBaseYOffset - scoreRise
+      effect.x + arcadeHitEffects.scoreXOffset,
+      effect.y - arcadeHitEffects.scoreBaseYOffset - scoreRise
     );
     ctx.fillText(
       effect.scoreLabel,
-      effect.x + scoreXOffset,
-      effect.y - scoreBaseYOffset - scoreRise
+      effect.x + arcadeHitEffects.scoreXOffset,
+      effect.y - arcadeHitEffects.scoreBaseYOffset - scoreRise
     );
     ctx.restore();
   }

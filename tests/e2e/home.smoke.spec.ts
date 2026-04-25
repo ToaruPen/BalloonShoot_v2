@@ -159,7 +159,12 @@ test("home page runs production balloon game flow without diagnostic surfaces", 
       window as unknown as { __fireGameFrame: (now: number) => void }
     ).__fireGameFrame(nowMs);
   }, baseNow + 64_000);
-  await expect(page.getByRole("heading", { name: "ナイスシュート" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "ナイスシュート" })
+  ).toBeVisible();
   await page.getByRole("button", { name: "もういっかい" }).click();
-  await expect(page.locator("#game-hud")).toContainText("3");
+  await expect(page.locator("#game-hud .hud-score-badge strong")).toHaveText(
+    "0"
+  );
+  await expect(page.locator("[data-game-countdown]")).toHaveText("3");
 });
