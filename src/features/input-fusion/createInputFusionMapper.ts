@@ -294,7 +294,7 @@ export const createInputFusionMapper = (): InputFusionMapper => {
     const sideUsable = isSideUsable(sideFrame, fusionTimestampMs, context);
     const fusionMode = fusionModeFor(pair, frontUsable, sideUsable);
     const shotFired =
-      fusionMode === "pairedFrontAndSide" && sideFrame !== undefined
+      sideUsable && frontUsable && sideFrame !== undefined
         ? shotConsumption.consumeIfShotCommit(sideFrame)
         : false;
     const fusedFrame: FusedGameInputFrame = {

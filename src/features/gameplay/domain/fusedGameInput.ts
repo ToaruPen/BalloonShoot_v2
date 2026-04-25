@@ -61,11 +61,7 @@ export const readFusedGameInput = (
       ? { kind: "inputPreparing" as const, reason: frame.fusionRejectReason }
       : undefined;
 
-  if (
-    frame.fusionMode !== "pairedFrontAndSide" ||
-    !frame.shotFired ||
-    crosshair === undefined
-  ) {
+  if (!frame.shotFired || crosshair === undefined) {
     return { crosshair, shot: undefined, status };
   }
 

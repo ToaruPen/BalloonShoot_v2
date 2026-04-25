@@ -151,7 +151,31 @@ describe("createInputFusionMapper", () => {
     ).toBe("laneFailed");
   });
 
-  it("fires and consumes a shot commit only in paired mode", () => {
+  it("fires the side shot commit even when the pair fails due to timestamp gap", () => {
+    const mapper = createInputFusionMapper();
+    const gapContext = {
+      ...context,
+      tuning: {
+        ...context.tuning,
+        maxPairDeltaMs: 25,
+        maxFrameAgeMs: 250,
+        recentFrameRetentionWindowMs: 300
+      }
+    };
+
+    mapper.updateAimFrame(createAimFrame(100), gapContext);
+    const result = mapper.updateTriggerFrame(
+      createTriggerFrame(160, { triggerEdge: "shotCommitted" }),
+      gapContext
+    );
+
+    expect(result.fusedFrame.fusionMode).toBe("frontOnlyAim");
+    expect(result.fusedFrame.fusionRejectReason).toBe("timestampGapTooLarge");
+    expect(result.fusedFrame.shotFired).toBe(true);
+    expect(result.telemetry.shotEdgeConsumed).toBe(true);
+  });
+
+  it("fires and consumes a shot commit only when both lanes are usable", () => {
     const mapper = createInputFusionMapper();
     const sideCommit = createTriggerFrame(100, {
       triggerEdge: "shotCommitted"

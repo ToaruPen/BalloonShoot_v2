@@ -174,12 +174,12 @@ M7 開始前の post-M6 `main` で必ず確認する。
 - Output should be a small shape:
   - crosshair point when `aim` is available or estimated
   - no crosshair when `aim` unavailable
-  - `shot` action only when `fusionMode === "pairedFrontAndSide"` and `shotFired === true`
+  - `shot` action when `shotFired === true` and a crosshair is present (superseded 2026-04-25: relaxed from the original `fusionMode === "pairedFrontAndSide"` gate so a side commit can fire when both lanes are individually usable but the pair fails on `timestampGapTooLarge`)
   - degraded status for production copy, not telemetry
 - Add M7-level shot consumption guard because the runtime may render the same latest fused frame across multiple rAF ticks.
 - Key consumed shots from M6 side source summary if available. If M6 does not expose a stable key, build one from `fusionTimestampMs`, `sideSource.frameTimestampMs`, `sideSource.presentedFrames`, and trigger edge summary. Do not inspect `TriggerInputFrame` directly.
-- `frontOnlyAim` can move crosshair but cannot score.
-- `sideOnlyTriggerDiagnostic` cannot fire and must not consume a shot.
+- `frontOnlyAim` can move the crosshair, and can score only when the side lane is also individually usable in the same frame (superseded 2026-04-25).
+- `sideOnlyTriggerDiagnostic` cannot fire and must not consume a shot (front lane unusable → shot edge stays unconsumed for retry once front recovers).
 
 **Test plan:**
 - Unit tests:
