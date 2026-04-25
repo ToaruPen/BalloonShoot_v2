@@ -9,7 +9,7 @@
 
 - `docs/superpowers/specs/2026-04-08-poc-foundation-design.md`: authoritative PoC design
 - `docs/superpowers/plans/2026-04-08-poc-implementation.md`: implementation plan
-- `docs/superpowers/handovers/2026-04-08-implementation-session-handoff.md`: latest session handoff
+- `docs/superpowers/handovers/`: session handoffs
 - `src/AGENTS.md`: source tree guidance
 - `tests/AGENTS.md`: test tree guidance
 - `docs/AGENTS.md`: docs tree guidance
@@ -17,7 +17,7 @@
 
 ## HOW
 
-- Keep gameplay, input mapping, rendering, and browser adapters separate.
+- Keep gameplay, front aiming, side trigger judgment, input fusion, rendering, audio, and browser adapters separate.
 - Treat `lint`, `typecheck`, and `test` as blocking checks once the toolchain exists.
 - Resolve review comments after the corresponding fix is implemented and verified.
 - Create pull requests as ready for review by default; use draft only when explicitly requested.

@@ -159,6 +159,7 @@ test("home page runs production balloon game flow without diagnostic surfaces", 
       window as unknown as { __fireGameFrame: (now: number) => void }
     ).__fireGameFrame(nowMs);
   }, baseNow + 64_000);
-  await expect(page.getByRole("heading", { name: "結果" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "もう一度" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "ナイスシュート" })).toBeVisible();
+  await page.getByRole("button", { name: "もういっかい" }).click();
+  await expect(page.locator("#game-hud")).toContainText("3");
 });

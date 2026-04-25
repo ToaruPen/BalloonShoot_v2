@@ -5,6 +5,7 @@ interface FakeAudioInstance {
   src: string;
   loop: boolean;
   currentTime: number;
+  volume: number;
   play: ReturnType<typeof vi.fn>;
   pause: ReturnType<typeof vi.fn>;
 }
@@ -17,6 +18,7 @@ describe("createAudioController", () => {
       src: string;
       loop = false;
       currentTime = 0;
+      volume = 1;
       play = vi.fn(() => Promise.resolve(undefined));
       pause = vi.fn(() => undefined);
 
@@ -51,6 +53,17 @@ describe("createAudioController", () => {
     expect(bgm?.currentTime).toBe(0);
   });
 
+  it("uses named mix levels and can briefly duck bgm", () => {
+    const audio = createAudioController();
+    const bgm = (globalThis as unknown as { __createdAudio: FakeAudioInstance[] }).__createdAudio[0];
+
+    expect(bgm?.volume).toBe(0.13);
+    audio.duckBgm(0.07);
+    expect(bgm?.volume).toBe(0.07);
+    audio.restoreBgmVolume();
+    expect(bgm?.volume).toBe(0.13);
+  });
+
   it("creates dedicated one-shot players for every sound effect", async () => {
     const audio = createAudioController();
 
@@ -70,6 +83,7 @@ describe("createAudioController", () => {
     ]);
     created.slice(1).forEach((instance) => {
       expect(instance.play).toHaveBeenCalledTimes(1);
+      expect(instance.volume).toBe(0.5);
     });
   });
 
@@ -80,6 +94,7 @@ describe("createAudioController", () => {
       src: string;
       loop = false;
       currentTime = 0;
+      volume = 1;
       play = vi.fn(() =>
         this.src === "/audio/shot.mp3" ? Promise.reject(blocked) : Promise.resolve(undefined)
       );

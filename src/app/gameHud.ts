@@ -58,22 +58,43 @@ export const renderGameHud = ({
     result === undefined
       ? ""
       : `
-        <section class="result-panel" aria-label="結果">
-          <h2>結果</h2>
+        <section class="result-panel result-panel-arcade" aria-label="結果">
+          <p class="result-kicker">RESULT</p>
+          <h2>ナイスシュート</h2>
+          <div class="result-score">
+            <span>スコア</span>
+            <strong>${String(result.finalScore)}</strong>
+          </div>
+          <div class="result-stars" aria-label="スター評価">
+            <img src="/images/arcade/ui/star-badge.png" alt="" aria-hidden="true">
+            <img src="/images/arcade/ui/star-badge.png" alt="" aria-hidden="true">
+            <img src="/images/arcade/ui/star-badge.png" alt="" aria-hidden="true">
+          </div>
           <div class="result-grid">
-            ${renderHudItem("最終スコア", String(result.finalScore))}
             ${renderHudItem("最大コンボ", String(result.bestCombo))}
           </div>
-          <button class="screen-button" data-game-action="retry">もう一度</button>
+          <button class="screen-button result-retry-button" data-game-action="retry">もういっかい</button>
         </section>
       `;
 
   return `
-    <div class="hud" aria-label="ゲーム情報">
-      ${renderHudItem("スコア", String(score))}
-      ${renderHudItem("コンボ", String(combo))}
-      ${renderHudItem("倍率", `x${String(multiplier)}`)}
-      ${renderHudItem("残り", String(secondsRemaining(timeRemainingMs)))}
+    <div class="hud hud-arcade" aria-label="ゲーム情報">
+      <div class="hud-score-badge">
+        <span>スコア</span>
+        <strong>${String(score)}</strong>
+      </div>
+      <div class="hud-timer-disc">
+        <span>残り</span>
+        <strong>${String(secondsRemaining(timeRemainingMs))}</strong>
+      </div>
+      <div class="hud-combo-chip">
+        <span>コンボ</span>
+        <strong>${String(combo)}</strong>
+      </div>
+      <div class="hud-multiplier-chip">
+        <span>倍率</span>
+        <strong>x${String(multiplier)}</strong>
+      </div>
     </div>
     ${status}
     ${countdown}

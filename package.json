@@ -15,7 +15,7 @@
     "test": "vitest --run",
     "test:replay": "vitest run --config vitest.replay.config.ts",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "env -u NO_COLOR playwright test",
     "check": "run-p lint typecheck test test:replay knip"
   },
   "dependencies": {

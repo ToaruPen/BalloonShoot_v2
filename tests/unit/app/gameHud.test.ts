@@ -22,6 +22,11 @@ describe("renderGameHud", () => {
     expect(html).toMatch(/<span[^>]*>倍率<\/span>\s*<strong[^>]*>x2<\/strong>/);
     expect(html).toMatch(/<span[^>]*>残り<\/span>\s*<strong[^>]*>55<\/strong>/);
     expect(html).toContain('data-game-countdown="2"');
+    expect(html).toContain('class="hud hud-arcade"');
+    expect(html).toContain('class="hud-score-badge"');
+    expect(html).toContain('class="hud-timer-disc"');
+    expect(html).toContain('class="hud-combo-chip"');
+    expect(html).toContain('class="hud-multiplier-chip"');
   });
 
   it("renders result summary and retry action", () => {
@@ -35,10 +40,14 @@ describe("renderGameHud", () => {
       result: { finalScore: 24, bestCombo: 6 }
     });
 
-    expect(html).toContain("結果");
-    expect(html).toMatch(
-      /<span[^>]*>最終スコア<\/span>\s*<strong[^>]*>24<\/strong>/
-    );
+    expect(html).toContain("ナイスシュート");
+    expect(html).toContain('class="result-score"');
+    expect(html).toContain('class="result-stars"');
+    expect(html).toContain('/images/arcade/ui/star-badge.png');
+    expect(html).toContain("もういっかい");
+    expect(html).not.toContain("🎈");
+    expect(html).not.toContain("🎯");
+    expect(html).toMatch(/<span[^>]*>スコア<\/span>\s*<strong[^>]*>24<\/strong>/);
     expect(html).toMatch(
       /<span[^>]*>最大コンボ<\/span>\s*<strong[^>]*>6<\/strong>/
     );

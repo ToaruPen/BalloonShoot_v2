@@ -66,14 +66,17 @@ export default tseslint.config(
         }
       ],
       "@typescript-eslint/strict-boolean-expressions": "error",
-      "boundaries/element-types": [
+      "boundaries/dependencies": [
         "error",
         {
           default: "disallow",
           rules: [
-            { from: "app", allow: ["feature", "shared"] },
-            { from: "feature", allow: ["shared"] },
-            { from: "shared", allow: ["shared"] }
+            {
+              from: { type: "app" },
+              allow: { to: { type: ["feature", "shared"] } }
+            },
+            { from: { type: "feature" }, allow: { to: { type: "shared" } } },
+            { from: { type: "shared" }, allow: { to: { type: "shared" } } }
           ]
         }
       ],

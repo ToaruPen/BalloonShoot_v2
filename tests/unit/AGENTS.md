@@ -7,7 +7,7 @@
 ## WHAT
 
 - Gameplay rules
-- Input mapping and trigger logic
+- Front aim, side trigger, and input fusion logic
 - Small shared helpers
 
 ## HOW

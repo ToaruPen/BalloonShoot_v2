@@ -46,11 +46,26 @@ const createRoot = () => {
             name === "data-game-action" ? action : null
         }
       } as unknown as Event);
+    },
+    clickNestedAction(action: string) {
+      clickListener?.({
+        target: {
+          getAttribute: () => null,
+          closest: (selector: string) =>
+            selector === "[data-game-action]"
+              ? {
+                  getAttribute: (name: string) =>
+                    name === "data-game-action" ? action : null
+                }
+              : null
+        }
+      } as unknown as Event);
     }
   } as unknown as HTMLElement & {
     innerHTML: string;
     querySelector: ReturnType<typeof vi.fn>;
     clickAction(action: string): void;
+    clickNestedAction(action: string): void;
   };
 };
 
@@ -144,6 +159,30 @@ describe("createBalloonGamePage", () => {
       })
     );
     expect(runtime.start).toHaveBeenCalledOnce();
+  });
+
+  it("retries the runtime when a nested element inside the retry button is clicked", async () => {
+    const root = createRoot();
+    const runtime = { start: vi.fn(), retry: vi.fn(), destroy: vi.fn() };
+    const page = createBalloonGamePage({
+      requestCameraPermission: vi.fn(() =>
+        Promise.resolve({ status: "granted" as const })
+      ),
+      enumerateVideoDevices: vi.fn(() =>
+        Promise.resolve([
+          createDevice("front", "Front Camera"),
+          createDevice("side", "Side Camera")
+        ])
+      ),
+      createBalloonGameRuntime: vi.fn(() => runtime)
+    });
+
+    page.mount(root);
+    await page.requestCameraAccess();
+    page.selectCameras("front", "side");
+    root.clickNestedAction("retry");
+
+    expect(runtime.retry).toHaveBeenCalledOnce();
   });
 
   it("reselects cameras from the running page while preserving available previous selections", async () => {

@@ -34,9 +34,13 @@ import {
 } from "../features/side-trigger";
 import { drawGameFrame } from "../features/rendering/drawGameFrame";
 import {
-  balloonAnimationFrameIndex,
-  type BalloonSprites
-} from "../features/rendering/balloonSpriteUtils";
+  activeHitPopEffects,
+  createHitPopEffect,
+  type HitPopEffect,
+  type TimedPointEffect
+} from "../features/rendering/arcadeEffects";
+import { arcadePalette } from "../features/rendering/arcadeTheme";
+import type { BalloonSprites } from "../features/rendering/balloonSpriteUtils";
 import { createBalloonSpriteLoader } from "../features/rendering/createBalloonSpriteLoader";
 import { loadBalloonSprites } from "./loadBalloonSpritesAdapter";
 import type { Balloon } from "../features/gameplay/domain/balloon";
@@ -152,6 +156,9 @@ const VIDEO_FRAME_FALLBACK_INTERVAL_MS = 66;
 // Ten consecutive frame failures spans ~330ms at 30fps, enough for transient browser hiccups.
 export const MAX_CONSECUTIVE_FRAME_ERRORS = 10;
 
+const HIT_BGM_DUCK_VOLUME = 0.07;
+const HIT_BGM_RESTORE_DELAY_MS = 200;
+
 const degradedInputMessages = {
   frontMissing: "正面カメラの入力を待っています",
   frontStale: "正面カメラの入力を待っています",
@@ -223,8 +230,9 @@ export const createBalloonGameRuntime = ({
   let frameHandle: number | undefined;
   let lastFrameMs = nowMs();
   let bestCombo = 0;
-  let shotEffect: { x: number; y: number } | undefined;
-  let hitEffect: { x: number; y: number } | undefined;
+  let shotEffect: TimedPointEffect | undefined;
+  let hitEffects: HitPopEffect[] = [];
+  let bgmRestoreTimeout: ReturnType<typeof setTimeout> | undefined;
   let latestFusedFrame: FusedGameInputFrame | undefined;
   let frontLaneHealth: LaneHealthStatus = "notStarted";
   let sideLaneHealth: LaneHealthStatus = "notStarted";
@@ -273,6 +281,30 @@ export const createBalloonGameRuntime = ({
         console.error("[balloon game runtime] audio playback failed", error);
       }
     });
+  };
+
+  const clearBgmRestoreTimeout = (
+    options: { readonly restoreVolume?: boolean } = {}
+  ): void => {
+    if (bgmRestoreTimeout !== undefined) {
+      clearTimeout(bgmRestoreTimeout);
+      bgmRestoreTimeout = undefined;
+
+      if (options.restoreVolume === true && !stopped) {
+        audio.restoreBgmVolume();
+      }
+    }
+  };
+
+  const duckBgmForHit = (): void => {
+    audio.duckBgm(HIT_BGM_DUCK_VOLUME);
+    clearBgmRestoreTimeout();
+    bgmRestoreTimeout = setTimeout(() => {
+      bgmRestoreTimeout = undefined;
+      if (!stopped) {
+        audio.restoreBgmVolume();
+      }
+    }, HIT_BGM_RESTORE_DELAY_MS);
   };
 
   const renderHud = (): void => {
@@ -325,17 +357,13 @@ export const createBalloonGameRuntime = ({
       return;
     }
 
-    const frameCount = balloonSprites?.frames.length ?? 0;
-    const balloonFrameIndex =
-      frameCount > 0 ? balloonAnimationFrameIndex(frameNowMs, frameCount) : 0;
-
     renderFrame(context, {
       balloons: engine.balloons,
       crosshair,
       shotEffect,
-      hitEffect,
+      hitEffects,
       balloonSprites,
-      balloonFrameIndex
+      frameNowMs
     });
   };
 
@@ -353,8 +381,7 @@ export const createBalloonGameRuntime = ({
     const shouldAdvanceEngine =
       previousSessionState === "playing" && nextSession.state === "playing";
     session = nextSession;
-    shotEffect = undefined;
-    hitEffect = undefined;
+    hitEffects = activeHitPopEffects(hitEffects, frameNowMs);
 
     if (shouldAdvanceEngine) {
       engine.advance(deltaMs, random);
@@ -376,13 +403,26 @@ export const createBalloonGameRuntime = ({
       shotTimestampMs >= session.playingStartedAtMs;
 
     if (shotStartedDuringPlaying) {
-      shotEffect = input.shot;
+      shotEffect = { ...input.shot, startedAtMs: frameNowMs };
       play(() => audio.playShot());
       const shotResult = registerShot(engine, input.shot);
 
       if (shotResult.kind === "hit") {
-        hitEffect = input.shot;
+        hitEffects = [
+          ...hitEffects,
+          createHitPopEffect({
+            x: input.shot.x,
+            y: input.shot.y,
+            points: shotResult.points,
+            color:
+              shotResult.size === "small"
+                ? arcadePalette.alert
+                : arcadePalette.candy,
+            startedAtMs: frameNowMs
+          })
+        ];
         play(() => audio.playHit());
+        duckBgmForHit();
       }
 
       bestCombo = Math.max(bestCombo, engine.combo);
@@ -390,7 +430,6 @@ export const createBalloonGameRuntime = ({
 
     if (session.resultEntered) {
       audio.stopBgm();
-      play(() => audio.playTimeout());
       play(() => audio.playResult());
     }
 
@@ -758,7 +797,8 @@ export const createBalloonGameRuntime = ({
       resetFusedGameInputAdapter(inputAdapter);
       bestCombo = 0;
       shotEffect = undefined;
-      hitEffect = undefined;
+      hitEffects = [];
+      clearBgmRestoreTimeout({ restoreVolume: true });
       play(() => audio.startBgm());
       balloonSpriteLoader.ensureStarted();
       startCameraTracking();
@@ -770,6 +810,7 @@ export const createBalloonGameRuntime = ({
         cancelFrame(frameHandle);
       }
       stopCameraTracking();
+      clearBgmRestoreTimeout();
       audio.stopBgm();
     }
   };

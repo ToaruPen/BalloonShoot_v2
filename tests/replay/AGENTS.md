@@ -25,7 +25,3 @@ is deliberately **not committed** because of its size; the test uses
 exercise the regression gate. Drop the JSON at the path documented in the
 test to enable it locally. Do not revive recorded video fixtures for this
 replay.
-
-## Future
-
-- Synthetic frame sequences for `input-fusion` timestamp pairing / degrade modes and the `side-trigger` FSM arrive with their v2 lanes.

@@ -1,11 +1,9 @@
 import type { BalloonSprites } from "../features/rendering/balloonSpriteUtils";
 
 const FRAME_PATHS = [
-  "/images/balloons/rising/0.png",
-  "/images/balloons/rising/1.png",
-  "/images/balloons/rising/2.png",
-  "/images/balloons/rising/3.png",
-  "/images/balloons/rising/4.png"
+  "/images/balloons/arcade/normal-candy.png",
+  "/images/balloons/arcade/normal-mint.png",
+  "/images/balloons/arcade/small-alert.png"
 ] as const;
 
 const loadImage = (path: string): Promise<HTMLImageElement> =>
