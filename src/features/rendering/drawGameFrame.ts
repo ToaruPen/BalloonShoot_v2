@@ -181,6 +181,11 @@ const drawHitEffects = (
     ctx.fillStyle = arcadePalette.cream;
     ctx.strokeStyle = arcadePalette.ink;
     ctx.lineWidth = 4;
+    ctx.strokeText(
+      effect.scoreLabel,
+      effect.x + scoreXOffset,
+      effect.y - scoreBaseYOffset - scoreRise
+    );
     ctx.fillText(
       effect.scoreLabel,
       effect.x + scoreXOffset,

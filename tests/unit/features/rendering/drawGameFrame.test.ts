@@ -30,6 +30,8 @@ const createMockContext = (operations: string[]): CanvasRenderingContext2D =>
       operations.push(
         `strokeRect:${String(x)},${String(y)},${String(w)},${String(h)}`
       ),
+    strokeText: (text: string, x: number, y: number) =>
+      operations.push(`strokeText:${text},${String(x)},${String(y)}`),
     fillText: (text: string, x: number, y: number) =>
       operations.push(`fillText:${text},${String(x)},${String(y)}`),
     drawImage: (
@@ -278,7 +280,11 @@ describe("drawGameFrame", () => {
     });
 
     expect(operations).toContain("scale:0.7666666666666666,0.7666666666666666");
+    expect(operations).toContain("strokeText:+3,242,98");
     expect(operations).toContain("fillText:+3,242,98");
+    expect(operations.indexOf("strokeText:+3,242,98")).toBeLessThan(
+      operations.indexOf("fillText:+3,242,98")
+    );
     expect(operations.some((op) => op.startsWith("fillRect:"))).toBe(true);
   });
 });
