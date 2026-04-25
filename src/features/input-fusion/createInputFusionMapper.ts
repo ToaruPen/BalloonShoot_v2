@@ -190,7 +190,7 @@ const isSideUsable = (
   frame: TriggerInputFrame | undefined,
   fusionTimestampMs: number,
   context: InputFusionMapperContext
-): boolean =>
+): frame is TriggerInputFrame =>
   frame !== undefined &&
   frame.triggerAvailability !== "unavailable" &&
   !isFailed(context.sideLaneHealth) &&
@@ -294,7 +294,7 @@ export const createInputFusionMapper = (): InputFusionMapper => {
     const sideUsable = isSideUsable(sideFrame, fusionTimestampMs, context);
     const fusionMode = fusionModeFor(pair, frontUsable, sideUsable);
     const shotFired =
-      fusionMode === "pairedFrontAndSide" && sideFrame !== undefined
+      sideUsable && frontUsable
         ? shotConsumption.consumeIfShotCommit(sideFrame)
         : false;
     const fusedFrame: FusedGameInputFrame = {

@@ -54,7 +54,7 @@ describe("fusedGameInput", () => {
     expect(readFusedGameInput(adapter, frame).shot).toBeUndefined();
   });
 
-  it("allows front-only aim movement but never fires", () => {
+  it("fires from frontOnlyAim mode when shotFired and aim available", () => {
     const adapter = createFusedGameInputAdapter();
     const result = readFusedGameInput(
       adapter,
@@ -66,7 +66,7 @@ describe("fusedGameInput", () => {
     );
 
     expect(result.crosshair).toEqual({ x: 320, y: 180 });
-    expect(result.shot).toBeUndefined();
+    expect(result.shot).toEqual({ x: 320, y: 180 });
   });
 
   it("ignores side-only trigger diagnostic frames for gameplay shots", () => {
