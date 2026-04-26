@@ -292,6 +292,7 @@ export const createBalloonGameRuntime = ({
     await audio.playTimeout();
 
     if (stopped || runId !== resultAudioRunId) {
+      audio.cancelTimeout();
       return;
     }
 
@@ -848,6 +849,7 @@ export const createBalloonGameRuntime = ({
 
       engine.reset();
       resultAudioRunId += 1;
+      audio.cancelTimeout();
       stopCameraTracking();
       frontAimMapper.reset();
       sideTriggerMapper.reset();
@@ -867,6 +869,7 @@ export const createBalloonGameRuntime = ({
     destroy() {
       stopped = true;
       resultAudioRunId += 1;
+      audio.cancelTimeout();
       if (frameHandle !== undefined) {
         cancelFrame(frameHandle);
       }

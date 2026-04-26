@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type MockInstance } from "vitest";
 import {
   createBalloonGameRuntime,
   MAX_CONSECUTIVE_FRAME_ERRORS
@@ -275,6 +275,7 @@ const createAudio = () => ({
   playShot: vi.fn(() => Promise.resolve()),
   playHit: vi.fn(() => Promise.resolve()),
   playTimeout: vi.fn(() => Promise.resolve()),
+  cancelTimeout: vi.fn(),
   playResult: vi.fn(() => Promise.resolve()),
   duckBgm: vi.fn(),
   restoreBgmVolume: vi.fn()
@@ -287,6 +288,58 @@ const createDeferred = <T = void>() => {
   });
 
   return { promise, resolve };
+};
+
+type RuntimeOptions = Parameters<typeof createBalloonGameRuntime>[0];
+
+interface StartupFailureTestContext {
+  readonly raf: ReturnType<typeof createRaf>;
+  readonly hudRoot: HTMLElement;
+  readonly consoleError: MockInstance<typeof console.error>;
+  readonly runtime: ReturnType<typeof createBalloonGameRuntime>;
+}
+
+const createStartupFailureTestContext = (
+  overrides: Pick<
+    RuntimeOptions,
+    "createDevicePinnedStream" | "createMediaPipeHandTracker"
+  >
+): StartupFailureTestContext => {
+  capturedFusionContexts.length = 0;
+  vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+  const raf = createRaf();
+  const hudRoot = { innerHTML: "" } as HTMLElement;
+  const consoleError = vi
+    .spyOn(console, "error")
+    .mockImplementation(() => undefined);
+  const runtime = createBalloonGameRuntime({
+    frontDeviceId: "front",
+    sideDeviceId: "side",
+    frontVideo: createVideo(),
+    sideVideo: createVideo(),
+    canvas: createCanvas(),
+    hudRoot,
+    nowMs: () => 0,
+    createAudioController: createAudio,
+    drawGameFrame: vi.fn(),
+    requestAnimationFrame: raf.requestAnimationFrame,
+    cancelAnimationFrame: raf.cancelAnimationFrame,
+    createDevicePinnedStream: (deviceId) =>
+      Promise.resolve(createPinnedStream(deviceId)),
+    createMediaPipeHandTracker: vi.fn(() => Promise.resolve(createTracker())),
+    ...overrides
+  });
+
+  return { raf, hudRoot, consoleError, runtime };
+};
+
+const cleanupStartupFailureTestContext = ({
+  consoleError,
+  runtime
+}: StartupFailureTestContext): void => {
+  consoleError.mockRestore();
+  runtime.destroy();
+  vi.unstubAllGlobals();
 };
 
 describe("createBalloonGameRuntime", () => {
@@ -377,32 +430,12 @@ describe("createBalloonGameRuntime", () => {
   });
 
   it("shows a recovery action when both tracker startups fail", async () => {
-    capturedFusionContexts.length = 0;
-    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
-    const raf = createRaf();
-    const hudRoot = { innerHTML: "" } as HTMLElement;
     const startupError = new Error("tracker wasm unavailable");
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-    const runtime = createBalloonGameRuntime({
-      frontDeviceId: "front",
-      sideDeviceId: "side",
-      frontVideo: createVideo(),
-      sideVideo: createVideo(),
-      canvas: createCanvas(),
-      hudRoot,
-      nowMs: () => 0,
-      createAudioController: createAudio,
-      drawGameFrame: vi.fn(),
-      requestAnimationFrame: raf.requestAnimationFrame,
-      cancelAnimationFrame: raf.cancelAnimationFrame,
-      createDevicePinnedStream: (deviceId) =>
-        Promise.resolve(createPinnedStream(deviceId)),
+    const context = createStartupFailureTestContext({
       createMediaPipeHandTracker: vi.fn(() => Promise.reject(startupError))
     });
 
-    runtime.start();
+    context.runtime.start();
     await vi.waitFor(() => {
       expect(capturedFusionContexts).toEqual(
         expect.arrayContaining([
@@ -417,47 +450,27 @@ describe("createBalloonGameRuntime", () => {
         ])
       );
     });
-    raf.fire(4_000);
+    context.raf.fire(4_000);
 
-    expect(hudRoot.innerHTML).toContain("カメラが失敗しました");
-    expect(hudRoot.innerHTML).toContain("カメラを選び直す");
-    expect(hudRoot.innerHTML).not.toContain("入力を準備中");
-    expect(consoleError).toHaveBeenCalledWith(
+    expect(context.hudRoot.innerHTML).toContain("カメラが失敗しました");
+    expect(context.hudRoot.innerHTML).toContain("カメラを選び直す");
+    expect(context.hudRoot.innerHTML).not.toContain("入力を準備中");
+    expect(context.consoleError).toHaveBeenCalledWith(
       "[balloon game runtime] tracker startup failed",
       startupError
     );
 
-    consoleError.mockRestore();
-    runtime.destroy();
-    vi.unstubAllGlobals();
+    cleanupStartupFailureTestContext(context);
   });
 
   it("shows a recovery action when both camera streams fail during startup", async () => {
-    capturedFusionContexts.length = 0;
-    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
-    const raf = createRaf();
-    const hudRoot = { innerHTML: "" } as HTMLElement;
     const streamError = new Error("camera unavailable");
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-    const runtime = createBalloonGameRuntime({
-      frontDeviceId: "front",
-      sideDeviceId: "side",
-      frontVideo: createVideo(),
-      sideVideo: createVideo(),
-      canvas: createCanvas(),
-      hudRoot,
-      nowMs: () => 0,
-      createAudioController: createAudio,
-      drawGameFrame: vi.fn(),
-      requestAnimationFrame: raf.requestAnimationFrame,
-      cancelAnimationFrame: raf.cancelAnimationFrame,
+    const context = createStartupFailureTestContext({
       createDevicePinnedStream: vi.fn(() => Promise.reject(streamError)),
       createMediaPipeHandTracker: vi.fn()
     });
 
-    runtime.start();
+    context.runtime.start();
     await vi.waitFor(() => {
       expect(capturedFusionContexts).toEqual(
         expect.arrayContaining([
@@ -472,55 +485,33 @@ describe("createBalloonGameRuntime", () => {
         ])
       );
     });
-    raf.fire(4_000);
+    context.raf.fire(4_000);
 
-    expect(hudRoot.innerHTML).toContain("カメラが失敗しました");
-    expect(hudRoot.innerHTML).toContain("カメラを選び直す");
-    expect(hudRoot.innerHTML).not.toContain("入力を準備中");
-    expect(consoleError).toHaveBeenCalledWith(
+    expect(context.hudRoot.innerHTML).toContain("カメラが失敗しました");
+    expect(context.hudRoot.innerHTML).toContain("カメラを選び直す");
+    expect(context.hudRoot.innerHTML).not.toContain("入力を準備中");
+    expect(context.consoleError).toHaveBeenCalledWith(
       "[balloon game runtime] front lane failed",
       streamError
     );
-    expect(consoleError).toHaveBeenCalledWith(
+    expect(context.consoleError).toHaveBeenCalledWith(
       "[balloon game runtime] side lane failed",
       streamError
     );
 
-    consoleError.mockRestore();
-    runtime.destroy();
-    vi.unstubAllGlobals();
+    cleanupStartupFailureTestContext(context);
   });
 
   it("shows a recovery action when only the front tracker startup fails", async () => {
-    capturedFusionContexts.length = 0;
-    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
-    const raf = createRaf();
-    const hudRoot = { innerHTML: "" } as HTMLElement;
     const startupError = new Error("front tracker unavailable");
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-    const runtime = createBalloonGameRuntime({
-      frontDeviceId: "front",
-      sideDeviceId: "side",
-      frontVideo: createVideo(),
-      sideVideo: createVideo(),
-      canvas: createCanvas(),
-      hudRoot,
-      nowMs: () => 0,
-      createAudioController: createAudio,
-      drawGameFrame: vi.fn(),
-      requestAnimationFrame: raf.requestAnimationFrame,
-      cancelAnimationFrame: raf.cancelAnimationFrame,
-      createDevicePinnedStream: (deviceId) =>
-        Promise.resolve(createPinnedStream(deviceId)),
+    const context = createStartupFailureTestContext({
       createMediaPipeHandTracker: vi
         .fn()
         .mockRejectedValueOnce(startupError)
         .mockResolvedValueOnce(createTracker())
     });
 
-    runtime.start();
+    context.runtime.start();
     await vi.waitFor(() => {
       expect(capturedFusionContexts).toEqual(
         expect.arrayContaining([
@@ -531,46 +522,26 @@ describe("createBalloonGameRuntime", () => {
         ])
       );
     });
-    raf.fire(4_000);
+    context.raf.fire(4_000);
 
-    expect(hudRoot.innerHTML).toContain("カメラが失敗しました");
-    expect(hudRoot.innerHTML).toContain('data-game-action="reselectCameras"');
+    expect(context.hudRoot.innerHTML).toContain("カメラが失敗しました");
+    expect(context.hudRoot.innerHTML).toContain(
+      'data-game-action="reselectCameras"'
+    );
 
-    consoleError.mockRestore();
-    runtime.destroy();
-    vi.unstubAllGlobals();
+    cleanupStartupFailureTestContext(context);
   });
 
   it("shows a recovery action when only the side tracker startup fails", async () => {
-    capturedFusionContexts.length = 0;
-    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
-    const raf = createRaf();
-    const hudRoot = { innerHTML: "" } as HTMLElement;
     const startupError = new Error("side tracker unavailable");
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
-    const runtime = createBalloonGameRuntime({
-      frontDeviceId: "front",
-      sideDeviceId: "side",
-      frontVideo: createVideo(),
-      sideVideo: createVideo(),
-      canvas: createCanvas(),
-      hudRoot,
-      nowMs: () => 0,
-      createAudioController: createAudio,
-      drawGameFrame: vi.fn(),
-      requestAnimationFrame: raf.requestAnimationFrame,
-      cancelAnimationFrame: raf.cancelAnimationFrame,
-      createDevicePinnedStream: (deviceId) =>
-        Promise.resolve(createPinnedStream(deviceId)),
+    const context = createStartupFailureTestContext({
       createMediaPipeHandTracker: vi
         .fn()
         .mockResolvedValueOnce(createTracker())
         .mockRejectedValueOnce(startupError)
     });
 
-    runtime.start();
+    context.runtime.start();
     await vi.waitFor(() => {
       expect(capturedFusionContexts).toEqual(
         expect.arrayContaining([
@@ -581,14 +552,14 @@ describe("createBalloonGameRuntime", () => {
         ])
       );
     });
-    raf.fire(4_000);
+    context.raf.fire(4_000);
 
-    expect(hudRoot.innerHTML).toContain("カメラが失敗しました");
-    expect(hudRoot.innerHTML).toContain('data-game-action="reselectCameras"');
+    expect(context.hudRoot.innerHTML).toContain("カメラが失敗しました");
+    expect(context.hudRoot.innerHTML).toContain(
+      'data-game-action="reselectCameras"'
+    );
 
-    consoleError.mockRestore();
-    runtime.destroy();
-    vi.unstubAllGlobals();
+    cleanupStartupFailureTestContext(context);
   });
 
   it("restores front lane health before fusing after a transient frame error", async () => {
@@ -1478,6 +1449,7 @@ describe("createBalloonGameRuntime", () => {
     expect(audio.playTimeout).toHaveBeenCalledTimes(1);
 
     runtime.retry();
+    expect(audio.cancelTimeout).toHaveBeenCalledTimes(1);
     timeoutPlayback.resolve();
     await Promise.resolve();
 

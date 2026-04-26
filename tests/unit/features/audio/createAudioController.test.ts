@@ -152,6 +152,29 @@ describe("createAudioController", () => {
     expect(timeoutAudio?.removeEventListener).toHaveBeenCalled();
   });
 
+  it("cancels in-progress timeout playback", async () => {
+    const audio = createAudioController();
+    let resolved = false;
+
+    const timeoutPlayback = audio.playTimeout().then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+
+    const created = (
+      globalThis as unknown as { __createdAudio: FakeAudioInstance[] }
+    ).__createdAudio;
+    const timeoutAudio = created.at(-1);
+
+    audio.cancelTimeout();
+    await timeoutPlayback;
+
+    expect(resolved).toBe(true);
+    expect(timeoutAudio?.pause).toHaveBeenCalledTimes(1);
+    expect(timeoutAudio?.currentTime).toBe(0);
+    expect(timeoutAudio?.removeEventListener).toHaveBeenCalled();
+  });
+
   it("surfaces one-shot playback failures to callers", async () => {
     const blocked = new Error("autoplay blocked");
 
