@@ -68,6 +68,10 @@ front hand landmarks
 
 ## カメラの役割
 
+全てのランドマーク座標は、カメラ表示の mirror 補正後の正規化画像座標として扱う。派生特徴量は wrist-relative に変換し、hand scale で割って正規化する。
+
+初期実装では `POINTING_FEATURE_SCHEMA_V1` を定義し、特徴量の順序と長さを固定する。テストは schema version、vector length、feature order を assert する。side camera が欠損する場合は side vector を `undefined` にし、front-only mapper として扱う。欠損を 0 埋めして front+side 距離計算に混ぜない。
+
 ### Front camera
 
 Front camera は、画面正面から見た手の左右・上下位置を主に担当する。
@@ -107,23 +111,40 @@ Side camera は現行の trigger 判断にも使われるため、本 PoC では
 
 初期実装:
 
-1. 中央の target を指す
-2. 左上、右上、左下、右下を指す
-3. 画面中央から少し外した 3 点を validation target として指す
+1. Calibration target 5 点を順に指す
+2. Validation target 3 点を順に指す
+3. 各 validation target で accepted sample 3 件の median error を計算する
 4. 推定 aim と正解の誤差を表示する
 5. 品質が足りれば検証完了、足りなければ 5 点 target を再試行する
+
+Calibration targets は以下の正規化座標に固定する。
+
+- center: `(0.5, 0.5)`
+- topLeft: `(0.2, 0.2)`
+- topRight: `(0.8, 0.2)`
+- bottomLeft: `(0.2, 0.8)`
+- bottomRight: `(0.8, 0.8)`
+
+Validation targets は training model から除外し、以下の正規化座標に固定する。
+
+- validationLeft: `(0.35, 0.5)`
+- validationRight: `(0.65, 0.5)`
+- validationTop: `(0.5, 0.35)`
+
+Target marker の見た目は半径 48px を初期値とする。ただし正解ラベルは marker area ではなく、上記の正規化座標そのものとする。
 
 左中央、右中央、上中央、下中央、斜め移動 target、円形追従 target は初期実装には入れない。5 点 target で改善が不足した場合に、次の設計で追加する。
 
 各 target では、即時に 1 フレームを採用せず、一定時間安定したサンプルだけを採用する。
 
-採用条件の初期案:
+採用条件:
 
-- front hand confidence が閾値以上
-- side hand confidence が閾値以上、または front-only fallback として扱える
-- target 表示後の短い猶予時間を過ぎている
-- index direction / hand scale が急変していない
-- 連続数フレームの特徴量分散が小さい
+- target 表示後の最初の 500ms は採用しない
+- 直近 10 animation frames のうち 8 frames 以上が valid hand frame である
+- front hand confidence が `0.6` 以上
+- side hand がある場合、side hand confidence が `0.5` 以上
+- 300ms 以上、normalized feature variance が `0.0025` 以下
+- side hand が条件を満たさない場合、front-only sample として採用し、front+side model には入れない
 
 ## Mapper Stages
 
@@ -146,6 +167,16 @@ projectedPoint = indexTip + normalize(indexTip - indexMcp) * gain
 - weighted k-nearest samples: 現在の特徴量に近い calibration samples を重み付き平均する
 
 理由は、サンプル数が少なくても実装とデバッグがしやすく、どの calibration sample が効いているか説明しやすいためである。affine / linear regression は、weighted k-nearest samples の検証後に比較対象として追加する。
+
+weighted k-nearest samples の初期パラメータ:
+
+- `k = min(3, acceptedSamples.length)`
+- distance は calibration samples から計算した dimension ごとの平均と標準偏差で z-score 化した特徴量の Euclidean distance
+- 標準偏差が `1e-6` 未満の dimension は `1` として扱う
+- weight は `1 / (distance + 1e-3)`
+- 出力 aim は `[0, 1]` に clamp する
+- `nearestDistance` が `rejectionDistance = 3.0` 以上なら `calibrationConfidence = 0`
+- `calibrationConfidence = clamp(1 - nearestDistance / rejectionDistance, 0, 1)`
 
 ### Stage 3: Hybrid mapper
 
@@ -191,6 +222,10 @@ interface PointingCalibrationSample {
 interface PointingCalibrationModel {
   readonly samples: readonly PointingCalibrationSample[];
   readonly status: "empty" | "collecting" | "ready" | "needsRetry";
+  readonly readiness: {
+    readonly frontOnlyReady: boolean;
+    readonly frontSideReady: boolean;
+  };
   readonly validationErrorPx: number | undefined;
 }
 ```
@@ -223,9 +258,13 @@ PoC の成功は、ゲームの得点ではなく入力推定として判定す�
 最低成功基準:
 
 - 5点以上の準備体操 target から calibration model を作れる
-- validation target で、現在の indexTip 追従より平均誤差が小さい
+- 3 validation targets は training model から除外される
+- 各 validation target は accepted sample 3 件の median aim を使って評価される
+- 1366x768 equivalent viewport 換算で、front+side calibrated mapper の validation MAE が現行 indexTip 追従 MAE より 20% 以上低く、かつ absolute MAE が 120px 以下である
+- いずれの validation target でも front+side calibrated mapper の error が 200px を超えない
 - front-only baseline と front+side calibrated mapper を同じ画面で比較できる
-- side camera が一時的に不安定でも front-only fallback で aim が破綻しない
+- side camera が一時的に不安定でも `frontOnlyReady` として aim が破綻しない
+- side camera を使った PoC としては、`frontSideReady` が front-only baseline より validation MAE を 20% 以上改善した場合だけ成功とする
 - 誤差、sample count、quality reason を診断画面で確認できる
 
 望ましい成功基準:
@@ -239,7 +278,8 @@ PoC の成功は、ゲームの得点ではなく入力推定として判定す�
 
 以下の場合は、本方式をゲーム本体へ入れない。
 
-- validation error が現行 indexTip 方式より改善しない
+- front+side calibrated mapper の validation MAE 改善が現行 indexTip 追従に対して 10% 未満
+- いずれかの validation target error が 200px を超える
 - キャリブレーション直後でも手の高さや距離の微小変化で大きく崩れる
 - side camera の追加情報が front-only baseline に対して改善を出さない
 - 準備体操の手順が長く、放デイの交代プレイに合わない
