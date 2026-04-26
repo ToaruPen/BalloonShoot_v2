@@ -280,6 +280,15 @@ const createAudio = () => ({
   restoreBgmVolume: vi.fn()
 });
 
+const createDeferred = <T = void>() => {
+  let resolve: (value: T | PromiseLike<T>) => void = () => undefined;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+};
+
 describe("createBalloonGameRuntime", () => {
   it("passes lane-specific filter configs to front and side game trackers", async () => {
     vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
@@ -364,6 +373,221 @@ describe("createBalloonGameRuntime", () => {
         cleanupError
       );
     });
+    vi.unstubAllGlobals();
+  });
+
+  it("shows a recovery action when both tracker startups fail", async () => {
+    capturedFusionContexts.length = 0;
+    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+    const raf = createRaf();
+    const hudRoot = { innerHTML: "" } as HTMLElement;
+    const startupError = new Error("tracker wasm unavailable");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: createVideo(),
+      sideVideo: createVideo(),
+      canvas: createCanvas(),
+      hudRoot,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      createDevicePinnedStream: (deviceId) =>
+        Promise.resolve(createPinnedStream(deviceId)),
+      createMediaPipeHandTracker: vi.fn(() => Promise.reject(startupError))
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(capturedFusionContexts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            method: "updateAimUnavailable",
+            frontLaneHealth: "failed"
+          }),
+          expect.objectContaining({
+            method: "updateTriggerUnavailable",
+            sideLaneHealth: "failed"
+          })
+        ])
+      );
+    });
+    raf.fire(4_000);
+
+    expect(hudRoot.innerHTML).toContain("カメラが失敗しました");
+    expect(hudRoot.innerHTML).toContain("カメラを選び直す");
+    expect(hudRoot.innerHTML).not.toContain("入力を準備中");
+    expect(consoleError).toHaveBeenCalledWith(
+      "[balloon game runtime] tracker startup failed",
+      startupError
+    );
+
+    consoleError.mockRestore();
+    runtime.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows a recovery action when both camera streams fail during startup", async () => {
+    capturedFusionContexts.length = 0;
+    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+    const raf = createRaf();
+    const hudRoot = { innerHTML: "" } as HTMLElement;
+    const streamError = new Error("camera unavailable");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: createVideo(),
+      sideVideo: createVideo(),
+      canvas: createCanvas(),
+      hudRoot,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      createDevicePinnedStream: vi.fn(() => Promise.reject(streamError)),
+      createMediaPipeHandTracker: vi.fn()
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(capturedFusionContexts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            method: "updateAimUnavailable",
+            frontLaneHealth: "failed"
+          }),
+          expect.objectContaining({
+            method: "updateTriggerUnavailable",
+            sideLaneHealth: "failed"
+          })
+        ])
+      );
+    });
+    raf.fire(4_000);
+
+    expect(hudRoot.innerHTML).toContain("カメラが失敗しました");
+    expect(hudRoot.innerHTML).toContain("カメラを選び直す");
+    expect(hudRoot.innerHTML).not.toContain("入力を準備中");
+    expect(consoleError).toHaveBeenCalledWith(
+      "[balloon game runtime] front lane failed",
+      streamError
+    );
+    expect(consoleError).toHaveBeenCalledWith(
+      "[balloon game runtime] side lane failed",
+      streamError
+    );
+
+    consoleError.mockRestore();
+    runtime.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows a recovery action when only the front tracker startup fails", async () => {
+    capturedFusionContexts.length = 0;
+    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+    const raf = createRaf();
+    const hudRoot = { innerHTML: "" } as HTMLElement;
+    const startupError = new Error("front tracker unavailable");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: createVideo(),
+      sideVideo: createVideo(),
+      canvas: createCanvas(),
+      hudRoot,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      createDevicePinnedStream: (deviceId) =>
+        Promise.resolve(createPinnedStream(deviceId)),
+      createMediaPipeHandTracker: vi
+        .fn()
+        .mockRejectedValueOnce(startupError)
+        .mockResolvedValueOnce(createTracker())
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(capturedFusionContexts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            method: "updateAimUnavailable",
+            frontLaneHealth: "failed"
+          })
+        ])
+      );
+    });
+    raf.fire(4_000);
+
+    expect(hudRoot.innerHTML).toContain("カメラが失敗しました");
+    expect(hudRoot.innerHTML).toContain('data-game-action="reselectCameras"');
+
+    consoleError.mockRestore();
+    runtime.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows a recovery action when only the side tracker startup fails", async () => {
+    capturedFusionContexts.length = 0;
+    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+    const raf = createRaf();
+    const hudRoot = { innerHTML: "" } as HTMLElement;
+    const startupError = new Error("side tracker unavailable");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: createVideo(),
+      sideVideo: createVideo(),
+      canvas: createCanvas(),
+      hudRoot,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      createDevicePinnedStream: (deviceId) =>
+        Promise.resolve(createPinnedStream(deviceId)),
+      createMediaPipeHandTracker: vi
+        .fn()
+        .mockResolvedValueOnce(createTracker())
+        .mockRejectedValueOnce(startupError)
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(capturedFusionContexts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            method: "updateTriggerUnavailable",
+            sideLaneHealth: "failed"
+          })
+        ])
+      );
+    });
+    raf.fire(4_000);
+
+    expect(hudRoot.innerHTML).toContain("カメラが失敗しました");
+    expect(hudRoot.innerHTML).toContain('data-game-action="reselectCameras"');
+
+    consoleError.mockRestore();
+    runtime.destroy();
     vi.unstubAllGlobals();
   });
 
@@ -1190,10 +1414,12 @@ describe("createBalloonGameRuntime", () => {
     vi.unstubAllGlobals();
   });
 
-  it("plays only the result jingle when playing duration ends", () => {
+  it("plays timeout before the result jingle when playing duration ends", () => {
     const raf = createRaf();
     const hudRoot = { innerHTML: "" } as HTMLElement;
     const audio = createAudio();
+    const timeoutPlayback = createDeferred();
+    audio.playTimeout.mockReturnValueOnce(timeoutPlayback.promise);
     const runtime = createBalloonGameRuntime({
       frontDeviceId: "front",
       sideDeviceId: "side",
@@ -1215,9 +1441,141 @@ describe("createBalloonGameRuntime", () => {
     raf.fire(64_016);
 
     expect(audio.stopBgm).toHaveBeenCalledTimes(1);
-    expect(audio.playTimeout).not.toHaveBeenCalled();
-    expect(audio.playResult).toHaveBeenCalledTimes(1);
+    expect(audio.playTimeout).toHaveBeenCalledTimes(1);
+    expect(audio.playResult).not.toHaveBeenCalled();
+
+    timeoutPlayback.resolve();
+
+    return vi.waitFor(() => {
+      expect(audio.playResult).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("does not play the old result jingle when retry interrupts timeout audio", async () => {
+    const raf = createRaf();
+    const hudRoot = { innerHTML: "" } as HTMLElement;
+    const audio = createAudio();
+    const timeoutPlayback = createDeferred();
+    audio.playTimeout.mockReturnValueOnce(timeoutPlayback.promise);
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: {} as HTMLVideoElement,
+      sideVideo: {} as HTMLVideoElement,
+      canvas: createCanvas(),
+      hudRoot,
+      readFusedInputFrame: () => undefined,
+      nowMs: () => 0,
+      createAudioController: () => audio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame
+    });
+
+    runtime.start();
+    raf.fire(4_000);
+    raf.fire(64_000);
+    expect(audio.playTimeout).toHaveBeenCalledTimes(1);
+
+    runtime.retry();
+    timeoutPlayback.resolve();
+    await Promise.resolve();
+
+    expect(audio.playResult).not.toHaveBeenCalled();
+  });
+
+  it("renders the result panel after playing duration ends", () => {
+    const raf = createRaf();
+    const hudRoot = { innerHTML: "" } as HTMLElement;
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: {} as HTMLVideoElement,
+      sideVideo: {} as HTMLVideoElement,
+      canvas: createCanvas(),
+      hudRoot,
+      readFusedInputFrame: () => undefined,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame
+    });
+
+    runtime.start();
+    raf.fire(4_000);
+    raf.fire(64_000);
+    raf.fire(64_016);
+
     expect(hudRoot.innerHTML).toContain("結果");
     expect(hudRoot.innerHTML).toContain('data-game-action="retry"');
+  });
+
+  it("stops camera tracking on result and restarts tracking on retry", async () => {
+    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+    const raf = createRaf();
+    const frontVideo = createVideo();
+    const sideVideo = createVideo();
+    const oldFrontStream = createPinnedStream("front");
+    const oldSideStream = createPinnedStream("side");
+    const newFrontStream = createPinnedStream("front");
+    const newSideStream = createPinnedStream("side");
+    const oldFrontTracker = createTracker();
+    const oldSideTracker = createTracker();
+    const newFrontTracker = createTracker();
+    const newSideTracker = createTracker();
+    const createDevicePinnedStream = vi
+      .fn()
+      .mockResolvedValueOnce(oldFrontStream)
+      .mockResolvedValueOnce(oldSideStream)
+      .mockResolvedValueOnce(newFrontStream)
+      .mockResolvedValueOnce(newSideStream);
+    const createMediaPipeHandTracker = vi
+      .fn()
+      .mockResolvedValueOnce(oldFrontTracker)
+      .mockResolvedValueOnce(oldSideTracker)
+      .mockResolvedValueOnce(newFrontTracker)
+      .mockResolvedValueOnce(newSideTracker);
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo,
+      sideVideo,
+      canvas: createCanvas(),
+      hudRoot: { innerHTML: "" } as HTMLElement,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      createDevicePinnedStream,
+      createMediaPipeHandTracker
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(createMediaPipeHandTracker).toHaveBeenCalledTimes(2);
+    });
+
+    raf.fire(4_000);
+    raf.fire(64_000);
+
+    expect(oldFrontStream.stopMock).toHaveBeenCalledOnce();
+    expect(oldSideStream.stopMock).toHaveBeenCalledOnce();
+    expect(oldFrontTracker.cleanupMock).toHaveBeenCalledOnce();
+    expect(oldSideTracker.cleanupMock).toHaveBeenCalledOnce();
+
+    runtime.retry();
+    await vi.waitFor(() => {
+      expect(createMediaPipeHandTracker).toHaveBeenCalledTimes(4);
+    });
+
+    expect(newFrontStream.stopMock).not.toHaveBeenCalled();
+    expect(newSideStream.stopMock).not.toHaveBeenCalled();
+    expect(newFrontTracker.cleanupMock).not.toHaveBeenCalled();
+    expect(newSideTracker.cleanupMock).not.toHaveBeenCalled();
+
+    runtime.destroy();
+    vi.unstubAllGlobals();
   });
 });

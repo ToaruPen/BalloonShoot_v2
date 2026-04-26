@@ -10,7 +10,13 @@ const tsconfigRootDir = fileURLToPath(new URL(".", import.meta.url));
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "coverage/**", "playwright-report/**", "test-results/**"]
+    ignores: [
+      "dist/**",
+      "coverage/**",
+      "playwright-report/**",
+      "public/wasm/**",
+      "test-results/**"
+    ]
   },
   js.configs.recommended,
   {

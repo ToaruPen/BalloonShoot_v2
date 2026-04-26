@@ -41,6 +41,7 @@
     "vitest": "^4.1.3"
   },
   "knip": {
-    "entry": ["index.html", "diagnostic.html", "src/diagnostic-main.ts"]
+    "entry": ["index.html", "diagnostic.html", "src/diagnostic-main.ts"],
+    "ignore": ["public/wasm/*.js"]
   }
 }

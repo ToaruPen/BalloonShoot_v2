@@ -190,6 +190,10 @@ const statusMessageForFusedFrame = (
   return frame.fusionMode === "noUsableInput" ? "入力を準備中" : undefined;
 };
 
+const hasRecoverableCameraFailure = (
+  frame: FusedGameInputFrame | undefined
+): boolean => frame?.fusionRejectReason === "laneFailed";
+
 const removeItem = <T>(items: T[], item: T): void => {
   const index = items.indexOf(item);
 
@@ -236,6 +240,7 @@ export const createBalloonGameRuntime = ({
   let latestFusedFrame: FusedGameInputFrame | undefined;
   let frontLaneHealth: LaneHealthStatus = "notStarted";
   let sideLaneHealth: LaneHealthStatus = "notStarted";
+  let resultAudioRunId = 0;
   let balloonSprites: BalloonSprites | undefined;
   const frontAimMapper = createFrontAimMapper();
   const sideTriggerMapper: CycleDrivenSideTriggerMapper =
@@ -283,6 +288,16 @@ export const createBalloonGameRuntime = ({
     });
   };
 
+  const playTimeoutThenResult = async (runId: number): Promise<void> => {
+    await audio.playTimeout();
+
+    if (stopped || runId !== resultAudioRunId) {
+      return;
+    }
+
+    await audio.playResult();
+  };
+
   const clearBgmRestoreTimeout = (
     options: { readonly restoreVolume?: boolean } = {}
   ): void => {
@@ -313,6 +328,11 @@ export const createBalloonGameRuntime = ({
       session.state === "playing"
         ? statusMessageForFusedFrame(currentFusedFrame)
         : undefined;
+    const statusAction =
+      statusMessage !== undefined &&
+      hasRecoverableCameraFailure(currentFusedFrame)
+        ? { action: "reselectCameras" as const, label: "カメラを選び直す" }
+        : undefined;
 
     const hudHtml = renderGameHud({
       score: engine.score,
@@ -321,10 +341,7 @@ export const createBalloonGameRuntime = ({
       timeRemainingMs: session.timeRemainingMs,
       countdownLabel: session.countdownLabel,
       statusMessage,
-      statusAction:
-        statusMessage === "カメラが切断されました"
-          ? { action: "reselectCameras", label: "カメラを選び直す" }
-          : undefined,
+      statusAction,
       result:
         session.state === "result"
           ? {
@@ -433,8 +450,11 @@ export const createBalloonGameRuntime = ({
     }
 
     if (session.resultEntered) {
+      resultAudioRunId += 1;
+      const runId = resultAudioRunId;
       audio.stopBgm();
-      play(() => audio.playResult());
+      play(() => playTimeoutThenResult(runId));
+      stopCameraTracking();
     }
 
     renderCanvas(input.crosshair, frameNowMs);
@@ -447,6 +467,54 @@ export const createBalloonGameRuntime = ({
     sideLaneHealth,
     tuning: defaultFusionTuning
   });
+
+  const timestampNow = (): FrameTimestamp => {
+    const now = performance.now();
+
+    return createFrameTimestamp({ expectedDisplayTime: now }, now);
+  };
+
+  const setLaneHealthForRole = (
+    role: "frontAim" | "sideTrigger",
+    health: LaneHealthStatus
+  ): void => {
+    if (role === "frontAim") {
+      frontLaneHealth = health;
+    } else {
+      sideLaneHealth = health;
+    }
+  };
+
+  const updateUnavailableFusionForRole = (
+    role: "frontAim" | "sideTrigger",
+    timestamp: FrameTimestamp
+  ): void => {
+    if (role === "frontAim") {
+      latestFusedFrame = inputFusionMapper.updateAimUnavailable(
+        timestamp,
+        currentFusionContext()
+      ).fusedFrame;
+    } else {
+      latestFusedFrame = inputFusionMapper.updateTriggerUnavailable(
+        timestamp,
+        currentFusionContext()
+      ).fusedFrame;
+    }
+  };
+
+  const failLaneStartup = (
+    role: "frontAim" | "sideTrigger",
+    errorLabel: string,
+    error: unknown
+  ): void => {
+    if (stopped) {
+      return;
+    }
+
+    console.error(errorLabel, error);
+    setLaneHealthForRole(role, "failed");
+    updateUnavailableFusionForRole(role, timestampNow());
+  };
 
   const updateFrontFusion = (
     detection: HandDetection | undefined,
@@ -539,11 +607,7 @@ export const createBalloonGameRuntime = ({
     const laneStillActive = (): boolean => !stopped && !laneStopped;
 
     const setLaneHealth = (health: LaneHealthStatus): void => {
-      if (role === "frontAim") {
-        frontLaneHealth = health;
-      } else {
-        sideLaneHealth = health;
-      }
+      setLaneHealthForRole(role, health);
     };
 
     const stopLane = (): void => {
@@ -575,24 +639,8 @@ export const createBalloonGameRuntime = ({
     streams.push(stream);
     video.srcObject = stream.stream;
 
-    const timestampNow = (): FrameTimestamp => {
-      const now = performance.now();
-
-      return createFrameTimestamp({ expectedDisplayTime: now }, now);
-    };
-
     const updateUnavailable = (timestamp: FrameTimestamp): void => {
-      if (role === "frontAim") {
-        latestFusedFrame = inputFusionMapper.updateAimUnavailable(
-          timestamp,
-          currentFusionContext()
-        ).fusedFrame;
-      } else {
-        latestFusedFrame = inputFusionMapper.updateTriggerUnavailable(
-          timestamp,
-          currentFusionContext()
-        ).fusedFrame;
-      }
+      updateUnavailableFusionForRole(role, timestamp);
     };
 
     const releaseLaneResources = (): void => {
@@ -632,6 +680,7 @@ export const createBalloonGameRuntime = ({
       if (laneStillActive()) {
         console.error("[balloon game runtime] tracker startup failed", error);
         setLaneHealth("failed");
+        updateUnavailable(timestampNow());
       }
       releaseLaneResources();
       return;
@@ -736,16 +785,22 @@ export const createBalloonGameRuntime = ({
     void startLane("frontAim", frontDeviceId, frontVideo).catch(
       (error: unknown) => {
         if (!stopped) {
-          console.error("[balloon game runtime] front lane failed", error);
-          frontLaneHealth = "failed";
+          failLaneStartup(
+            "frontAim",
+            "[balloon game runtime] front lane failed",
+            error
+          );
         }
       }
     );
     void startLane("sideTrigger", sideDeviceId, sideVideo).catch(
       (error: unknown) => {
         if (!stopped) {
-          console.error("[balloon game runtime] side lane failed", error);
-          sideLaneHealth = "failed";
+          failLaneStartup(
+            "sideTrigger",
+            "[balloon game runtime] side lane failed",
+            error
+          );
         }
       }
     );
@@ -792,6 +847,7 @@ export const createBalloonGameRuntime = ({
       }
 
       engine.reset();
+      resultAudioRunId += 1;
       stopCameraTracking();
       frontAimMapper.reset();
       sideTriggerMapper.reset();
@@ -810,6 +866,7 @@ export const createBalloonGameRuntime = ({
     },
     destroy() {
       stopped = true;
+      resultAudioRunId += 1;
       if (frameHandle !== undefined) {
         cancelFrame(frameHandle);
       }
