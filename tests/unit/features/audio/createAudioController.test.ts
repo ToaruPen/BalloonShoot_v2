@@ -8,6 +8,9 @@ interface FakeAudioInstance {
   volume: number;
   play: ReturnType<typeof vi.fn>;
   pause: ReturnType<typeof vi.fn>;
+  addEventListener: ReturnType<typeof vi.fn>;
+  removeEventListener: ReturnType<typeof vi.fn>;
+  dispatch(type: string): void;
 }
 
 describe("createAudioController", () => {
@@ -19,12 +22,27 @@ describe("createAudioController", () => {
       loop = false;
       currentTime = 0;
       volume = 1;
+      listeners = new Map<string, Set<() => void>>();
       play = vi.fn(() => Promise.resolve(undefined));
       pause = vi.fn(() => undefined);
+      addEventListener = vi.fn((type: string, listener: () => void) => {
+        const listeners = this.listeners.get(type) ?? new Set<() => void>();
+        listeners.add(listener);
+        this.listeners.set(type, listeners);
+      });
+      removeEventListener = vi.fn((type: string, listener: () => void) => {
+        this.listeners.get(type)?.delete(listener);
+      });
 
       constructor(src: string) {
         this.src = src;
         created.push(this);
+      }
+
+      dispatch(type: string): void {
+        for (const listener of this.listeners.get(type) ?? []) {
+          listener();
+        }
       }
     }
 
@@ -84,7 +102,12 @@ describe("createAudioController", () => {
 
     await audio.playShot();
     await audio.playHit();
-    await audio.playTimeout();
+    const timeoutPlayback = audio.playTimeout();
+    await Promise.resolve();
+    (
+      globalThis as unknown as { __createdAudio: FakeAudioInstance[] }
+    ).__createdAudio.at(-1)?.dispatch("ended");
+    await timeoutPlayback;
     await audio.playResult();
 
     const created = (
@@ -102,6 +125,54 @@ describe("createAudioController", () => {
       expect(instance.play).toHaveBeenCalledTimes(1);
       expect(instance.volume).toBe(0.5);
     });
+  });
+
+  it("resolves timeout playback after the time-up clip ends", async () => {
+    const audio = createAudioController();
+    let resolved = false;
+
+    const timeoutPlayback = audio.playTimeout().then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+
+    const created = (
+      globalThis as unknown as { __createdAudio: FakeAudioInstance[] }
+    ).__createdAudio;
+    const timeoutAudio = created.at(-1);
+
+    expect(timeoutAudio?.src).toBe("/audio/time-up.mp3");
+    expect(timeoutAudio?.play).toHaveBeenCalledTimes(1);
+    expect(resolved).toBe(false);
+
+    timeoutAudio?.dispatch("ended");
+    await timeoutPlayback;
+
+    expect(resolved).toBe(true);
+    expect(timeoutAudio?.removeEventListener).toHaveBeenCalled();
+  });
+
+  it("cancels in-progress timeout playback", async () => {
+    const audio = createAudioController();
+    let resolved = false;
+
+    const timeoutPlayback = audio.playTimeout().then(() => {
+      resolved = true;
+    });
+    await Promise.resolve();
+
+    const created = (
+      globalThis as unknown as { __createdAudio: FakeAudioInstance[] }
+    ).__createdAudio;
+    const timeoutAudio = created.at(-1);
+
+    audio.cancelTimeout();
+    await timeoutPlayback;
+
+    expect(resolved).toBe(true);
+    expect(timeoutAudio?.pause).toHaveBeenCalledTimes(1);
+    expect(timeoutAudio?.currentTime).toBe(0);
+    expect(timeoutAudio?.removeEventListener).toHaveBeenCalled();
   });
 
   it("surfaces one-shot playback failures to callers", async () => {

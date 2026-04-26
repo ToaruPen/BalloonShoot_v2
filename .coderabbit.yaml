@@ -29,6 +29,7 @@ reviews:
     - "!test-results/**"
     - "!public/models/**"
     - "!public/audio/**"
+    - "!public/wasm/**"
   path_instructions:
     - path: "**/*.{ts,tsx,js,mjs,cjs,css,html}"
       instructions: >

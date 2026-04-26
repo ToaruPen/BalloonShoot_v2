@@ -334,11 +334,7 @@ const toHandFrame = (
   };
 };
 
-// MediaPipe's WASM runtime is fetched from jsDelivr instead of vendored.
-// Vendoring would add ~33 MB of binaries to the repo; the CDN is pinned to the
-// same @mediapipe/tasks-vision version declared in package.json.
-const MEDIAPIPE_WASM_URL =
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm";
+const MEDIAPIPE_WASM_URL = "/wasm";
 
 export const createMediaPipeHandTracker = async (
   options: MediaPipeHandTrackerOptions

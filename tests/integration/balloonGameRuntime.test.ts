@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type MockInstance } from "vitest";
 import {
   createBalloonGameRuntime,
   MAX_CONSECUTIVE_FRAME_ERRORS
@@ -275,10 +275,72 @@ const createAudio = () => ({
   playShot: vi.fn(() => Promise.resolve()),
   playHit: vi.fn(() => Promise.resolve()),
   playTimeout: vi.fn(() => Promise.resolve()),
+  cancelTimeout: vi.fn(),
   playResult: vi.fn(() => Promise.resolve()),
   duckBgm: vi.fn(),
   restoreBgmVolume: vi.fn()
 });
+
+const createDeferred = <T = void>() => {
+  let resolve: (value: T | PromiseLike<T>) => void = () => undefined;
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+};
+
+type RuntimeOptions = Parameters<typeof createBalloonGameRuntime>[0];
+
+interface StartupFailureTestContext {
+  readonly raf: ReturnType<typeof createRaf>;
+  readonly hudRoot: HTMLElement;
+  readonly consoleError: MockInstance<typeof console.error>;
+  readonly runtime: ReturnType<typeof createBalloonGameRuntime>;
+}
+
+const createStartupFailureTestContext = (
+  overrides: Pick<
+    RuntimeOptions,
+    "createDevicePinnedStream" | "createMediaPipeHandTracker"
+  >
+): StartupFailureTestContext => {
+  capturedFusionContexts.length = 0;
+  vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+  const raf = createRaf();
+  const hudRoot = { innerHTML: "" } as HTMLElement;
+  const consoleError = vi
+    .spyOn(console, "error")
+    .mockImplementation(() => undefined);
+  const runtime = createBalloonGameRuntime({
+    frontDeviceId: "front",
+    sideDeviceId: "side",
+    frontVideo: createVideo(),
+    sideVideo: createVideo(),
+    canvas: createCanvas(),
+    hudRoot,
+    nowMs: () => 0,
+    createAudioController: createAudio,
+    drawGameFrame: vi.fn(),
+    requestAnimationFrame: raf.requestAnimationFrame,
+    cancelAnimationFrame: raf.cancelAnimationFrame,
+    createDevicePinnedStream: (deviceId) =>
+      Promise.resolve(createPinnedStream(deviceId)),
+    createMediaPipeHandTracker: vi.fn(() => Promise.resolve(createTracker())),
+    ...overrides
+  });
+
+  return { raf, hudRoot, consoleError, runtime };
+};
+
+const cleanupStartupFailureTestContext = ({
+  consoleError,
+  runtime
+}: StartupFailureTestContext): void => {
+  consoleError.mockRestore();
+  runtime.destroy();
+  vi.unstubAllGlobals();
+};
 
 describe("createBalloonGameRuntime", () => {
   it("passes lane-specific filter configs to front and side game trackers", async () => {
@@ -365,6 +427,139 @@ describe("createBalloonGameRuntime", () => {
       );
     });
     vi.unstubAllGlobals();
+  });
+
+  it("shows a recovery action when both tracker startups fail", async () => {
+    const startupError = new Error("tracker wasm unavailable");
+    const context = createStartupFailureTestContext({
+      createMediaPipeHandTracker: vi.fn(() => Promise.reject(startupError))
+    });
+
+    context.runtime.start();
+    await vi.waitFor(() => {
+      expect(capturedFusionContexts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            method: "updateAimUnavailable",
+            frontLaneHealth: "failed"
+          }),
+          expect.objectContaining({
+            method: "updateTriggerUnavailable",
+            sideLaneHealth: "failed"
+          })
+        ])
+      );
+    });
+    context.raf.fire(4_000);
+
+    expect(context.hudRoot.innerHTML).toContain("カメラが失敗しました");
+    expect(context.hudRoot.innerHTML).toContain("カメラを選び直す");
+    expect(context.hudRoot.innerHTML).not.toContain("入力を準備中");
+    expect(context.consoleError).toHaveBeenCalledWith(
+      "[balloon game runtime] tracker startup failed",
+      startupError
+    );
+
+    cleanupStartupFailureTestContext(context);
+  });
+
+  it("shows a recovery action when both camera streams fail during startup", async () => {
+    const streamError = new Error("camera unavailable");
+    const context = createStartupFailureTestContext({
+      createDevicePinnedStream: vi.fn(() => Promise.reject(streamError)),
+      createMediaPipeHandTracker: vi.fn()
+    });
+
+    context.runtime.start();
+    await vi.waitFor(() => {
+      expect(capturedFusionContexts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            method: "updateAimUnavailable",
+            frontLaneHealth: "failed"
+          }),
+          expect.objectContaining({
+            method: "updateTriggerUnavailable",
+            sideLaneHealth: "failed"
+          })
+        ])
+      );
+    });
+    context.raf.fire(4_000);
+
+    expect(context.hudRoot.innerHTML).toContain("カメラが失敗しました");
+    expect(context.hudRoot.innerHTML).toContain("カメラを選び直す");
+    expect(context.hudRoot.innerHTML).not.toContain("入力を準備中");
+    expect(context.consoleError).toHaveBeenCalledWith(
+      "[balloon game runtime] front lane failed",
+      streamError
+    );
+    expect(context.consoleError).toHaveBeenCalledWith(
+      "[balloon game runtime] side lane failed",
+      streamError
+    );
+
+    cleanupStartupFailureTestContext(context);
+  });
+
+  it("shows a recovery action when only the front tracker startup fails", async () => {
+    const startupError = new Error("front tracker unavailable");
+    const context = createStartupFailureTestContext({
+      createMediaPipeHandTracker: vi
+        .fn()
+        .mockRejectedValueOnce(startupError)
+        .mockResolvedValueOnce(createTracker())
+    });
+
+    context.runtime.start();
+    await vi.waitFor(() => {
+      expect(capturedFusionContexts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            method: "updateAimUnavailable",
+            frontLaneHealth: "failed"
+          })
+        ])
+      );
+    });
+    context.raf.fire(4_000);
+
+    expect(context.hudRoot.innerHTML).toContain("カメラが失敗しました");
+    expect(context.hudRoot.innerHTML).toContain(
+      'data-game-action="reselectCameras"'
+    );
+
+    cleanupStartupFailureTestContext(context);
+  });
+
+  it("shows a recovery action when only the side tracker startup fails", async () => {
+    const startupError = new Error("side tracker unavailable");
+    const context = createStartupFailureTestContext({
+      createMediaPipeHandTracker: vi
+        .fn()
+        .mockResolvedValueOnce(createTracker())
+        .mockRejectedValueOnce(startupError)
+    });
+
+    context.runtime.start();
+    await vi.waitFor(() => {
+      expect(capturedFusionContexts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            method: "updateTriggerUnavailable",
+            sideLaneHealth: "failed"
+          })
+        ])
+      );
+    });
+    context.raf.fire(4_000);
+
+    expect(context.hudRoot.innerHTML).toContain("カメラが失敗しました");
+    expect(context.hudRoot.innerHTML).toContain(
+      'data-game-action="reselectCameras"'
+    );
+
+    cleanupStartupFailureTestContext(context);
   });
 
   it("restores front lane health before fusing after a transient frame error", async () => {
@@ -1190,10 +1385,12 @@ describe("createBalloonGameRuntime", () => {
     vi.unstubAllGlobals();
   });
 
-  it("plays only the result jingle when playing duration ends", () => {
+  it("plays timeout before the result jingle when playing duration ends", () => {
     const raf = createRaf();
     const hudRoot = { innerHTML: "" } as HTMLElement;
     const audio = createAudio();
+    const timeoutPlayback = createDeferred();
+    audio.playTimeout.mockReturnValueOnce(timeoutPlayback.promise);
     const runtime = createBalloonGameRuntime({
       frontDeviceId: "front",
       sideDeviceId: "side",
@@ -1215,9 +1412,142 @@ describe("createBalloonGameRuntime", () => {
     raf.fire(64_016);
 
     expect(audio.stopBgm).toHaveBeenCalledTimes(1);
-    expect(audio.playTimeout).not.toHaveBeenCalled();
-    expect(audio.playResult).toHaveBeenCalledTimes(1);
+    expect(audio.playTimeout).toHaveBeenCalledTimes(1);
+    expect(audio.playResult).not.toHaveBeenCalled();
+
+    timeoutPlayback.resolve();
+
+    return vi.waitFor(() => {
+      expect(audio.playResult).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("does not play the old result jingle when retry interrupts timeout audio", async () => {
+    const raf = createRaf();
+    const hudRoot = { innerHTML: "" } as HTMLElement;
+    const audio = createAudio();
+    const timeoutPlayback = createDeferred();
+    audio.playTimeout.mockReturnValueOnce(timeoutPlayback.promise);
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: {} as HTMLVideoElement,
+      sideVideo: {} as HTMLVideoElement,
+      canvas: createCanvas(),
+      hudRoot,
+      readFusedInputFrame: () => undefined,
+      nowMs: () => 0,
+      createAudioController: () => audio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame
+    });
+
+    runtime.start();
+    raf.fire(4_000);
+    raf.fire(64_000);
+    expect(audio.playTimeout).toHaveBeenCalledTimes(1);
+
+    runtime.retry();
+    expect(audio.cancelTimeout).toHaveBeenCalledTimes(1);
+    timeoutPlayback.resolve();
+    await Promise.resolve();
+
+    expect(audio.playResult).not.toHaveBeenCalled();
+  });
+
+  it("renders the result panel after playing duration ends", () => {
+    const raf = createRaf();
+    const hudRoot = { innerHTML: "" } as HTMLElement;
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo: {} as HTMLVideoElement,
+      sideVideo: {} as HTMLVideoElement,
+      canvas: createCanvas(),
+      hudRoot,
+      readFusedInputFrame: () => undefined,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame
+    });
+
+    runtime.start();
+    raf.fire(4_000);
+    raf.fire(64_000);
+    raf.fire(64_016);
+
     expect(hudRoot.innerHTML).toContain("結果");
     expect(hudRoot.innerHTML).toContain('data-game-action="retry"');
+  });
+
+  it("stops camera tracking on result and restarts tracking on retry", async () => {
+    vi.stubGlobal("HTMLMediaElement", { HAVE_CURRENT_DATA: 2 });
+    const raf = createRaf();
+    const frontVideo = createVideo();
+    const sideVideo = createVideo();
+    const oldFrontStream = createPinnedStream("front");
+    const oldSideStream = createPinnedStream("side");
+    const newFrontStream = createPinnedStream("front");
+    const newSideStream = createPinnedStream("side");
+    const oldFrontTracker = createTracker();
+    const oldSideTracker = createTracker();
+    const newFrontTracker = createTracker();
+    const newSideTracker = createTracker();
+    const createDevicePinnedStream = vi
+      .fn()
+      .mockResolvedValueOnce(oldFrontStream)
+      .mockResolvedValueOnce(oldSideStream)
+      .mockResolvedValueOnce(newFrontStream)
+      .mockResolvedValueOnce(newSideStream);
+    const createMediaPipeHandTracker = vi
+      .fn()
+      .mockResolvedValueOnce(oldFrontTracker)
+      .mockResolvedValueOnce(oldSideTracker)
+      .mockResolvedValueOnce(newFrontTracker)
+      .mockResolvedValueOnce(newSideTracker);
+    const runtime = createBalloonGameRuntime({
+      frontDeviceId: "front",
+      sideDeviceId: "side",
+      frontVideo,
+      sideVideo,
+      canvas: createCanvas(),
+      hudRoot: { innerHTML: "" } as HTMLElement,
+      nowMs: () => 0,
+      createAudioController: createAudio,
+      drawGameFrame: vi.fn(),
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      createDevicePinnedStream,
+      createMediaPipeHandTracker
+    });
+
+    runtime.start();
+    await vi.waitFor(() => {
+      expect(createMediaPipeHandTracker).toHaveBeenCalledTimes(2);
+    });
+
+    raf.fire(4_000);
+    raf.fire(64_000);
+
+    expect(oldFrontStream.stopMock).toHaveBeenCalledOnce();
+    expect(oldSideStream.stopMock).toHaveBeenCalledOnce();
+    expect(oldFrontTracker.cleanupMock).toHaveBeenCalledOnce();
+    expect(oldSideTracker.cleanupMock).toHaveBeenCalledOnce();
+
+    runtime.retry();
+    await vi.waitFor(() => {
+      expect(createMediaPipeHandTracker).toHaveBeenCalledTimes(4);
+    });
+
+    expect(newFrontStream.stopMock).not.toHaveBeenCalled();
+    expect(newSideStream.stopMock).not.toHaveBeenCalled();
+    expect(newFrontTracker.cleanupMock).not.toHaveBeenCalled();
+    expect(newSideTracker.cleanupMock).not.toHaveBeenCalled();
+
+    runtime.destroy();
+    vi.unstubAllGlobals();
   });
 });

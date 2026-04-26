@@ -261,9 +261,7 @@ describe("createMediaPipeHandTracker", () => {
     expectHandFrameCloseTo(rawFrame, expectedFrame);
     expectHandFrameCloseTo(filteredFrame, expectedFrame);
 
-    expect(forVisionTasks).toHaveBeenCalledWith(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.34/wasm"
-    );
+    expect(forVisionTasks).toHaveBeenCalledWith("/wasm");
     expect(createFromOptions).toHaveBeenCalledWith("vision", {
       baseOptions: { modelAssetPath: "/models/hand_landmarker.task" },
       numHands: 1,
